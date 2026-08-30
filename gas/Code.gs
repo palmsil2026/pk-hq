@@ -1,7 +1,7 @@
 /**
  * ════════════════════════════════════════════════════════════
  *  P&K System v2 — ระบบโรงขวด P&K (Google Apps Script)
- *  ครบวงจร: พนักงานล็อกอิน PIN · ลงเวลา · ออเดอร์ → ผลิต(รายสินค้า)
+ *  ครบวงจร: พนักงานล็อกอิน PIN · ออเดอร์ → ผลิต(รายสินค้า)
  *  → สกรีน → ส่งเป็นงวด(หักสต๊อกอัตโนมัติ) → ออกบิล → ใบวางบิล
  *  + สต๊อกสินค้า/วัตถุดิบ · ประวัติทุกการกระทำ (ActivityLog)
  *  + บอร์ดบริหาร: แจ้งเตือน/ผลิต/ของเสีย/พนักงาน/ราคา(ประธาน)
@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30d';
+const CODE_VERSION = '2026-08-30e';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -49,7 +49,6 @@ const TABS = {
   Bills:      ['Bill_No', 'วันที่', 'ลูกค้า', 'Order_ID', 'ยอดรวม', 'ประเภท', 'ช่องทางชำระ', 'สถานะ', 'กำหนดชำระ', 'ชำระเมื่อ', 'Stmt_No', 'รายการ', 'หมายเหตุ', 'ที่มา', 'ผู้ทำ'],
   Statements: ['Stmt_No', 'วันที่วาง', 'ลูกค้า', 'จำนวนบิล', 'ยอดรวม', 'กำหนดเก็บเงิน', 'สถานะ', 'บิลที่รวม', 'หมายเหตุ'],
   Staff:      ['Staff_ID', 'ชื่อ', 'ชื่อเล่น', 'แผนก', 'PIN', 'สถานะ', 'เริ่มงาน', 'Token', 'TokenExp', 'หมายเหตุ'],
-  Attendance: ['วันที่', 'Staff_ID', 'ชื่อ', 'เข้า', 'ออก', 'ชั่วโมง', 'แก้โดย', 'หมายเหตุ'],
   StockMoves: ['Move_ID', 'เมื่อ', 'ประเภท', 'ชนิด', 'Item_ID', 'ชื่อ', 'จำนวน', 'คงเหลือหลัง', 'ผู้ทำ', 'อ้างอิง', 'หมายเหตุ'],
   ProductionLogs: ['เมื่อ', 'Job_ID', 'Order_ID', 'Product_ID', 'สินค้า', 'ประเภทงาน', 'ดี', 'เสีย', 'สาเหตุเสีย', 'เครื่อง', 'กะ', 'ผู้ลง', 'หมายเหตุ'],
   ActivityLog: ['เมื่อ', 'ใคร', 'ช่องทาง', 'การกระทำ', 'อ้างอิง', 'รายละเอียด'],
@@ -85,13 +84,6 @@ function setupPkSystem() {
   ['PIN', 'Token'].forEach(function (c) {
     const i = stfHead.indexOf(c);
     if (i >= 0) stf.getRange(1, i + 1, stf.getMaxRows(), 1).setNumberFormat('@');
-  });
-  // เวลาเข้า/ออก เก็บเป็นข้อความ กันชีตแปลง 'HH:mm' เป็นวันที่ปี 1899
-  const att = ss.getSheetByName('Attendance');
-  const attHead = att.getRange(1, 1, 1, att.getLastColumn()).getValues()[0].map(String);
-  ['เข้า', 'ออก'].forEach(function (c) {
-    const i = attHead.indexOf(c);
-    if (i >= 0) att.getRange(1, i + 1, att.getMaxRows(), 1).setNumberFormat('@');
   });
   const st = ss.getSheetByName('Settings');
   if (st.getLastRow() <= 1) SETTINGS_SEED.forEach(function (r) { st.appendRow(r); });
@@ -293,77 +285,6 @@ function staffSave(pay, me) { // exec เท่านั้น: {id?, name, nick
   const id = seq('STAFF_NEXT', 'S', 3);
   appendObj('Staff', { 'Staff_ID': id, 'ชื่อ': pay.name, 'ชื่อเล่น': nick, 'แผนก': pay.dept || '', 'PIN': String(pay.pin), 'สถานะ': 'ทำงาน', 'เริ่มงาน': pay.start || today() });
   return { ok: true, id: id, _log: { ref: id, detail: pay.name } };
-}
-
-// ─── ลงเวลา ───
-function clock(pay, me) {
-  if (me.via !== 'pin') return { ok: false, error: 'ลงเวลาต้องล็อกอินด้วย PIN ของตัวเอง' };
-  // ใช้เวลาที่ "กดจริง" จากเครื่อง (คิวออฟไลน์ replay ทีหลังได้เวลาถูก) — เพี้ยนเกิน 3 วันใช้เวลา server
-  let base = new Date();
-  const at = Number(pay.at);
-  if (at && !isNaN(at) && Math.abs(Date.now() - at) < 3 * 86400000) base = new Date(at);
-  const td = Utilities.formatDate(base, TZ, 'yyyy-MM-dd');
-  const att = rowsToObjs('Attendance');
-  const mine = att.filter(function (a) { return a['Staff_ID'] === me.id; });
-  const todayRow = mine.filter(function (a) { return String(a['วันที่']) === td; })[0];
-  const t = Utilities.formatDate(base, TZ, 'HH:mm');
-  if (pay.do === 'in') {
-    if (todayRow && todayRow['เข้า']) return { ok: true, already: true, in: todayRow['เข้า'], out: todayRow['ออก'] };
-    if (todayRow) { updateAtt_(td, me.id, { 'เข้า': t }); }
-    else appendObj('Attendance', { 'วันที่': td, 'Staff_ID': me.id, 'ชื่อ': me.name, 'เข้า': t });
-    return { ok: true, in: t, _log: { ref: me.id, detail: 'เข้า ' + t } };
-  }
-  // ออก: วันนี้ก่อน ไม่มีก็หาแถวค้างออกของเมื่อวาน (กะข้ามคืน)
-  let target = todayRow && todayRow['เข้า'] ? todayRow : null;
-  let targetDate = td;
-  if (!target) {
-    const yd = Utilities.formatDate(new Date(base.getTime() - 86400000), TZ, 'yyyy-MM-dd');
-    const yRow = mine.filter(function (a) { return String(a['วันที่']) === yd && a['เข้า'] && !a['ออก']; })[0];
-    if (yRow) { target = yRow; targetDate = yd; }
-  }
-  if (!target) {
-    if (todayRow) { updateAtt_(td, me.id, { 'ออก': t }); return { ok: true, out: t, warn: 'ไม่พบเวลาเข้า — อัปเดตเวลาออกให้แล้ว', _log: { ref: me.id, detail: 'ออก ' + t + ' (ไม่มีเวลาเข้า)' } }; }
-    appendObj('Attendance', { 'วันที่': td, 'Staff_ID': me.id, 'ชื่อ': me.name, 'ออก': t, 'หมายเหตุ': 'ไม่มีเวลาเข้า' });
-    return { ok: true, out: t, warn: 'ไม่พบเวลาเข้า — บันทึกออกไว้ให้ผู้บริหารตรวจ', _log: { ref: me.id, detail: 'ออก ' + t + ' (ไม่มีเวลาเข้า)' } };
-  }
-  const hrs = hoursBetween_(String(target['เข้า']), t);
-  updateAtt_(targetDate, me.id, { 'ออก': t, 'ชั่วโมง': hrs });
-  return { ok: true, in: target['เข้า'], out: t, hours: hrs, _log: { ref: me.id, detail: 'ออก ' + t + ' (' + hrs + ' ชม.)' } };
-}
-function hoursBetween_(tin, tout) {
-  const p = function (s) { const m = String(s).split(':'); return (Number(m[0]) || 0) * 60 + (Number(m[1]) || 0); };
-  let mins = p(tout) - p(tin);
-  if (mins < 0) mins += 24 * 60;   // กะข้ามเที่ยงคืน
-  return Math.round(mins / 6) / 10;
-}
-function updateAtt_(date, staffId, patch) {
-  const sh = tab('Attendance');
-  const v = sh.getDataRange().getValues();
-  const head = v[0].map(String);
-  for (let i = 1; i < v.length; i++) {
-    if (String(fmtCell(v[i][col(head, 'วันที่')])) === date && String(v[i][col(head, 'Staff_ID')]) === staffId) {
-      const row = v[i].slice();
-      Object.keys(patch).forEach(function (l) { row[col(head, l)] = patch[l]; });
-      sh.getRange(i + 1, 1, 1, head.length).setValues([row]);
-      return true;
-    }
-  }
-  return false;
-}
-function attFix(pay, me) { // exec: {date, staffId, in?, out?, note?}
-  const patch = { 'แก้โดย': me.name };
-  if (pay.in !== undefined) patch['เข้า'] = pay.in;
-  if (pay.out !== undefined) patch['ออก'] = pay.out;
-  if (pay.note) patch['หมายเหตุ'] = pay.note;
-  let okA = updateAtt_(pay.date, pay.staffId, patch);
-  if (!okA) {
-    const s = staffPublic().filter(function (x) { return x['Staff_ID'] === pay.staffId; })[0] || {};
-    appendObj('Attendance', { 'วันที่': pay.date, 'Staff_ID': pay.staffId, 'ชื่อ': s['ชื่อ'] || '', 'เข้า': pay.in || '', 'ออก': pay.out || '', 'แก้โดย': me.name, 'หมายเหตุ': pay.note || '' });
-  }
-  // คำนวณชั่วโมงใหม่ถ้าครบเข้า-ออก
-  const row = rowsToObjs('Attendance').filter(function (a) { return String(a['วันที่']) === pay.date && a['Staff_ID'] === pay.staffId; })[0];
-  if (row && row['เข้า'] && row['ออก']) updateAtt_(pay.date, pay.staffId, { 'ชั่วโมง': hoursBetween_(String(row['เข้า']), String(row['ออก'])) });
-  return { ok: true, _log: { ref: pay.staffId, detail: pay.date + ' เข้า=' + (pay.in || '-') + ' ออก=' + (pay.out || '-') } };
 }
 
 // ─────────────────────────────────────────────
@@ -769,8 +690,6 @@ function teamData(p, me) {
     const c = custBy[String(o['ลูกค้า']).trim()] || {};
     return remain.length ? { id: o['Order_ID'], customer: o['ลูกค้า'], tel: c['เบอร์โทร'] || '', addr: c['ที่อยู่'] || '', due: o['กำหนดส่ง'], status: o['สถานะ'], remain: remain } : null;
   }).filter(Boolean).sort(function (a, b) { return String(a.due || '9999').localeCompare(String(b.due || '9999')); });
-  let myAtt = null;
-  if (me.via === 'pin') myAtt = rowsToObjs('Attendance').filter(function (a) { return String(a['วันที่']) === today() && a['Staff_ID'] === me.id; })[0] || null;
   return {
     ok: true, version: CODE_VERSION, me: { id: me.id, name: me.name, nick: me.nick, dept: me.dept, via: me.via },
     customers: custs, products: rowsToObjs('Products').filter(function (p2) { return (p2['สถานะ'] || 'ใช้งาน') !== 'เลิกขาย'; }),
@@ -783,7 +702,6 @@ function teamData(p, me) {
     bills: activeBills_().reverse().slice(0, 25),
     stmts: rowsToObjs('Statements').filter(function (s) { return s['สถานะ'] === 'รอเก็บ'; }).reverse(),
     materials: rowsToObjs('Materials'),
-    myAtt: myAtt,
     wasteReasons: WASTE_REASONS,
   };
 }
@@ -851,9 +769,6 @@ function execData() {
     .map(function (p2) { return { name: p2['ชื่อสินค้า'], bal: num(p2['คงเหลือ']), min: num(p2['จุดเตือน']), kind: 'สินค้า' }; })
     .concat(materials.filter(function (m2) { return m2['จุดสั่งซื้อ'] !== '' && num(m2['คงเหลือ']) <= num(m2['จุดสั่งซื้อ']); })
       .map(function (m2) { return { name: m2['ชื่อวัตถุดิบ'], bal: num(m2['คงเหลือ']), min: num(m2['จุดสั่งซื้อ']), kind: 'วัตถุดิบ' }; }));
-  const att = tailSince_('Attendance', 'วันที่', d30, 400);
-  const attToday = att.filter(function (a) { return String(a['วันที่']) === td; });
-  const attOpen = att.filter(function (a) { return a['เข้า'] && !a['ออก'] && String(a['วันที่']) < td; }).slice(-15);
 
   // ผลิต 30 วัน + ของเสียตามสาเหตุ + ผลงานรายคน
   const plogs = tailSince_('ProductionLogs', 'เมื่อ', d30, 800).filter(function (l) { return String(l['เมื่อ']).slice(0, 10) >= d30; });
@@ -866,13 +781,9 @@ function execData() {
     byStaff[k] = byStaff[k] || { good: 0, waste: 0, logs: 0 };
     byStaff[k].good += num(l['ดี']); byStaff[k].waste += num(l['เสีย']); byStaff[k].logs++;
   });
-  const attByStaff = {};
-  att.filter(function (a) { return String(a['วันที่']) >= d30 && a['เข้า']; }).forEach(function (a) {
-    attByStaff[a['ชื่อ']] = (attByStaff[a['ชื่อ']] || 0) + 1;
-  });
   const staff30 = staff.filter(function (s) { return s['สถานะ'] === 'ทำงาน'; }).map(function (s) {
     const w = byStaff[s['ชื่อ']] || { good: 0, waste: 0, logs: 0 };
-    return { name: s['ชื่อ'], dept: s['แผนก'], days: attByStaff[s['ชื่อ']] || 0, logs: w.logs, good: w.good, waste: w.waste };
+    return { name: s['ชื่อ'], dept: s['แผนก'], logs: w.logs, good: w.good, waste: w.waste };
   });
   const adjust30 = tailSince_('StockMoves', 'เมื่อ', d30, 500).filter(function (m2) { return (m2['ประเภท'] === 'ปรับยอด' || m2['ประเภท'] === 'ของเสีย') && String(m2['เมื่อ']).slice(0, 10) >= d30; }).slice(-30).reverse();
 
@@ -891,9 +802,9 @@ function execData() {
     },
     stmtsWait: stmts.filter(function (s) { return s['สถานะ'] === 'รอเก็บ'; }).length,
     daily30: last30,
-    alerts: { lateOrders: lateOrders, lateStmts: lateStmts, lowStock: lowStock, attOpen: attOpen },
+    alerts: { lateOrders: lateOrders, lateStmts: lateStmts, lowStock: lowStock },
     prod30: { good: good30, waste: waste30, wasteBy: Object.keys(wasteBy).map(function (k) { return { reason: k, qty: wasteBy[k] }; }).sort(function (a, b) { return b.qty - a.qty; }) },
-    staffToday: attToday, staff30: staff30, staffList: staff,
+    staff30: staff30, staffList: staff,
     cashToday: Object.keys(cashToday).map(function (k) { return { name: k, amt: cashToday[k] }; }),
     stock: { products: products.filter(function (p2) { return (p2['สถานะ'] || 'ใช้งาน') !== 'เลิกขาย'; }), materials: materials },
     adjust30: adjust30,
@@ -912,8 +823,8 @@ const ACT_LABEL = {
   pkLogin: 'เข้าสู่ระบบ', pkOrderSave: 'ลงออเดอร์', pkOrderEdit: 'แก้ออเดอร์', pkOrderCancel: 'ยกเลิกออเดอร์',
   pkJobStart: 'เริ่มงาน', pkProdLog: 'ลงผลผลิต', pkJobClose: 'ปิดงาน', pkDeliver: 'ส่งของ',
   pkBillCreate: 'ออกบิล', pkBillPay: 'รับชำระ', pkBillCancel: 'ยกเลิกบิล', pkStmtCreate: 'สร้างใบวางบิล', pkStmtDone: 'ปิดใบวางบิล',
-  pkCustSave: 'บันทึกลูกค้า', pkStockIn: 'รับของเข้า', pkStockCount: 'นับ/ปรับสต๊อก', pkClock: 'ลงเวลา',
-  pkPriceSet: 'ปรับราคา', pkStaffSave: 'บันทึกพนักงาน', pkAttFix: 'แก้เวลาเข้าออก',
+  pkCustSave: 'บันทึกลูกค้า', pkStockIn: 'รับของเข้า', pkStockCount: 'นับ/ปรับสต๊อก',
+  pkPriceSet: 'ปรับราคา', pkStaffSave: 'บันทึกพนักงาน',
 };
 function ACTIONS() {
   return {
@@ -936,12 +847,10 @@ function ACTIONS() {
     pkCustSave: { auth: 'team', mut: true, fn: custSave },
     pkStockIn: { auth: 'team', mut: true, fn: stockIn },
     pkStockCount: { auth: 'team', mut: true, depts: ['ผลิต', 'ออฟฟิศ', 'บริหาร'], fn: stockCount },
-    pkClock: { auth: 'team', mut: true, fn: clock },
     pkExec: { auth: 'exec', fn: function () { return execData(); } },
     pkPriceSet: { auth: 'exec', mut: true, fn: priceSet },
     pkPriceHistory: { auth: 'exec', fn: function (pay, me, p) { return { ok: true, history: tailObjs('PriceHistory', Number(p.limit) || 100).reverse() }; } },
     pkStaffSave: { auth: 'exec', mut: true, fn: staffSave },
-    pkAttFix: { auth: 'exec', mut: true, fn: attFix },
   };
 }
 function doGet(e) {
@@ -1084,6 +993,54 @@ function importLegacyAccounting(srcId) {
   if (!seeded) stg.appendRow(['CUST_NEXT', custCount + 1]);
   Logger.log('นำเข้าเสร็จ: บิล ' + bills + ' · ลูกหนี้เครดิต ' + ar + ' · ลูกค้าใหม่ ' + customers);
   Logger.log('⚠️ แท็บเครดิตกับแท็บบิลรายวันอาจมีบิลซ้ำกัน — เช็คก่อนใช้ยอดย้อนหลังจริงจัง');
+}
+
+// ─────────────────────────────────────────────
+// ใส่ทะเบียนสินค้ามาตรฐานลงแท็บ Products (รันครั้งเดียวใน editor — รันซ้ำได้ ไม่เบิ้ล)
+// ที่มา: docs/products/products-master.csv ของ repo pk-hq (29 รายการ 6 หมวด)
+// เพิ่มเฉพาะชื่อที่ยังไม่มี — ของเดิม/ราคาที่แก้ไว้แล้ว ไม่ถูกทับ
+// ─────────────────────────────────────────────
+const PRODUCT_SEED = [   // [Product_ID, ชื่อสินค้า, หน่วย, ราคา/หน่วย, หมายเหตุ]
+  ['PK-BOT-250-RB-CL','ขวด PET 250ml เรียบ ใส','ใบ',1.35,''],
+  ['PK-BOT-250-DM-BL','ขวด PET 250ml เพชร ฟ้า','ใบ',1.35,''],
+  ['PK-BOT-250-MK-CL','ขวด PET 250ml MK ใส','ใบ','','⚠️ รอยืนยัน'],
+  ['PK-BOT-500-RB-CL','ขวด PET 500ml เรียบ ใส','ใบ','','⚠️ รอยืนยัน'],
+  ['PK-BOT-600-RB-CL','ขวด PET 600ml เรียบ ใส','ใบ',1.95,'ราคาในบิล: 1.95-2.20 · 200 ใบ/ถุง (อ้างอิงขวด 600 ทรง MK)'],
+  ['PK-BOT-600-OK-CL','ขวด PET 600ml ทรง "OK" ใส','ใบ',1.43,'ราคาในบิล: ~1.43 · ⚠️ รอยืนยัน'],
+  ['PK-BOT-600-MK-CL','ขวด PET 600ml MK ใส','ใบ','','200 ใบ/ถุง'],
+  ['PK-BOT-1500-MK-CL','ขวด PET 1500ml MK ใส','ใบ',3.80,''],
+  ['PK-BOT-250-SC-PURESA','ขวด PET 250ml สกรีนเพียวซ่า','ใบ','','252 ใบ/ถุง'],
+  ['PK-BOT-600-SC-PURESA','ขวด PET 600ml สกรีนเพียวซ่า','ใบ','','200 ใบ/ถุง'],
+  ['PK-BOT-600-SC-BOONYAWAT','ขวด PET 600ml สกรีนบุญวาทย์','ใบ','','⚠️ รอยืนยัน'],
+  ['PK-CAP-PET-PK','ฝาน้ำ PET สีชมพู','ชิ้น',0.25,''],
+  ['PK-CAP-PET-BL','ฝาน้ำ PET สีฟ้า','ชิ้น',0.25,''],
+  ['PK-CAP-PET-NV','ฝาน้ำ PET สีน้ำเงิน','ชิ้น',0.25,''],
+  ['PK-CAP-PET-LG','ฝาน้ำ PET สีเขียวอ่อน','ชิ้น',0.25,''],
+  ['PK-CAP-PET-DG','ฝาน้ำ PET สีเขียวเข้ม','ชิ้น',0.25,''],
+  ['PK-CAP-PET-WH','ฝาน้ำ PET สีขาว','ชิ้น',0.25,''],
+  ['PK-CAP-PET-BK','ฝาน้ำ PET สีดำ','ชิ้น',0.25,''],
+  ['PK-CAP-PET-GD','ฝาน้ำ สีทอง','ชิ้น',0.25,'ราคาในบิล: ~0.25 · ⚠️ รอยืนยัน'],
+  ['PK-CAP-TOK','ฝาต๊อก','ชิ้น',0.25,'⚠️ รอยืนยัน'],
+  ['PK-FLM-NECK-WIDE-BL','ฟิล์มคอขวด ปากกว้าง สีฟ้า','ม้วน',200,''],
+  ['PK-FLM-NECK-WH','ฟิล์มคอขวด สีขาว','ม้วน',200,''],
+  ['PK-FLM-NECK-TANK-YL','ฟิล์มคอถัง สีเหลือง','ม้วน',150,''],
+  ['PK-FLM-PACK12-CL','ฟิล์มแพ็คโหล (12 ขวด) ใส','ม้วน/ชิ้น','','⚠️ รอยืนยัน'],
+  ['PK-FLM-CUPSEAL','ฟิล์มปิดฝาถ้วยแก้ว (ม้วน)','ม้วน',900,''],
+  ['PK-TNK-GALLON','ถังแกลลอน (คาดว่า 20 ลิตร)','ใบ',465,''],
+  ['PK-CUP-GLASS','ถ้วยแก้ว (น้ำถ้วย)','ลัง/แพ็ค',520,''],
+  ['PK-MSC-PVC-CUT','PVC ตัดตามขนาด (เช่น 16.5x16.5)','เมตร',120,'⚠️ รอยืนยัน'],
+  ['PK-MSC-PREFORM','หลอดพรีฟอร์ม (ขายยกกระสอบ)','กระสอบ',735,'⚠️ รอยืนยัน'],
+];
+function seedProducts() {
+  const have = {};
+  rowsToObjs('Products').forEach(function (p) { have[String(p['ชื่อสินค้า']).trim()] = true; });
+  const add = PRODUCT_SEED.filter(function (r) { return !have[r[1]]; }).map(function (r) {
+    return { 'Product_ID': r[0], 'ชื่อสินค้า': r[1], 'หน่วย': r[2], 'ราคา/หน่วย': r[3],
+             'หมายเหตุ': r[4], 'คงเหลือ': 0, 'จุดเตือน': '', 'สถานะ': 'ใช้งาน' };
+  });
+  appendObjs('Products', add);
+  Logger.log('เพิ่มสินค้าใหม่ ' + add.length + ' รายการ (มีอยู่แล้ว ' + (PRODUCT_SEED.length - add.length) + ')');
+  return add.length;
 }
 
 function doPost(e) { return doGet(e); }

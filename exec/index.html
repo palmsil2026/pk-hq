@@ -114,10 +114,6 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 </div>
 
 <div class="card">
-  <h2>พนักงาน — วันนี้ <span class="meta">(เข้างาน/ออกงาน)</span></h2>
-  <table id="attTable"></table>
-</div>
-<div class="card">
   <h2>ผลงาน 30 วัน — รายคน <span class="meta">(นับจากผู้ลงข้อมูล — หัวหน้ากะอาจลงแทนทั้งทีม อย่าใช้ตัดสินรายคนเพียว ๆ)</span></h2>
   <table id="staffTable"></table>
 </div>
@@ -228,8 +224,7 @@ function render(){
   const A = d.alerts || {};
   let html = alertBox('ออเดอร์เลยกำหนดส่ง', A.lateOrders, o => esc(o.customer) + ' (' + esc(o.id) + ' กำหนด ' + esc(o.due) + ')')
     + alertBox('ใบวางบิลเลยกำหนดเก็บ', A.lateStmts, s => esc(s.customer) + ' ' + baht(s.amt) + ' บ. (เก็บ ' + esc(s.due) + ')')
-    + alertBox('สต๊อกต่ำกว่าจุดเตือน', A.lowStock, s => esc(s.name) + ' เหลือ ' + baht(s.bal) + ' (จุดเตือน ' + baht(s.min) + ')')
-    + alertBox('ลืมลงเวลาออก', A.attOpen, a => esc(a['ชื่อ']) + ' วันที่ ' + esc(a['วันที่']) + ' <button class="mini ghost" data-fix="' + esc(a['วันที่']) + '|' + esc(a['Staff_ID']) + '">แก้เวลา</button>');
+    + alertBox('สต๊อกต่ำกว่าจุดเตือน', A.lowStock, s => esc(s.name) + ' เหลือ ' + baht(s.bal) + ' (จุดเตือน ' + baht(s.min) + ')');
   $('alerts').innerHTML = html || '<div class="alert calm">✅ ไม่มีเรื่องด่วนต้องจัดการ</div>';
 
   $('kMonth').textContent = baht(d.kpi.monthTotal);
@@ -266,8 +261,7 @@ function render(){
   $('stockProd').innerHTML = tbl(d.stock.products.map(p=>stRow(p['ชื่อสินค้า'], p['คงเหลือ'], p['จุดเตือน'])), '<tr><th>สินค้า</th><th class="r">คงเหลือ</th><th class="r">จุดเตือน</th></tr>', 'ยังไม่มีสินค้า');
   $('stockMat').innerHTML = tbl(d.stock.materials.map(m=>stRow(m['ชื่อวัตถุดิบ'], m['คงเหลือ'], m['จุดสั่งซื้อ'])), '<tr><th>วัตถุดิบ</th><th class="r">คงเหลือ</th><th class="r">จุดสั่งซื้อ</th></tr>', 'ยังไม่มีวัตถุดิบ');
 
-  $('attTable').innerHTML = tbl(d.staffToday.map(a=>'<tr><td>'+esc(a['ชื่อ'])+'</td><td>'+esc(a['เข้า']||'—')+'</td><td>'+esc(a['ออก']||'—')+'</td><td class="r">'+esc(a['ชั่วโมง']||'')+'</td></tr>'), '<tr><th>ชื่อ</th><th>เข้า</th><th>ออก</th><th class="r">ชม.</th></tr>', 'วันนี้ยังไม่มีใครลงเวลา');
-  $('staffTable').innerHTML = tbl(d.staff30.map(s=>'<tr><td>'+esc(s.name)+'</td><td class="meta">'+esc(s.dept||'-')+'</td><td class="r">'+s.days+'</td><td class="r">'+s.logs+'</td><td class="r">'+baht(s.good)+'</td><td class="r'+(s.waste?' low':'')+'">'+baht(s.waste)+'</td></tr>'), '<tr><th>ชื่อ</th><th>แผนก</th><th class="r">วันเข้างาน</th><th class="r">ครั้งที่ลงงาน</th><th class="r">ดี</th><th class="r">เสีย</th></tr>', 'ยังไม่มีข้อมูล');
+  $('staffTable').innerHTML = tbl(d.staff30.map(s=>'<tr><td>'+esc(s.name)+'</td><td class="meta">'+esc(s.dept||'-')+'</td><td class="r">'+s.logs+'</td><td class="r">'+baht(s.good)+'</td><td class="r'+(s.waste?' low':'')+'">'+baht(s.waste)+'</td></tr>'), '<tr><th>ชื่อ</th><th>แผนก</th><th class="r">ครั้งที่ลงงาน</th><th class="r">ดี</th><th class="r">เสีย</th></tr>', 'ยังไม่มีข้อมูล');
   $('staffMg').innerHTML = tbl(d.staffList.map(s=>'<tr><td><b>'+esc(s['ชื่อ'])+'</b> <span class="meta">('+esc(s['ชื่อเล่น'])+')</span></td><td class="meta">'+esc(s['แผนก']||'-')+'</td><td><span class="chip'+(s['สถานะ']!=='ทำงาน'?' warn':'')+'">'+esc(s['สถานะ'])+'</span></td><td class="r"><button class="mini ghost" data-edit="'+esc(s['Staff_ID'])+'">แก้ไข/PIN</button></td></tr>'), '<tr><th>ชื่อ</th><th>แผนก</th><th>สถานะ</th><th></th></tr>', 'ยังไม่มีพนักงาน — เพิ่มคนแรกเลย');
 
   $('priceList').innerHTML = (d.products||[]).map(p=>
@@ -338,17 +332,6 @@ $('sfSave').addEventListener('click', async () => {
     reload();
   } catch(e){}
 });
-$('alerts').addEventListener('click', async e => {
-  const fx = e.target.dataset && e.target.dataset.fix;
-  if (!fx) return;
-  const [date, staffId] = fx.split('|');
-  const out = prompt('เวลาออกจริงของวันที่ ' + date + ' (เช่น 17:30):');
-  if (!out) return;
-  await api('pkAttFix', { date, staffId, out, note: 'ผู้บริหารแก้ให้' });
-  toast('✅ แก้เวลาแล้ว');
-  reload();
-});
-
 load();
 </script>
 </body>
