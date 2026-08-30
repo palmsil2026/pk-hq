@@ -45,6 +45,13 @@ button.mini.gold{background:var(--gold-soft); color:var(--gold);}
 .item-row .i-del{padding:6px 0; min-height:32px;}
 .item-head{display:grid; grid-template-columns:1fr 64px 72px 34px 38px; gap:6px; font-size:11px; color:var(--muted); margin-top:4px;}
 .item-row input[type=checkbox]{width:18px; height:18px; justify-self:center;}
+.spec-row{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; background:var(--surface);}
+.spec-row .sg{display:grid; grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:6px;}
+.spec-row .sg label{font-size:11px; color:var(--muted); margin:0 0 2px;}
+.spec-row select,.spec-row input{margin:0;}
+.spec-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;}
+.spec-top b{font-size:13.5px;}
+.qty-note{font-size:11.5px; color:var(--muted); margin-top:4px;}
 .list{margin:0; padding:0; list-style:none;}
 .list li{padding:11px 0; border-bottom:1px dashed var(--line);}
 .list li:last-child{border-bottom:none;}
@@ -115,14 +122,27 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
     <h2>ลงออเดอร์ใหม่</h2>
     <label>ลูกค้า</label>
     <input id="oCust" list="dlCust" placeholder="พิมพ์ชื่อลูกค้า">
-    <label>รายการสินค้า <span class="meta">(เลือกจากรายการสินค้า — ราคากลางเติมให้ แก้ได้)</span></label>
-    <div class="item-head"><span>สินค้า</span><span>จำนวน</span><span>ราคา</span><span>สกรีน</span><span></span></div>
+    <div class="row">
+      <div><label>ประเภทการซื้อ</label><select id="oBuyType"></select></div>
+      <div><label>กำหนดส่ง</label><input type="date" id="oDue"></div>
+    </div>
+    <label>รายการสินค้า <span class="meta">(เลือกสเปกแบบเดียวกับที่จดในแอปเดิม — ใส่จำนวนถุง ระบบคูณเป็นใบให้เอง)</span></label>
     <div id="oItems"></div>
     <button class="mini" id="oAdd">+ เพิ่มรายการ</button>
+
+    <h2 style="margin-top:16px">สถานะงาน <span class="meta">(เดิมเขียนมือในหมายเหตุ)</span></h2>
     <div class="row">
-      <div><label>กำหนดส่ง</label><input type="date" id="oDue"></div>
-      <div><label>หมายเหตุ</label><input id="oNote"></div>
+      <div><label>เรื่องเงิน</label><select id="oPay"></select></div>
+      <div><label>แบบสกรีน</label><select id="oArt"></select></div>
     </div>
+    <div class="row">
+      <div><label>ค่าบล็อก (บาท)</label><input type="number" id="oBlock" placeholder="0"></div>
+      <div><label>ทีมสกรีน</label><select id="oTeam"></select></div>
+    </div>
+    <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
+      <input type="checkbox" id="oUrgent" style="width:18px;height:18px"> <span>งานด่วน</span>
+    </label>
+    <label>หมายเหตุอื่น ๆ</label><input id="oNote" placeholder="เรื่องที่ไม่มีช่องข้างบน เช่น นัดรับของ / หน่วยพิเศษ">
     <div class="total" id="oTotal">รวม 0 บาท</div>
     <button class="btn" id="oSave">บันทึกออเดอร์</button>
   </div>
@@ -376,6 +396,14 @@ async function loadData(){
   try { DATA = await api('pkTeamData'); } catch(e){ return; }
   $('dlCust').innerHTML = DATA.customers.map(c => '<option value="' + esc(c['ชื่อลูกค้า']) + '">').join('');
   $('dlProd').innerHTML = DATA.products.map(p => '<option value="' + esc(p['ชื่อสินค้า']) + '">').join('');
+  const S = DATA.spec || {};
+  if (!$('oBuyType').options.length){
+    $('oBuyType').innerHTML = opts(S['ประเภทการซื้อ'], '', false) || '';
+    $('oPay').innerHTML  = opts(S['สถานะเงิน'], '', 'ยังไม่ระบุ');
+    $('oArt').innerHTML  = opts(S['สถานะแบบ'], '', 'ยังไม่ระบุ');
+    $('oTeam').innerHTML = opts(S['ทีมสกรีน'], '', 'ยังไม่จ่ายทีม');
+    $('oItems').innerHTML = ''; addSpecRow();
+  }
   $('dlMat').innerHTML = DATA.materials.map(m => '<option value="' + esc(m['ชื่อวัตถุดิบ']) + '">').join('');
   $('plReason').innerHTML = (DATA.wasteReasons||[]).map(r => '<option>' + esc(r) + '</option>').join('');
   renderOrders(); renderJobs(); renderDeliver(); renderStock(); renderOffice(); renderHome();
@@ -426,6 +454,70 @@ function bindPicker(d){
     calcTotal();
   });
 }
+// ── แถวรายการแบบสเปก (ใช้เฉพาะฟอร์มออเดอร์) ──
+// พนักงานเลือก ประเภท → ขนาด → คอ/ทรง/สี → สีสกรีน/ฝาสี แบบเดียวกับแอปเดิมเป๊ะ
+function opts(list, sel, blank){
+  return (blank !== false ? '<option value="">' + (blank || '—') + '</option>' : '') +
+    (list||[]).map(x => '<option' + (x===sel?' selected':'') + '>' + esc(x) + '</option>').join('');
+}
+function addSpecRow(it={}){
+  const S = (DATA && DATA.spec) || {};
+  const d = document.createElement('div');
+  d.className = 'spec-row';
+  d.innerHTML =
+    '<div class="spec-top"><b class="s-title">รายการใหม่</b>' +
+    '<button class="mini warn i-del" type="button">ลบ</button></div>' +
+    '<div class="sg">' +
+      '<div><label>ประเภท</label><select class="i-type">' + opts(S['ประเภทสินค้า'], it.type) + '</select></div>' +
+      '<div><label>ขนาด</label><select class="i-size"></select></div>' +
+      '<div><label>คอขวด</label><select class="i-neck">' + opts(S['คอขวด'], it.neck) + '</select></div>' +
+      '<div><label>รูปทรง</label><select class="i-shape">' + opts(S['รูปทรง'], it.shape) + '</select></div>' +
+      '<div><label>สี</label><select class="i-color">' + opts(S['สี'], it.color) + '</select></div>' +
+      '<div><label>สีสกรีน</label><select class="i-scrcolor">' + opts(S['สีสกรีน'], it.screenColor, 'ไม่สกรีน') + '</select></div>' +
+      '<div><label>พร้อมฝาสี</label><select class="i-cap">' + opts(S['พร้อมฝาสี'], it.capColor, 'ไม่มีฝา') + '</select></div>' +
+      '<div><label>จำนวน (ถุง)</label><input class="i-bags" type="number" inputmode="numeric" value="' + esc(it.bags||'') + '"></div>' +
+      '<div><label>เศษ (ใบ)</label><input class="i-extra" type="number" inputmode="numeric" value="' + esc(it.extra||'') + '"></div>' +
+      '<div><label>ราคา/ใบ</label><input class="i-price" type="number" step="0.01" value="' + esc(it.price||'') + '"></div>' +
+    '</div><div class="qty-note"></div>';
+
+  const q = s => d.querySelector(s);
+  function fillSizes(){
+    const t = q('.i-type').value;
+    const sizes = (S['ขนาดตามประเภท'] || {})[t] || [];
+    q('.i-size').innerHTML = opts(sizes, it.size);
+  }
+  function refresh(){
+    const t = q('.i-type').value, sz = q('.i-size').value;
+    const per = ((DATA && DATA.perBag) || {})[t + '|' + sz] || 0;
+    const bags = Number(q('.i-bags').value) || 0, extra = Number(q('.i-extra').value) || 0;
+    const total = per > 0 && bags > 0 ? bags * per + extra : extra;
+    q('.s-title').textContent = [t, sz, q('.i-shape').value, q('.i-neck').value, q('.i-color').value]
+      .filter(Boolean).join(' ') || 'รายการใหม่';
+    q('.qty-note').textContent = per > 0
+      ? (bags ? bags + ' ถุง × ' + per + ' ใบ' + (extra ? ' + ' + extra + ' ใบ' : '') + ' = ' + baht(total) + ' ใบ'
+              : 'สินค้านี้ ' + per + ' ใบ/ถุง — ใส่จำนวนถุงได้เลย')
+      : (total ? 'รวม ' + baht(total) + ' ใบ' : 'สินค้านี้ยังไม่มีสูตรใบ/ถุง — กรอกจำนวนที่ช่อง "เศษ (ใบ)"');
+    calcTotal();
+  }
+  q('.i-type').addEventListener('change', () => { fillSizes(); refresh(); });
+  d.querySelectorAll('select,input').forEach(el => el.addEventListener('change', refresh));
+  d.querySelectorAll('input').forEach(el => el.addEventListener('input', refresh));
+  q('.i-del').addEventListener('click', () => { d.remove(); calcTotal(); });
+  $('oItems').appendChild(d);
+  fillSizes(); refresh();
+}
+function readSpecItems(){
+  return [...$('oItems').querySelectorAll('.spec-row')].map(r => {
+    const g = s => r.querySelector(s).value.trim();
+    const type = g('.i-type'), size = g('.i-size');
+    const per = ((DATA && DATA.perBag) || {})[type + '|' + size] || 0;
+    const bags = Number(g('.i-bags')) || 0, extra = Number(g('.i-extra')) || 0;
+    return { type, size, neck: g('.i-neck'), shape: g('.i-shape'), color: g('.i-color'),
+      screenColor: g('.i-scrcolor'), capColor: g('.i-cap'), bags, extra, perBag: per,
+      qty: per > 0 && bags > 0 ? bags * per + extra : extra,
+      price: Number(g('.i-price')) || 0, screen: !!g('.i-scrcolor') };
+  }).filter(it => it.type && it.qty > 0);
+}
 function addItemRow(target='oItems', it={}){
   const d = document.createElement('div');
   d.className = 'item-row';
@@ -448,24 +540,44 @@ function readItems(target){
   })).filter(it => it.name && it.qty);
 }
 function calcTotal(){
-  const t = readItems('oItems').reduce((s,it) => s + it.qty*it.price, 0);
-  $('oTotal').textContent = 'รวม ' + baht(t) + ' บาท';
+  const items = readSpecItems();
+  const t = items.reduce((s,it) => s + it.qty*it.price, 0);
+  const pcs = items.reduce((s,it) => s + it.qty, 0);
+  $('oTotal').textContent = 'รวม ' + baht(pcs) + ' ใบ' + (t ? ' · ' + baht(t) + ' บาท' : ' (ยังไม่ใส่ราคา)');
 }
-$('oAdd').addEventListener('click', () => addItemRow());
+$('oAdd').addEventListener('click', () => addSpecRow());
 $('oSave').addEventListener('click', async () => {
-  const items = readItems('oItems');
+  const items = readSpecItems();
   const customer = $('oCust').value.trim();
-  if (!customer || !items.length) return toast('ใส่ลูกค้ากับรายการก่อน');
-  const j = await api('pkOrderSave', { customer, items, due: $('oDue').value, note: $('oNote').value });
+  if (!customer) return toast('ใส่ชื่อลูกค้าก่อน');
+  if (!items.length) return toast('เลือกสินค้าและใส่จำนวนก่อน');
+  const j = await api('pkOrderSave', {
+    customer, items, due: $('oDue').value, note: $('oNote').value,
+    buyType: $('oBuyType').value, payStatus: $('oPay').value, artStatus: $('oArt').value,
+    blockFee: $('oBlock').value, screenTeam: $('oTeam').value, urgent: $('oUrgent').checked,
+  });
   toast('✅ ' + j.id + ' · ' + baht(j.total) + ' บ.' + (j.unmapped.length ? ' ⚠️ นอกระบบสต๊อก: ' + j.unmapped.join(',') : ''));
-  $('oCust').value=''; $('oNote').value=''; $('oItems').innerHTML=''; addItemRow(); calcTotal();
+  $('oCust').value=''; $('oNote').value=''; $('oBlock').value=''; $('oUrgent').checked=false;
+  $('oItems').innerHTML=''; addSpecRow(); calcTotal();
   loadData();
 });
 const CHIP = s => ({'รอผลิต':'c-wait','กำลังผลิต':'c-doing','รอสกรีน':'c-wait','กำลังสกรีน':'c-doing','พร้อมส่ง':'c-ready','ส่งบางส่วน':'c-doing','ส่งแล้ว':'c-done','ยกเลิก':'c-done','เสร็จ':'c-done','ค้างชำระ':'c-owe','วางบิลแล้ว':'c-wait','ชำระแล้ว':'c-done','รอเก็บ':'c-owe'}[s] || 'c-wait');
+// ป้ายสถานะที่เดิมต้องอ่านเอาจากหมายเหตุ — ให้เห็นตั้งแต่ในลิสต์
+function orderBadges(o){
+  let s = '';
+  if (o['ด่วน']) s += '<span class="chip c-owe">⚡ ด่วน</span> ';
+  const pay = o['สถานะเงิน'];
+  if (pay && pay !== 'โอนแล้ว' && pay !== 'ทำได้เลย') s += '<span class="chip c-owe">' + esc(pay) + '</span> ';
+  const art = o['สถานะแบบ'];
+  if (art && art !== 'ไม่ต้องใช้แบบ' && art !== 'แบบผ่านแล้ว') s += '<span class="chip c-wait">' + esc(art) + '</span> ';
+  if (o['ค้าง(ถุง)']) s += '<span class="chip c-wait">ค้าง ' + esc(o['ค้าง(ถุง)']) + ' ถุง' + (o['สาเหตุค้าง'] ? ' (' + esc(o['สาเหตุค้าง']) + ')' : '') + '</span> ';
+  if (o['ทีมสกรีน']) s += '<span class="chip c-doing">' + esc(o['ทีมสกรีน']) + '</span> ';
+  return s;
+}
 function renderOrders(){
   $('orderList').innerHTML = DATA.orders.slice(0,40).map(o =>
     '<li><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + '</span></div>' +
-    '<div><span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
+    '<div>' + orderBadges(o) + '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
     (['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ']) ? '' : '<button class="mini warn" data-cancel="' + esc(o['Order_ID']) + '">ยกเลิก</button>') +
     '</div></div></li>').join('') || '<li class="meta">ยังไม่มีออเดอร์</li>';
 }
@@ -707,7 +819,6 @@ function printStmtDoc(no, date, customer, bills, total, due, st){
 // ─── เริ่มระบบ ───
 $('qRetry').addEventListener('click', flushQueue);
 addItemRow('bItems');
-addItemRow('oItems');
 if (TOKEN && ME) enterApp(); else doLogout(false);
 </script>
 </body>

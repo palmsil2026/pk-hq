@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30e';
+const CODE_VERSION = '2026-08-30f';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -38,13 +38,56 @@ function setProp(k, v) { PropertiesService.getScriptProperties().setProperty(k, 
 // ─────────────────────────────────────────────
 // โครงสร้างชีต PKSystem (setupPkSystem รันซ้ำได้ — เพิ่มเฉพาะที่ขาด)
 // ─────────────────────────────────────────────
+// ─────────────────────────────────────────────
+// คลังคำศัพท์สเปกสินค้า — ถอดจากออเดอร์จริง 136 ใบในชีต "Order" ของ AppSheet เดิม (2568)
+// พนักงานไม่ได้เลือก "ชื่อสินค้า" ชิ้นเดียว แต่ประกอบจาก ประเภท × ขนาด × คอ × ทรง × สี
+// แก้เพิ่มได้ที่นี่ (เพิ่มค่าใหม่ต่อท้าย อย่าลบของเดิม เดี๋ยวออเดอร์เก่าอ่านไม่ออก)
+// ─────────────────────────────────────────────
+const SPEC = {
+  ประเภทสินค้า: ['ขวด', 'ถัง', 'ฟิล์มหุ้มคอ', 'ฝา', 'ฟิล์มแพ็คโหล', 'ถุงหิ้ว', 'ลัง'],
+  ขนาดตามประเภท: {
+    'ขวด': ['250 ml', '600 ml', '350 ml', '500 ml', 'น้ำลัง ปากแคบ (920)', '800 ml', '1500 ml'],
+    'ถัง': ['18.9 ลิตร', 'ขุ่น 20 ลิตร'],
+    'ฟิล์มหุ้มคอ': ['คอขวดปากกว้าง', 'คอถัง', 'คอขวดปากแคบ'],
+    'ฝา': ['ถังใส', 'ถังขุ่น', 'PET น้ำลัง ปากแคบ'],
+    'ฟิล์มแพ็คโหล': ['12 x 15 (250 ml)'],
+    'ถุงหิ้ว': ['เบอร์ 8 x 18 (800 ml)'],
+    'ลัง': [],
+  },
+  คอขวด: ['คอยาว', 'คอสั้น'],
+  รูปทรง: ['เพชร', 'เรียบ', 'MK', 'เหลี่ยม'],
+  สี: ['น้ำเงิน', 'ใส', 'เขียว', 'ฟ้า', 'ฟ้าทะเล', 'ฟ้าเข้ม', 'ขาวขุ่น', 'เขียวอ่อน', 'ดำ (เกรด B)'],
+  สีสกรีน: ['น้ำเงิน', 'ขาว', 'ฟ้าคริสตัล', 'เขียวเข้ม', 'เขียวอ่อน', 'ส้ม', 'ชมพูบานเย็น', 'ดำ', 'แดง', 'ทอง', 'ฟ้านม', 'ม่วง', 'ยังไม่รู้'],
+  พร้อมฝาสี: ['ขาว', 'น้ำเงิน', 'ฟ้าคริสตัล 012', 'ขาว 001', 'ดำ 018', 'เขียวอ่อน', 'เขียวเข้ม 038', 'ส้ม 045', 'ชมพูบานเย็น 006', 'ชมพู'],
+  ประเภทการซื้อ: ['ขายราคาโรงงาน', 'ขายหน้าร้าน'],
+  ทีมสกรีน: ['ทีม 2', 'ทีม 1', 'ทีม 3'],
+  สถานะเงิน: ['รอโอนเงิน', 'โอนแล้ว', 'ทำได้เลย', 'เก็บปลายทาง'],
+  สถานะแบบ: ['ไม่ต้องใช้แบบ', 'รอแบบ', 'แก้ไขแบบ', 'แบบผ่านแล้ว'],
+};
+// จำนวน "ใบต่อถุง" — ถอดจากออเดอร์จริง (รวมใบ ÷ ถุง) ทุกค่าตรงกันหมดไม่มีขัดแย้ง
+const PER_BAG = {
+  'ขวด|350 ml': 300,
+  'ขวด|250 ml': 252,
+  'ขวด|500 ml': 250,
+  'ขวด|600 ml': 200,
+  'ขวด|800 ml': 190,
+  'ขวด|น้ำลัง ปากแคบ (920)': 130,
+  'ขวด|1500 ml': 100,
+  'ถัง|18.9 ลิตร': 5,
+  'ถัง|ขุ่น 20 ลิตร': 5,
+};
+function perBag_(type, size) { return PER_BAG[type + '|' + size] || 0; }
+
 const TABS = {
   Customers:  ['Customer_ID', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เครดิต(วัน)', 'หมายเหตุ', 'สร้างเมื่อ'],
   Products:   ['Product_ID', 'ชื่อสินค้า', 'หน่วย', 'ราคา/หน่วย', 'หมายเหตุ', 'คงเหลือ', 'จุดเตือน', 'สถานะ'],
   Materials:  ['Material_ID', 'ชื่อวัตถุดิบ', 'หน่วย', 'คงเหลือ', 'จุดสั่งซื้อ', 'หมายเหตุ'],
-  Orders:     ['Order_ID', 'วันที่รับ', 'ลูกค้า', 'กำหนดส่ง', 'สถานะ', 'มีสกรีน', 'ยอดรวม', 'รายการ', 'หมายเหตุ', 'ผู้รับออเดอร์', 'Bill_No', 'อัปเดตล่าสุด', 'Customer_ID', 'ส่งครบเมื่อ'],
-  Production: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'งาน', 'จำนวนรวม', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม'],
-  ScreenJobs: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'ลาย/สี', 'จำนวน', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม'],
+  Orders:     ['Order_ID', 'วันที่รับ', 'ลูกค้า', 'กำหนดส่ง', 'สถานะ', 'มีสกรีน', 'ยอดรวม', 'รายการ', 'หมายเหตุ', 'ผู้รับออเดอร์', 'Bill_No', 'อัปเดตล่าสุด', 'Customer_ID', 'ส่งครบเมื่อ',
+               // ▼ เพิ่ม 2026-08-30f — เดิมพนักงานเขียนเรื่องพวกนี้ปนใน 'หมายเหตุ' เพราะแอปเก่าไม่มีช่อง
+               'สถานะเงิน', 'สถานะแบบ', 'ค่าบล็อก', 'ด่วน', 'ทีมสกรีน', 'วันเสร็จจริง', 'ประเภทการซื้อ',
+               'ทำแล้ว(ถุง)', 'ค้าง(ถุง)', 'สาเหตุค้าง'],
+  Production: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'งาน', 'จำนวนรวม', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง'],
+  ScreenJobs: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'ลาย/สี', 'จำนวน', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง'],
   Deliveries: ['Delivery_ID', 'เมื่อ', 'Order_ID', 'ลูกค้า', 'รายการ', 'ผู้ส่ง', 'หมายเหตุ'],
   Bills:      ['Bill_No', 'วันที่', 'ลูกค้า', 'Order_ID', 'ยอดรวม', 'ประเภท', 'ช่องทางชำระ', 'สถานะ', 'กำหนดชำระ', 'ชำระเมื่อ', 'Stmt_No', 'รายการ', 'หมายเหตุ', 'ที่มา', 'ผู้ทำ'],
   Statements: ['Stmt_No', 'วันที่วาง', 'ลูกค้า', 'จำนวนบิล', 'ยอดรวม', 'กำหนดเก็บเงิน', 'สถานะ', 'บิลที่รวม', 'หมายเหตุ'],
@@ -336,13 +379,36 @@ function stockCount(pay, me) { // {kind, id, counted, note} นับจริ�
 // ─────────────────────────────────────────────
 // ออเดอร์ → งานผลิต/สกรีน "รายสินค้า" → ส่งเป็นงวด
 // ─────────────────────────────────────────────
+// ชื่อสินค้าอ่านง่ายจากสเปก 5 แกน — ใช้ทั้งแสดงผลและจับคู่แท็บ Products
+function specName_(it) {
+  return [it.type, it.size, it.shape, it.neck, it.color].map(function (x) { return String(x || '').trim(); })
+    .filter(Boolean).join(' ');
+}
+// จำนวนใบ = ถุง × ใบต่อถุง + เศษใบ (วิธีนับจริงของหน้างาน) · ไม่ได้กรอกถุงก็ใช้จำนวนตรง ๆ
+function specQty_(it) {
+  const bags = Number(it.bags) || 0, extra = Number(it.extra) || 0;
+  if (bags > 0) {
+    const per = Number(it.perBag) || perBag_(it.type, it.size);
+    if (per > 0) return bags * per + extra;
+  }
+  return Number(it.qty) || extra || 0;
+}
 function resolveItems_(items) {
   const prods = rowsToObjs('Products');
   const unmapped = [];
   const out = (items || []).map(function (it) {
-    const p = prods.filter(function (x) { return String(x['ชื่อสินค้า']).trim() === String(it.name).trim(); })[0];
-    if (!p) unmapped.push(it.name);
-    return { pid: p ? p['Product_ID'] : '', name: String(it.name).trim(), qty: Number(it.qty) || 0, price: Number(it.price) || 0, screen: !!it.screen, screenNote: it.screenNote || '' };
+    const name = it.type ? specName_(it) : String(it.name || '').trim();
+    const qty = it.type ? specQty_(it) : (Number(it.qty) || 0);
+    const p = prods.filter(function (x) { return String(x['ชื่อสินค้า']).trim() === name; })[0];
+    if (!p && name) unmapped.push(name);
+    return {
+      pid: p ? p['Product_ID'] : '', name: name, qty: qty, price: Number(it.price) || 0,
+      screen: !!it.screen, screenNote: it.screenNote || '',
+      // เก็บสเปกดิบไว้ด้วย — รายงาน/ค้นย้อนหลังทำได้ ไม่ต้องแกะจากชื่อ
+      type: it.type || '', size: it.size || '', neck: it.neck || '', shape: it.shape || '', color: it.color || '',
+      screenColor: it.screenColor || '', capColor: it.capColor || '',
+      bags: Number(it.bags) || 0, extra: Number(it.extra) || 0, perBag: Number(it.perBag) || perBag_(it.type, it.size) || 0,
+    };
   }).filter(function (it) { return it.name && it.qty > 0; });
   return { items: out, unmapped: unmapped };
 }
@@ -359,6 +425,9 @@ function orderSave(pay, me) {
     'Order_ID': id, 'วันที่รับ': today(), 'ลูกค้า': customer, 'Customer_ID': cust.id || '',
     'กำหนดส่ง': pay.due || '', 'สถานะ': 'รอผลิต', 'มีสกรีน': hasScreen ? 'มี' : '', 'ยอดรวม': total,
     'รายการ': JSON.stringify(items), 'หมายเหตุ': pay.note || '', 'ผู้รับออเดอร์': me.name, 'อัปเดตล่าสุด': now(),
+    // ช่องใหม่ 2026-08-30f — เดิมเขียนปนในหมายเหตุ ("รอโอน" "รอแบบ" "ค่าบล้อค 500" "ขอด่วน")
+    'สถานะเงิน': pay.payStatus || '', 'สถานะแบบ': pay.artStatus || '', 'ค่าบล็อก': Number(pay.blockFee) || '',
+    'ด่วน': pay.urgent ? 'ด่วน' : '', 'ทีมสกรีน': pay.screenTeam || '', 'ประเภทการซื้อ': pay.buyType || '',
   });
   items.forEach(function (it) {
     appendObj('Production', {
@@ -693,6 +762,7 @@ function teamData(p, me) {
   return {
     ok: true, version: CODE_VERSION, me: { id: me.id, name: me.name, nick: me.nick, dept: me.dept, via: me.via },
     customers: custs, products: rowsToObjs('Products').filter(function (p2) { return (p2['สถานะ'] || 'ใช้งาน') !== 'เลิกขาย'; }),
+    spec: SPEC, perBag: PER_BAG,
     settings: settingsMap(),
     orders: active.reverse().concat(recentDone),
     production: rowsToObjs('Production').filter(notJob).reverse(),
@@ -823,7 +893,7 @@ const ACT_LABEL = {
   pkLogin: 'เข้าสู่ระบบ', pkOrderSave: 'ลงออเดอร์', pkOrderEdit: 'แก้ออเดอร์', pkOrderCancel: 'ยกเลิกออเดอร์',
   pkJobStart: 'เริ่มงาน', pkProdLog: 'ลงผลผลิต', pkJobClose: 'ปิดงาน', pkDeliver: 'ส่งของ',
   pkBillCreate: 'ออกบิล', pkBillPay: 'รับชำระ', pkBillCancel: 'ยกเลิกบิล', pkStmtCreate: 'สร้างใบวางบิล', pkStmtDone: 'ปิดใบวางบิล',
-  pkCustSave: 'บันทึกลูกค้า', pkStockIn: 'รับของเข้า', pkStockCount: 'นับ/ปรับสต๊อก',
+  pkCustSave: 'บันทึกลูกค้า', pkStockIn: 'รับของเข้า', pkStockCount: 'นับ/ปรับสต๊อก', pkOrderFlags: 'อัปเดตสถานะออเดอร์',
   pkPriceSet: 'ปรับราคา', pkStaffSave: 'บันทึกพนักงาน',
 };
 function ACTIONS() {
@@ -847,6 +917,7 @@ function ACTIONS() {
     pkCustSave: { auth: 'team', mut: true, fn: custSave },
     pkStockIn: { auth: 'team', mut: true, fn: stockIn },
     pkStockCount: { auth: 'team', mut: true, depts: ['ผลิต', 'ออฟฟิศ', 'บริหาร'], fn: stockCount },
+    pkOrderFlags: { auth: 'team', mut: true, fn: orderFlags },
     pkExec: { auth: 'exec', fn: function () { return execData(); } },
     pkPriceSet: { auth: 'exec', mut: true, fn: priceSet },
     pkPriceHistory: { auth: 'exec', fn: function (pay, me, p) { return { ok: true, history: tailObjs('PriceHistory', Number(p.limit) || 100).reverse() }; } },
@@ -1041,6 +1112,134 @@ function seedProducts() {
   appendObjs('Products', add);
   Logger.log('เพิ่มสินค้าใหม่ ' + add.length + ' รายการ (มีอยู่แล้ว ' + (PRODUCT_SEED.length - add.length) + ')');
   return add.length;
+}
+
+// อัปเดตสถานะที่เดิมเขียนมือในหมายเหตุ (จดใน ActivityLog ทุกครั้ง)
+function orderFlags(pay, me) {
+  const patch = {};
+  ['สถานะเงิน', 'สถานะแบบ', 'ทีมสกรีน', 'วันเสร็จจริง'].forEach(function (k) {
+    if (pay[k] !== undefined) patch[k] = pay[k];
+  });
+  if (pay['ค่าบล็อก'] !== undefined) patch['ค่าบล็อก'] = Number(pay['ค่าบล็อก']) || '';
+  if (pay['ด่วน'] !== undefined) patch['ด่วน'] = pay['ด่วน'] ? 'ด่วน' : '';
+  if (!Object.keys(patch).length) return { ok: false, error: 'ไม่มีอะไรให้แก้' };
+  patch['อัปเดตล่าสุด'] = now();
+  if (!updateWhere('Orders', 'Order_ID', pay.id, patch)) return { ok: false, error: 'ไม่พบออเดอร์ ' + pay.id };
+  return { ok: true, _log: { ref: pay.id, detail: Object.keys(patch).filter(function (k) { return k !== 'อัปเดตล่าสุด'; })
+    .map(function (k) { return k + '=' + patch[k]; }).join(' · ') } };
+}
+
+// ─────────────────────────────────────────────
+// นำเข้าออเดอร์เก่าจากชีต "Order" ของ AppSheet (เมลเก่า palm.work2025) — รันครั้งเดียวใน editor
+// ประวัติล้วน: ไม่สร้างงานผลิต/สกรีน ไม่แตะสต๊อก · รันซ้ำได้ ไม่เบิ้ล (กันด้วย Order_ID)
+// แกะ "หมายเหตุ" ที่พนักงานเขียนมือ ออกเป็นช่องจริง (สถานะเงิน/สถานะแบบ/ค่าบล็อก/ด่วน/วันเสร็จจริง)
+// ─────────────────────────────────────────────
+const LEGACY_ORDER_SHEET_ID = '1515IKTrgz-b1LDlpW66y6LHy_S1WEZZraOWczwZaRYg';
+
+function thaiDate_(s) {   // '28/7/2568' หรือ '28/7/68' → '2025-07-28'
+  const m = String(s || '').trim().match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
+  if (!m) return '';
+  let y = Number(m[3]);
+  if (y < 100) y += 2500;           // 68 → 2568
+  if (y > 2400) y -= 543;           // พ.ศ. → ค.ศ.
+  const d = ('0' + m[1]).slice(-2), mo = ('0' + m[2]).slice(-2);
+  return y + '-' + mo + '-' + d;
+}
+
+// แกะหมายเหตุมือ → ช่องจริง + คืนข้อความส่วนที่เหลือ
+function parseLegacyNote_(note) {
+  let rest = String(note || '').trim();
+  const out = {};
+  const take = function (re, fn) {
+    const m = rest.match(re);
+    if (m) { fn(m); rest = rest.replace(m[0], ' ').trim(); }
+  };
+  // "ค่าบล้อค 500 บาท" — สะกดได้หลายแบบ (บล็อค/บล้อค/บลอก)
+  take(/ค่าบล[็้]?อ?[คก]\s*([\d,]+)\s*บาท?/, function (m) { out['ค่าบล็อก'] = Number(String(m[1]).replace(/,/g, '')) || ''; });
+  // งานค้าง: "13/10/68ทำ25ถุงค้าง9ถุง(ขวดหมด)" · "ทำ50ถุงค้างอีก10ถุงขวดหมด"
+  take(/ทำ\s*([\d,]+)\s*ถุง\s*ค้าง\s*(?:อีก)?\s*([\d,]+)\s*ถุง/, function (m) {
+    out['ทำแล้ว(ถุง)'] = Number(String(m[1]).replace(/,/g, '')) || '';
+    out['ค้าง(ถุง)'] = Number(String(m[2]).replace(/,/g, '')) || '';
+  });
+  take(/\(?\s*(ขวดหมด|ของหมด|วัตถุดิบหมด)\s*\)?/, function (m) { out['สาเหตุค้าง'] = m[1]; });
+  take(/ทำครบแล้ว\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/, function (m) { out['วันเสร็จจริง'] = thaiDate_(m[1]); });
+  take(/เสร็จ\s*(\d{1,2}\/\d{1,2}\/\d{2,4})/, function (m) { if (!out['วันเสร็จจริง']) out['วันเสร็จจริง'] = thaiDate_(m[1]); });
+  take(/แก้ไขแบบ/, function () { out['สถานะแบบ'] = 'แก้ไขแบบ'; });
+  take(/รอแบบ/,   function () { out['สถานะแบบ'] = 'รอแบบ'; });
+  take(/ทำแบบ/,   function () { out['สถานะแบบ'] = 'รอแบบ'; });
+  take(/รอโอน(เงิน)?/, function () { out['สถานะเงิน'] = 'รอโอนเงิน'; });
+  take(/ทำได้เลย/,     function () { out['สถานะเงิน'] = 'ทำได้เลย'; });
+  take(/ขอด่วน|ด่วน/,  function () { out['ด่วน'] = 'ด่วน'; });
+  out['หมายเหตุ'] = rest.replace(/\s{2,}/g, ' ').trim();
+  return out;
+}
+
+function importLegacyOrders(srcId) {
+  const src = SpreadsheetApp.openById(srcId || LEGACY_ORDER_SHEET_ID);
+  const sh = src.getSheets()[0];
+  const v = sh.getDataRange().getValues();
+  const head = v[0].map(String);
+  const at = function (r, label) { const i = head.indexOf(label); return i < 0 ? '' : r[i]; };
+  const cellDate = function (x) { return x instanceof Date ? Utilities.formatDate(x, TZ, 'yyyy-MM-dd') : thaiDate_(x); };
+
+  const seen = {};
+  rowsToObjs('Orders').forEach(function (o) { seen[String(o['Order_ID'])] = true; });
+  const seenCust = {};
+  rowsToObjs('Customers').forEach(function (c) { seenCust[String(c['ชื่อลูกค้า']).trim()] = true; });
+  let custCount = Object.keys(seenCust).length;
+
+  const outOrders = [], outCust = [];
+  let skipped = 0;
+  for (let i = 1; i < v.length; i++) {
+    const r = v[i];
+    const rawId = String(at(r, 'ID') || '').trim();
+    const cust = String(at(r, 'ลูกค้า') || '').trim();
+    if (!rawId || !cust) continue;
+    const id = 'เก่า-' + rawId;
+    if (seen[id]) { skipped++; continue; }
+    seen[id] = true;
+
+    const bags  = Number(at(r, 'จำนวน (ถุง)')) || 0;
+    const extra = Number(at(r, 'และซื้อย่อย (ใบ)')) || 0;
+    const piece = Number(at(r, 'จำนวน (ชิ้น)')) || 0;
+    let total   = Number(at(r, 'รวมทั้งหมด (ใบ)')) || 0;
+    if (!total) total = piece || (bags ? bags * perBag_(String(at(r, 'ประเภทสินค้า')), String(at(r, 'ขนาด'))) + extra : extra);
+
+    const it = {
+      pid: '', name: '', qty: total, price: Number(at(r, 'ราคาต่อหน่วย')) || 0, screen: !!String(at(r, 'สีสกรีน')).trim(),
+      type: String(at(r, 'ประเภทสินค้า') || '').trim(), size: String(at(r, 'ขนาด') || '').trim(),
+      neck: String(at(r, 'คอขวด') || '').trim(), shape: String(at(r, 'รูปทรง') || '').trim(),
+      color: String(at(r, 'สี') || '').trim(), screenColor: String(at(r, 'สีสกรีน') || '').trim(),
+      capColor: String(at(r, 'พร้อมฝาสี') || '').trim(), bags: bags, extra: extra,
+      perBag: perBag_(String(at(r, 'ประเภทสินค้า')), String(at(r, 'ขนาด'))) || 0,
+    };
+    it.name = specName_(it);
+
+    const st = String(at(r, 'สถานะ') || '').trim();
+    const n = parseLegacyNote_(at(r, 'หมายเหตุ'));
+    outOrders.push({
+      'Order_ID': id, 'วันที่รับ': cellDate(at(r, 'วันที่สั่งซื้อ')), 'ลูกค้า': cust,
+      'กำหนดส่ง': cellDate(at(r, 'ส่งภายในวันที่')),
+      'สถานะ': st === 'ยกเลิก' ? 'ยกเลิก' : 'ส่งแล้ว',
+      'มีสกรีน': it.screenColor ? 'มี' : '', 'ยอดรวม': total * (Number(at(r, 'ราคาต่อหน่วย')) || 0),
+      'รายการ': JSON.stringify([it]), 'หมายเหตุ': n['หมายเหตุ'] || '',
+      'ผู้รับออเดอร์': String(at(r, 'ผู้รับออเดอร์') || '').trim(),
+      'อัปเดตล่าสุด': now(), 'ส่งครบเมื่อ': n['วันเสร็จจริง'] || '',
+      'สถานะเงิน': n['สถานะเงิน'] || '', 'สถานะแบบ': n['สถานะแบบ'] || '', 'ค่าบล็อก': n['ค่าบล็อก'] || '',
+      'ด่วน': n['ด่วน'] || '', 'ทีมสกรีน': String(at(r, 'ทีมสกรีน') || '').trim(),
+      'วันเสร็จจริง': n['วันเสร็จจริง'] || '', 'ประเภทการซื้อ': String(at(r, 'ประเภทการซื้อ') || '').trim(),
+      'ทำแล้ว(ถุง)': n['ทำแล้ว(ถุง)'] || '', 'ค้าง(ถุง)': n['ค้าง(ถุง)'] || '', 'สาเหตุค้าง': n['สาเหตุค้าง'] || '',
+    });
+    if (!seenCust[cust]) {
+      seenCust[cust] = true; custCount++;
+      outCust.push({ 'Customer_ID': 'C' + ('000' + custCount).slice(-4), 'ชื่อลูกค้า': cust, 'สร้างเมื่อ': now() });
+    }
+  }
+  appendObjs('Customers', outCust);
+  appendObjs('Orders', outOrders);
+  Logger.log('นำเข้าออเดอร์เก่า ' + outOrders.length + ' ใบ · ลูกค้าใหม่ ' + outCust.length + ' ราย · ข้ามที่มีแล้ว ' + skipped);
+  Logger.log('⚠️ เป็นประวัติล้วน — ไม่สร้างงานผลิต/สกรีน และไม่แตะสต๊อก');
+  return { orders: outOrders.length, customers: outCust.length, skipped: skipped };
 }
 
 function doPost(e) { return doGet(e); }
