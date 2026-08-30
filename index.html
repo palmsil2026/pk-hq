@@ -228,11 +228,12 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
     <p class="meta" id="plInfo"></p>
     <div class="row">
       <div><label>จำนวนดี</label><input id="plGood" type="number" inputmode="numeric"></div>
+      <div><label>เกรด B</label><input id="plGradeB" type="number" inputmode="numeric" value="0"></div>
       <div><label>ของเสีย</label><input id="plWaste" type="number" inputmode="numeric" value="0"></div>
     </div>
     <div id="plReasonWrap" hidden><label>สาเหตุของเสีย</label><select id="plReason"></select></div>
     <div class="row">
-      <div><label>เครื่อง (ถ้ามี)</label><input id="plMachine"></div>
+      <div><label>เครื่อง</label><select id="plMachine"></select></div>
       <div><label>กะ</label><select id="plShift"><option value="">—</option><option>เช้า</option><option>บ่าย</option><option>ดึก</option></select></div>
     </div>
     <label>หมายเหตุ</label><input id="plNote">
@@ -394,7 +395,11 @@ async function enterApp(){
 }
 async function loadData(){
   try { DATA = await api('pkTeamData'); } catch(e){ return; }
-  $('dlCust').innerHTML = DATA.customers.map(c => '<option value="' + esc(c['ชื่อลูกค้า']) + '">').join('');
+  // ทะเบียนลูกค้า: โชว์เส้นทาง/อำเภอ กันเลือกผิดคนชื่อคล้ายกัน
+  $('dlCust').innerHTML = DATA.customers.map(c => {
+    const tag = [c['เส้นทาง'] ? 'สาย ' + c['เส้นทาง'] : '', c['อำเภอ'] || ''].filter(Boolean).join(' · ');
+    return '<option value="' + esc(c['ชื่อลูกค้า']) + '"' + (tag ? ' label="' + esc(tag) + '"' : '') + '>';
+  }).join('');
   $('dlProd').innerHTML = DATA.products.map(p => '<option value="' + esc(p['ชื่อสินค้า']) + '">').join('');
   const S = DATA.spec || {};
   if (!$('oBuyType').options.length){
@@ -404,6 +409,8 @@ async function loadData(){
     $('oTeam').innerHTML = opts(S['ทีมสกรีน'], '', 'ยังไม่จ่ายทีม');
     $('oItems').innerHTML = ''; addSpecRow();
   }
+  // ทะเบียนเครื่องฉีด — มาจากแท็บ Machines (แก้เพิ่ม/ปิดเครื่องได้ในชีต ไม่ต้องแก้โค้ด)
+  $('plMachine').innerHTML = opts(DATA.machines || [], '', 'ไม่ระบุเครื่อง');
   $('dlMat').innerHTML = DATA.materials.map(m => '<option value="' + esc(m['ชื่อวัตถุดิบ']) + '">').join('');
   $('plReason').innerHTML = (DATA.wasteReasons||[]).map(r => '<option>' + esc(r) + '</option>').join('');
   renderOrders(); renderJobs(); renderDeliver(); renderStock(); renderOffice(); renderHome();
@@ -493,10 +500,14 @@ function addSpecRow(it={}){
     const total = per > 0 && bags > 0 ? bags * per + extra : extra;
     q('.s-title').textContent = [t, sz, q('.i-shape').value, q('.i-neck').value, q('.i-color').value]
       .filter(Boolean).join(' ') || 'รายการใหม่';
-    q('.qty-note').textContent = per > 0
+    let msg = per > 0
       ? (bags ? bags + ' ถุง × ' + per + ' ใบ' + (extra ? ' + ' + extra + ' ใบ' : '') + ' = ' + baht(total) + ' ใบ'
               : 'สินค้านี้ ' + per + ' ใบ/ถุง — ใส่จำนวนถุงได้เลย')
       : (total ? 'รวม ' + baht(total) + ' ใบ' : 'สินค้านี้ยังไม่มีสูตรใบ/ถุง — กรอกจำนวนที่ช่อง "เศษ (ใบ)"');
+    // ขั้นต่ำการสั่ง (จากตารางราคาเดิม) — เตือนอย่างเดียว ไม่บล็อก เพราะหน้างานยืดหยุ่นได้
+    const min = ((DATA && DATA.minOrder) || {})[t + '|' + sz] || 0;
+    if (min && total > 0 && total < min) msg += ' · ⚠️ ต่ำกว่าขั้นต่ำ ' + baht(min) + ' ใบ';
+    q('.qty-note').textContent = msg;
     calcTotal();
   }
   q('.i-type').addEventListener('change', () => { fillSizes(); refresh(); });
@@ -617,7 +628,7 @@ async function jobAction(e){
     CURRENT_JOB = { type, id, job: j };
     $('plTitle').textContent = 'ลงผลผลิต — ' + (j['สินค้า'] || j['ลาย/สี'] || '');
     $('plInfo').textContent = j['Order_ID'] + ' · สั่ง ' + baht(j['จำนวนสั่ง']) + ' · ดีแล้ว ' + baht(j['ดีสะสม']) + ' · เสียแล้ว ' + baht(j['เสียสะสม']);
-    $('plGood').value=''; $('plWaste').value='0'; $('plMachine').value=''; $('plNote').value=''; $('plReasonWrap').hidden = true;
+    $('plGood').value=''; $('plGradeB').value='0'; $('plWaste').value='0'; $('plMachine').value=''; $('plNote').value=''; $('plReasonWrap').hidden = true;
     $('plModal').classList.add('on');
   }
   if (act === 'close'){
@@ -634,11 +645,11 @@ $('screenList').addEventListener('click', jobAction);
 $('plWaste').addEventListener('input', function(){ $('plReasonWrap').hidden = !(Number(this.value) > 0); });
 $('plCancel').addEventListener('click', () => $('plModal').classList.remove('on'));
 $('plSave').addEventListener('click', async () => {
-  const good = Number($('plGood').value)||0, waste = Number($('plWaste').value)||0;
+  const good = Number($('plGood').value)||0, waste = Number($('plWaste').value)||0, gradeB = Number($('plGradeB').value)||0;
   if (good<=0 && waste<=0) return toast('ใส่จำนวนดีหรือของเสีย');
   try {
     await api('pkProdLog', {
-      type: CURRENT_JOB.type, id: CURRENT_JOB.id, good, waste,
+      type: CURRENT_JOB.type, id: CURRENT_JOB.id, good, waste, gradeB,
       reason: waste>0 ? $('plReason').value : '', machine: $('plMachine').value, shift: $('plShift').value, note: $('plNote').value,
     }, {}, { queueable:true });
     toast('✅ บันทึกผลผลิตแล้ว');

@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30f';
+const CODE_VERSION = '2026-08-30g';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -46,8 +46,8 @@ function setProp(k, v) { PropertiesService.getScriptProperties().setProperty(k, 
 const SPEC = {
   ประเภทสินค้า: ['ขวด', 'ถัง', 'ฟิล์มหุ้มคอ', 'ฝา', 'ฟิล์มแพ็คโหล', 'ถุงหิ้ว', 'ลัง'],
   ขนาดตามประเภท: {
-    'ขวด': ['250 ml', '600 ml', '350 ml', '500 ml', 'น้ำลัง ปากแคบ (920)', '800 ml', '1500 ml'],
-    'ถัง': ['18.9 ลิตร', 'ขุ่น 20 ลิตร'],
+    'ขวด': ['250 ml', '600 ml', '350 ml', '500 ml', 'น้ำลัง ปากแคบ (920)', '800 ml', '1500 ml', '1000 ml', 'น้ำลัง ปากกว้าง (920)'],
+    'ถัง': ['18.9 ลิตร', 'ขุ่น 20 ลิตร', '15 ลิตร'],
     'ฟิล์มหุ้มคอ': ['คอขวดปากกว้าง', 'คอถัง', 'คอขวดปากแคบ'],
     'ฝา': ['ถังใส', 'ถังขุ่น', 'PET น้ำลัง ปากแคบ'],
     'ฟิล์มแพ็คโหล': ['12 x 15 (250 ml)'],
@@ -75,25 +75,38 @@ const PER_BAG = {
   'ขวด|1500 ml': 100,
   'ถัง|18.9 ลิตร': 5,
   'ถัง|ขุ่น 20 ลิตร': 5,
+  'ถัง|15 ลิตร': 5,
+  'ขวด|น้ำลัง ปากกว้าง (920)': 130,
 };
 function perBag_(type, size) { return PER_BAG[type + '|' + size] || 0; }
+// ขั้นต่ำการสั่ง (ใบ) — จากตาราง "ราคา" ในชีต Stock Management ของแอปเดิม
+const MIN_ORDER = {
+  'ขวด|250 ml': 2000, 'ขวด|350 ml': 2000, 'ขวด|500 ml': 1200, 'ขวด|600 ml': 1200,
+  'ขวด|น้ำลัง ปากแคบ (920)': 500, 'ขวด|น้ำลัง ปากกว้าง (920)': 500,
+  'ถัง|18.9 ลิตร': 25, 'ถัง|15 ลิตร': 25, 'ถัง|ขุ่น 20 ลิตร': 25,
+};
+// เครื่องฉีด 12 ตัว — จากแท็บ "เครื่องจักร" ของชีต Stock Management
+const MACHINE_SEED = ['PET 1', 'PET 2', 'PET 3', 'PET 4', 'PET 5', 'PET 6', 'PET 7', 'PET 8', 'PET 9', 'PET 10', 'SHE230G PET', 'LG17-228 PET'];
 
 const TABS = {
-  Customers:  ['Customer_ID', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เครดิต(วัน)', 'หมายเหตุ', 'สร้างเมื่อ'],
+  Customers:  ['Customer_ID', 'ชื่อลูกค้า', 'เบอร์โทร', 'ที่อยู่', 'เครดิต(วัน)', 'หมายเหตุ', 'สร้างเมื่อ',
+               // ▼ เพิ่ม 2026-08-30g — จากทะเบียนลูกค้าเดิม (P&K_ลูกค้า)
+               'เส้นทาง', 'อำเภอ', 'ตำบล', 'พิกัด'],
   Products:   ['Product_ID', 'ชื่อสินค้า', 'หน่วย', 'ราคา/หน่วย', 'หมายเหตุ', 'คงเหลือ', 'จุดเตือน', 'สถานะ'],
   Materials:  ['Material_ID', 'ชื่อวัตถุดิบ', 'หน่วย', 'คงเหลือ', 'จุดสั่งซื้อ', 'หมายเหตุ'],
   Orders:     ['Order_ID', 'วันที่รับ', 'ลูกค้า', 'กำหนดส่ง', 'สถานะ', 'มีสกรีน', 'ยอดรวม', 'รายการ', 'หมายเหตุ', 'ผู้รับออเดอร์', 'Bill_No', 'อัปเดตล่าสุด', 'Customer_ID', 'ส่งครบเมื่อ',
                // ▼ เพิ่ม 2026-08-30f — เดิมพนักงานเขียนเรื่องพวกนี้ปนใน 'หมายเหตุ' เพราะแอปเก่าไม่มีช่อง
                'สถานะเงิน', 'สถานะแบบ', 'ค่าบล็อก', 'ด่วน', 'ทีมสกรีน', 'วันเสร็จจริง', 'ประเภทการซื้อ',
                'ทำแล้ว(ถุง)', 'ค้าง(ถุง)', 'สาเหตุค้าง'],
-  Production: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'งาน', 'จำนวนรวม', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง'],
-  ScreenJobs: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'ลาย/สี', 'จำนวน', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง'],
+  Production: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'งาน', 'จำนวนรวม', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง', 'เกรดBสะสม'],
+  ScreenJobs: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'ลาย/สี', 'จำนวน', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง', 'เกรดBสะสม'],
   Deliveries: ['Delivery_ID', 'เมื่อ', 'Order_ID', 'ลูกค้า', 'รายการ', 'ผู้ส่ง', 'หมายเหตุ'],
   Bills:      ['Bill_No', 'วันที่', 'ลูกค้า', 'Order_ID', 'ยอดรวม', 'ประเภท', 'ช่องทางชำระ', 'สถานะ', 'กำหนดชำระ', 'ชำระเมื่อ', 'Stmt_No', 'รายการ', 'หมายเหตุ', 'ที่มา', 'ผู้ทำ'],
   Statements: ['Stmt_No', 'วันที่วาง', 'ลูกค้า', 'จำนวนบิล', 'ยอดรวม', 'กำหนดเก็บเงิน', 'สถานะ', 'บิลที่รวม', 'หมายเหตุ'],
   Staff:      ['Staff_ID', 'ชื่อ', 'ชื่อเล่น', 'แผนก', 'PIN', 'สถานะ', 'เริ่มงาน', 'Token', 'TokenExp', 'หมายเหตุ'],
   StockMoves: ['Move_ID', 'เมื่อ', 'ประเภท', 'ชนิด', 'Item_ID', 'ชื่อ', 'จำนวน', 'คงเหลือหลัง', 'ผู้ทำ', 'อ้างอิง', 'หมายเหตุ'],
-  ProductionLogs: ['เมื่อ', 'Job_ID', 'Order_ID', 'Product_ID', 'สินค้า', 'ประเภทงาน', 'ดี', 'เสีย', 'สาเหตุเสีย', 'เครื่อง', 'กะ', 'ผู้ลง', 'หมายเหตุ'],
+  ProductionLogs: ['เมื่อ', 'Job_ID', 'Order_ID', 'Product_ID', 'สินค้า', 'ประเภทงาน', 'ดี', 'เสีย', 'สาเหตุเสีย', 'เครื่อง', 'กะ', 'ผู้ลง', 'หมายเหตุ', 'เกรดB'],
+  Machines:   ['ชื่อเครื่อง', 'สถานะ', 'หมายเหตุ'],
   ActivityLog: ['เมื่อ', 'ใคร', 'ช่องทาง', 'การกระทำ', 'อ้างอิง', 'รายละเอียด'],
   PriceHistory: ['วันที่', 'Product_ID', 'ชื่อสินค้า', 'ราคาเดิม', 'ราคาใหม่', 'ผู้ปรับ', 'หมายเหตุ'],
   Settings:   ['key', 'value'],
@@ -545,22 +558,24 @@ function prodLog(pay, me) { // {type:'prod'|'screen', id, good, waste, reason?, 
   if (!job) return { ok: false, error: 'ไม่พบงาน' };
   if (job['สถานะ'] === 'ยกเลิก') return { ok: false, error: 'งานนี้ถูกยกเลิกแล้ว — ลงผลผลิตไม่ได้' };
   if (job['สถานะ'] === 'เสร็จ') return { ok: false, error: 'งานนี้ปิดแล้ว' };
-  const good = Number(pay.good) || 0, waste = Number(pay.waste) || 0;
-  if (good <= 0 && waste <= 0) return { ok: false, error: 'ใส่จำนวนดีหรือของเสียอย่างน้อยหนึ่งช่อง' };
+  const good = Number(pay.good) || 0, waste = Number(pay.waste) || 0, gradeB = Number(pay.gradeB) || 0;
+  if (good <= 0 && waste <= 0 && gradeB <= 0) return { ok: false, error: 'ใส่จำนวนดี เกรด B หรือของเสียอย่างน้อยหนึ่งช่อง' };
   if (waste > 0 && !pay.reason) return { ok: false, error: 'มีของเสียต้องเลือกสาเหตุ' };
-  const patch = { 'ดีสะสม': num(job['ดีสะสม']) + good, 'เสียสะสม': num(job['เสียสะสม']) + waste, 'ผู้ทำ': me.name };
+  // เกรด B = ขายได้แต่ราคาต่ำกว่า — นับแยก ไม่บวกเข้าสต๊อกของดี (กันยอดขายได้เกินจริง)
+  const patch = { 'ดีสะสม': num(job['ดีสะสม']) + good, 'เสียสะสม': num(job['เสียสะสม']) + waste,
+                  'เกรดBสะสม': num(job['เกรดBสะสม']) + gradeB, 'ผู้ทำ': me.name };
   if (job['สถานะ'].indexOf('รอ') === 0) { patch['สถานะ'] = pay.type === 'screen' ? 'กำลังสกรีน' : 'กำลังผลิต'; patch['เริ่มเมื่อ'] = now(); }
   updateWhere(t, 'Job_ID', pay.id, patch);
   appendObj('ProductionLogs', {
     'เมื่อ': now(), 'Job_ID': pay.id, 'Order_ID': job['Order_ID'], 'Product_ID': job['Product_ID'], 'สินค้า': job['สินค้า'],
-    'ประเภทงาน': pay.type === 'screen' ? 'สกรีน' : 'ผลิต', 'ดี': good, 'เสีย': waste, 'สาเหตุเสีย': pay.reason || '',
+    'ประเภทงาน': pay.type === 'screen' ? 'สกรีน' : 'ผลิต', 'ดี': good, 'เสีย': waste, 'เกรดB': gradeB, 'สาเหตุเสีย': pay.reason || '',
     'เครื่อง': pay.machine || '', 'กะ': pay.shift || '', 'ผู้ลง': me.name, 'หมายเหตุ': pay.note || '',
   });
   // ผลิต: ของดีเข้าสต๊อกสินค้า | สกรีน: ของเสียหักสต๊อก (ขวดที่ผลิตเข้าแล้วถูกทำเสีย)
   if (pay.type !== 'screen' && good > 0 && job['Product_ID']) stockShift_('สินค้า', job['Product_ID'], '', good, 'ผลิตเข้า', pay.id, me.name, '');
   if (pay.type === 'screen' && waste > 0 && job['Product_ID']) stockShift_('สินค้า', job['Product_ID'], '', -waste, 'ของเสีย', pay.id, me.name, pay.reason || '');
   recomputeOrder_(job['Order_ID']);
-  return { ok: true, done: num(job['ดีสะสม']) + good, target: num(job['จำนวนสั่ง']), _log: { ref: pay.id, detail: (job['สินค้า'] || '') + ' ดี+' + good + (waste ? ' เสีย+' + waste + '(' + (pay.reason || '') + ')' : '') } };
+  return { ok: true, done: num(job['ดีสะสม']) + good, target: num(job['จำนวนสั่ง']), _log: { ref: pay.id, detail: (job['สินค้า'] || '') + ' ดี+' + good + (gradeB ? ' เกรดB+' + gradeB : '') + (waste ? ' เสีย+' + waste + '(' + (pay.reason || '') + ')' : '') } };
 }
 function jobClose(pay, me) {
   const t = jobTab_(pay.type);
@@ -762,7 +777,8 @@ function teamData(p, me) {
   return {
     ok: true, version: CODE_VERSION, me: { id: me.id, name: me.name, nick: me.nick, dept: me.dept, via: me.via },
     customers: custs, products: rowsToObjs('Products').filter(function (p2) { return (p2['สถานะ'] || 'ใช้งาน') !== 'เลิกขาย'; }),
-    spec: SPEC, perBag: PER_BAG,
+    spec: SPEC, perBag: PER_BAG, minOrder: MIN_ORDER,
+    machines: rowsToObjs('Machines').filter(function (m) { return (m['สถานะ'] || 'ใช้งาน') === 'ใช้งาน'; }).map(function (m) { return m['ชื่อเครื่อง']; }),
     settings: settingsMap(),
     orders: active.reverse().concat(recentDone),
     production: rowsToObjs('Production').filter(notJob).reverse(),
@@ -1240,6 +1256,78 @@ function importLegacyOrders(srcId) {
   Logger.log('นำเข้าออเดอร์เก่า ' + outOrders.length + ' ใบ · ลูกค้าใหม่ ' + outCust.length + ' ราย · ข้ามที่มีแล้ว ' + skipped);
   Logger.log('⚠️ เป็นประวัติล้วน — ไม่สร้างงานผลิต/สกรีน และไม่แตะสต๊อก');
   return { orders: outOrders.length, customers: outCust.length, skipped: skipped };
+}
+
+// ─────────────────────────────────────────────
+// ใส่ทะเบียนเครื่องฉีด 12 ตัว (รันครั้งเดียว — รันซ้ำได้ ไม่เบิ้ล)
+// ─────────────────────────────────────────────
+function seedMachines() {
+  const have = {};
+  rowsToObjs('Machines').forEach(function (m) { have[String(m['ชื่อเครื่อง']).trim()] = true; });
+  const add = MACHINE_SEED.filter(function (n) { return !have[n]; })
+    .map(function (n) { return { 'ชื่อเครื่อง': n, 'สถานะ': 'ใช้งาน', 'หมายเหตุ': '' }; });
+  appendObjs('Machines', add);
+  Logger.log('เพิ่มเครื่องจักร ' + add.length + ' ตัว (มีอยู่แล้ว ' + (MACHINE_SEED.length - add.length) + ')');
+  return add.length;
+}
+
+// ─────────────────────────────────────────────
+// นำเข้าทะเบียนลูกค้าเดิม (ชีต "P&K_ลูกค้า" ของเมลเก่า) — 225 ราย พร้อมเส้นทางส่ง
+// ลูกค้าที่มีอยู่แล้ว (จาก import ออเดอร์/บัญชี) จะถูก "เติมข้อมูลที่ขาด" ไม่ทับของเดิม
+// ─────────────────────────────────────────────
+const LEGACY_CUSTOMER_SHEET_ID = '1yg1p_WjFpDh68WtK5KVJeCcx_K57x-X3m1etsDnX__Q';
+
+function importLegacyCustomers(srcId) {
+  const src = SpreadsheetApp.openById(srcId || LEGACY_CUSTOMER_SHEET_ID);
+  // หาแท็บที่เป็นทะเบียนจริง (มีหัว "เส้นทาง-2")
+  let sh = null, head = null;
+  src.getSheets().forEach(function (s) {
+    if (sh) return;
+    const v = s.getDataRange().getValues();
+    for (let i = 0; i < Math.min(v.length, 10); i++) {
+      const row = v[i].map(String);
+      if (row.indexOf('เส้นทาง-2') >= 0 && row.indexOf('ลูกค้า') >= 0) { sh = s; head = { row: i, cols: row }; return; }
+    }
+  });
+  if (!sh) return { ok: false, error: 'ไม่พบแท็บทะเบียนลูกค้า (ต้องมีหัวคอลัมน์ "เส้นทาง-2")' };
+
+  const v = sh.getDataRange().getValues();
+  const idx = function (label) { return head.cols.indexOf(label); };
+  const at = function (r, label) { const i = idx(label); return i < 0 ? '' : String(r[i] || '').trim(); };
+
+  const existing = rowsToObjs('Customers');
+  const byName = {};
+  existing.forEach(function (c) { byName[String(c['ชื่อลูกค้า']).trim()] = c; });
+  let custCount = existing.length, added = 0, filled = 0;
+  const outNew = [];
+
+  for (let i = head.row + 1; i < v.length; i++) {
+    const name = at(v[i], 'ลูกค้า');
+    if (!name) continue;
+    const info = {
+      'เบอร์โทร': at(v[i], 'เบอร์'), 'ที่อยู่': at(v[i], 'ที่อยู่'),
+      'เส้นทาง': at(v[i], 'เส้นทาง-2'), 'อำเภอ': at(v[i], 'อำเภอ'),
+      'ตำบล': at(v[i], 'ตำบล'), 'พิกัด': at(v[i], 'โลเคชั่นลิงก์'),
+      'หมายเหตุ': at(v[i], 'หมายเหตุ'),
+    };
+    const cur = byName[name];
+    if (cur) {
+      // เติมเฉพาะช่องที่ยังว่าง — ของที่คนกรอกไว้เองไม่ถูกทับ
+      const patch = {};
+      Object.keys(info).forEach(function (k) { if (info[k] && !String(cur[k] || '').trim()) patch[k] = info[k]; });
+      if (Object.keys(patch).length) { updateWhere('Customers', 'Customer_ID', cur['Customer_ID'], patch); filled++; }
+      continue;
+    }
+    custCount++; added++;
+    const row = { 'Customer_ID': 'C' + ('000' + custCount).slice(-4), 'ชื่อลูกค้า': name, 'สร้างเมื่อ': now() };
+    Object.keys(info).forEach(function (k) { row[k] = info[k]; });
+    byName[name] = row;
+    outNew.push(row);
+  }
+  appendObjs('Customers', outNew);
+  Logger.log('ลูกค้าใหม่ ' + added + ' ราย · เติมข้อมูลให้ของเดิม ' + filled + ' ราย');
+  Logger.log('⚠️ ชื่อลูกค้าในออเดอร์เก่ามักมีชื่องานปนอยู่ ("ช้างทิพย์ ลี้ งานช้างทิพย์") จึงจับคู่กับทะเบียนไม่ติดทุกราย — ค่อยรวมมือทีหลังได้');
+  return { added: added, filled: filled };
 }
 
 function doPost(e) { return doGet(e); }
