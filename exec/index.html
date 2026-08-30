@@ -171,7 +171,7 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-08-30k';
+const WEB_VERSION = '2026-08-30l';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -181,7 +181,7 @@ function fail(t){ const e=$('err'); e.style.display='block'; e.textContent=t; $(
 const qs = new URLSearchParams(location.search);
 let KEY = qs.get('key') || localStorage.getItem('pk_exec_key') || '';
 if (qs.get('key')) history.replaceState(null, '', location.pathname); // เอารหัสออกจาก address bar
-let DATA = null, EDIT_ID = null;
+let DATA = null, EDIT_ID = null, ADOPT = false;
 
 async function api(action, payload=null, params={}){
   const q = new URLSearchParams({ action, key: KEY, ...params });
@@ -226,7 +226,7 @@ function render(){
   $('board').hidden = false;
   $('stamp').textContent = 'เดือน ' + d.month + ' · v' + d.version;
   // หน้าเว็บขึ้นทันทีที่ push (Pages) · GAS วางแยก → โชว์ทั้งสองเลข จะได้รู้ว่าอะไรอัปเดตแล้ว
-  const same = d.version === WEB_VERSION;
+  const same = !d.version || d.version >= WEB_VERSION;   // เตือนเฉพาะตอนหลังบ้านเก่ากว่าหน้าเว็บ
   $('verLine').innerHTML = 'เวอร์ชัน · หน้าเว็บ <b>' + esc(WEB_VERSION) + '</b> · ระบบหลังบ้าน <b class="' +
     (same ? '' : 'old') + '">' + esc(d.version) + '</b>' + (same ? '' : ' ← ยังไม่ได้วางโค้ดรุ่นใหม่');
 
@@ -271,7 +271,12 @@ function render(){
   $('stockMat').innerHTML = tbl(d.stock.materials.map(m=>stRow(m['ชื่อวัตถุดิบ'], m['คงเหลือ'], m['จุดสั่งซื้อ'])), '<tr><th>วัตถุดิบ</th><th class="r">คงเหลือ</th><th class="r">จุดสั่งซื้อ</th></tr>', 'ยังไม่มีวัตถุดิบ');
 
   $('staffTable').innerHTML = tbl(d.staff30.map(s=>'<tr><td>'+esc(s.name)+'</td><td class="meta">'+esc(s.dept||'-')+'</td><td class="r">'+s.logs+'</td><td class="r">'+baht(s.good)+'</td><td class="r'+(s.waste?' low':'')+'">'+baht(s.waste)+'</td></tr>'), '<tr><th>ชื่อ</th><th>แผนก</th><th class="r">ครั้งที่ลงงาน</th><th class="r">ดี</th><th class="r">เสีย</th></tr>', 'ยังไม่มีข้อมูล');
-  $('staffMg').innerHTML = tbl(d.staffList.map(s=>'<tr><td><b>'+esc(s['ชื่อ'])+'</b> <span class="meta">('+esc(s['ชื่อเล่น'])+')</span></td><td class="meta">'+esc(s['แผนก']||'-')+'</td><td><span class="chip'+(s['สถานะ']!=='ทำงาน'?' warn':'')+'">'+esc(s['สถานะ'])+'</span></td><td class="r"><button class="mini ghost" data-edit="'+esc(s['Staff_ID'])+'">แก้ไข/PIN</button></td></tr>'), '<tr><th>ชื่อ</th><th>แผนก</th><th>สถานะ</th><th></th></tr>', 'ยังไม่มีพนักงาน — เพิ่มคนแรกเลย');
+  $('staffMg').innerHTML = tbl(d.staffList.map((s,i)=>{
+    const st = String(s['สถานะ']||'').trim();
+    const chip = st ? '<span class="chip'+(st!=='ทำงาน'?' warn':'')+'">'+esc(st)+'</span>'
+                    : '<span class="chip warn">ยังไม่ตั้งสถานะ — ล็อกอินไม่ได้</span>';
+    return '<tr><td><b>'+esc(s['ชื่อ'])+'</b> <span class="meta">('+esc(s['ชื่อเล่น'])+')</span></td><td class="meta">'+esc(s['แผนก']||'-')+'</td><td>'+chip+'</td><td class="r"><button class="mini ghost" data-i="'+i+'">แก้ไข/PIN</button></td></tr>';
+  }), '<tr><th>ชื่อ</th><th>แผนก</th><th>สถานะ</th><th></th></tr>', 'ยังไม่มีพนักงาน — เพิ่มคนแรกเลย');
 
   $('priceList').innerHTML = (d.products||[]).map(p=>
     '<div class="price-row"><div><b>'+esc(p['ชื่อสินค้า'])+'</b>'+((p['สถานะ']||'ใช้งาน')==='เลิกขาย'?' <span class="chip warn">เลิกขาย</span>':'')+'</div><div class="meta">'+esc(p['หน่วย']||'-')+'</div>'+
@@ -312,12 +317,18 @@ $('npAdd').addEventListener('click', async () => {
 });
 
 // ─── พนักงาน ───
+const DEPTS = ['ผลิต','สกรีน','ส่งของ','ออฟฟิศ','บริหาร'];
 function openStaffModal(s){
-  EDIT_ID = s ? s['Staff_ID'] : null;
+  EDIT_ID = s ? String(s['Staff_ID']||'').trim() : null;
+  ADOPT = !!(s && !EDIT_ID);        // แถวที่ยังไม่มี Staff_ID (พิมพ์มือลงชีต) — ให้ backend รับเข้าระบบตอนบันทึก
   $('stTitle').textContent = s ? 'แก้ไข — ' + s['ชื่อ'] : 'เพิ่มพนักงาน';
   $('sfName').value = s ? s['ชื่อ'] : '';
   $('sfNick').value = s ? s['ชื่อเล่น'] : '';
-  $('sfDept').value = s ? (s['แผนก'] || 'ผลิต') : 'ผลิต';
+  // แผนกเดิมที่ไม่มีในตัวเลือก (เช่น "ผู้จัดการ") ต้องใส่เข้าไปด้วย ไม่งั้นบันทึกแล้วแผนกหาย
+  const cur = s ? String(s['แผนก']||'').trim() : '';
+  const list = DEPTS.concat(cur && DEPTS.indexOf(cur) < 0 ? [cur] : []);
+  $('sfDept').innerHTML = list.map(x=>'<option>'+esc(x)+'</option>').join('');
+  $('sfDept').value = cur || 'ผลิต';
   $('sfStatus').value = s ? s['สถานะ'] : 'ทำงาน';
   $('sfNote').value = s ? (s['หมายเหตุ'] || '') : '';
   $('sfPin').value = '';
@@ -326,13 +337,12 @@ function openStaffModal(s){
 }
 $('stAdd').addEventListener('click', () => openStaffModal(null));
 $('staffMg').addEventListener('click', e => {
-  const id = e.target.dataset && e.target.dataset.edit;
-  if (!id) return;
-  openStaffModal(DATA.staffList.find(s => s['Staff_ID'] === id));
+  const b = e.target.closest('button[data-i]'); if (!b) return;
+  openStaffModal(DATA.staffList[Number(b.dataset.i)]);
 });
 $('sfCancel').addEventListener('click', () => $('stModal').classList.remove('on'));
 $('sfSave').addEventListener('click', async () => {
-  const pay = { id: EDIT_ID, name: $('sfName').value.trim(), nick: $('sfNick').value.trim(), dept: $('sfDept').value, status: $('sfStatus').value, note: $('sfNote').value };
+  const pay = { id: EDIT_ID, adopt: ADOPT, name: $('sfName').value.trim(), nick: $('sfNick').value.trim(), dept: $('sfDept').value, status: $('sfStatus').value, note: $('sfNote').value };
   if ($('sfPin').value.trim()) pay.pin = $('sfPin').value.trim();
   try {
     const j = await api('pkStaffSave', pay);

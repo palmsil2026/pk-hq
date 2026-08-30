@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30k';
+const CODE_VERSION = '2026-08-30l';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -151,6 +151,7 @@ function setupPkSystem() {
   const s1 = ss.getSheetByName('Sheet1') || ss.getSheetByName('ชีต1');
   if (s1 && ss.getSheets().length > 1) ss.deleteSheet(s1);
   _SS = null;   // ล้างแคช handle เดิม เผื่อเพิ่งเพิ่มแท็บใหม่ในรอบนี้
+  repairStaffIds_();
   Logger.log('PKSystem พร้อมใช้: ' + ss.getUrl());
 }
 
@@ -289,6 +290,25 @@ function nextCounter(counterKey, pad, prefix) {
 // ─────────────────────────────────────────────
 // พนักงาน + ล็อกอิน (PIN → token) — PIN ห้ามหลุดออก API เด็ดขาด
 // ─────────────────────────────────────────────
+// แถวพนักงานที่พิมพ์มือลงชีตตรง ๆ มักไม่มี Staff_ID → บอร์ดกดแก้ไขไม่ได้ (ปุ่มอ้าง ID)
+// เติม ID ให้ (เป็น "ชื่อเรียกแถว" ล้วน ๆ ไม่ได้ให้สิทธิ์อะไรเพิ่ม)
+// ⚠️ ไม่แตะ "สถานะ" กับ PIN — ต้องให้ผู้บริหารตั้งเองจากบอร์ด
+//    ไม่งั้นใครแอบเพิ่มแถวในชีตก็จะกลายเป็นพนักงานที่ล็อกอินได้ทันที
+function repairStaffIds_() {
+  const sh = tab('Staff');
+  if (sh.getLastRow() < 2) return 0;
+  const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
+  const c = head.indexOf('Staff_ID');
+  if (c < 0) return 0;
+  const col1 = sh.getRange(2, c + 1, sh.getLastRow() - 1, 1);
+  const vals = col1.getValues();
+  let n = 0;
+  for (let i = 0; i < vals.length; i++) {
+    if (String(vals[i][0]).trim() === '') { vals[i][0] = seq('STAFF_NEXT', 'S', 3); n++; }
+  }
+  if (n) col1.setValues(vals);
+  return n;
+}
 function staffPublic() {
   return rowsToObjs('Staff').map(function (s) {
     return { 'Staff_ID': s['Staff_ID'], 'ชื่อ': s['ชื่อ'], 'ชื่อเล่น': s['ชื่อเล่น'], 'แผนก': s['แผนก'], 'สถานะ': s['สถานะ'], 'เริ่มงาน': s['เริ่มงาน'], 'หมายเหตุ': s['หมายเหตุ'] };
@@ -333,6 +353,16 @@ function staffSave(pay, me) { // exec เท่านั้น: {id?, name, nick
   const nick = String(pay.nick || '').trim();
   if (!pay.name || !nick) return { ok: false, error: 'ต้องมีชื่อและชื่อเล่น' };
   const all = rowsToObjs('Staff');
+  // adopt = บอร์ดกำลังแก้ "แถวที่ยังไม่มี Staff_ID" (พิมพ์มือลงชีตมาก่อน) — รับมาเป็นของระบบแล้วแก้ต่อ
+  // ไม่ใช่การเพิ่มคนใหม่ จึงไม่ต้องเช็คชื่อเล่นซ้ำกับตัวเอง
+  if (!pay.id && pay.adopt) {
+    const rows = all.filter(function (s) { return String(s['ชื่อเล่น']).trim() === nick; });
+    if (rows.length !== 1) return { ok: false, error: 'หาแถวของ "' + nick + '" ไม่เจอ หรือเจอซ้ำกัน ' + rows.length + ' แถว — แก้ในชีตก่อน' };
+    if (!String(rows[0]['Staff_ID']).trim()) repairStaffIds_();   // เติม ID ให้ทุกแถวที่ยังว่าง แล้วค่อยอ่านใหม่
+    const got = rowsToObjs('Staff').filter(function (s) { return String(s['ชื่อเล่น']).trim() === nick; })[0];
+    if (!got || !String(got['Staff_ID']).trim()) return { ok: false, error: 'เติม Staff_ID ให้แถวนี้ไม่สำเร็จ' };
+    pay.id = got['Staff_ID'];
+  }
   const dup = all.filter(function (s) { return String(s['ชื่อเล่น']).trim() === nick && s['Staff_ID'] !== pay.id; })[0];
   if (dup) return { ok: false, error: 'ชื่อเล่น "' + nick + '" ถูกใช้แล้ว (' + dup['ชื่อ'] + ')' };
   if (pay.pin && !/^\d{4,6}$/.test(String(pay.pin))) return { ok: false, error: 'PIN ต้องเป็นตัวเลข 4-6 หลัก' };
