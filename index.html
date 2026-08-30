@@ -52,6 +52,14 @@ button.mini.gold{background:var(--gold-soft); color:var(--gold);}
 .spec-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;}
 .spec-top b{font-size:13.5px;}
 .qty-note{font-size:11.5px; color:var(--muted); margin-top:4px;}
+.seg{display:flex; gap:6px; margin-bottom:4px;}
+.seg button{flex:1; padding:12px 6px; border:1px solid var(--line); background:var(--surface); color:var(--text);
+  border-radius:10px; font:600 14px "Anuphan",sans-serif; cursor:pointer; min-height:44px;}
+.seg button.on{background:var(--green); color:var(--ground); border-color:var(--green);}
+.team-btns{display:flex; gap:6px; flex-wrap:wrap; margin-top:8px;}
+.team-btns button{flex:1 0 76px; min-height:44px; border-radius:10px; border:1px solid var(--line);
+  background:var(--surface); color:var(--text); font:600 13.5px "Anuphan",sans-serif; cursor:pointer;}
+.team-btns button.done{background:var(--green); color:var(--ground); border-color:var(--green);}
 .list{margin:0; padding:0; list-style:none;}
 .list li{padding:11px 0; border-bottom:1px dashed var(--line);}
 .list li:last-child{border-bottom:none;}
@@ -122,10 +130,13 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
     <h2>ลงออเดอร์ใหม่</h2>
     <label>ลูกค้า</label>
     <input id="oCust" list="dlCust" placeholder="พิมพ์ชื่อลูกค้า">
-    <div class="row">
-      <div><label>ประเภทการซื้อ</label><select id="oBuyType"></select></div>
-      <div><label>กำหนดส่ง</label><input type="date" id="oDue"></div>
-    </div>
+    <label>แบรนด์ / ชื่องาน <span class="meta">(เดิมพิมพ์ต่อท้ายชื่อลูกค้า — ใส่ตรงนี้แทน)</span></label>
+    <input id="oBrand" placeholder="เช่น งานสวมฉลากกฟผ. / ศูนย์อนุรักษ์ช้างฯ">
+    <label>ประเภทการซื้อ</label>
+    <div class="seg" id="oBuyType"></div>
+    <label>ราคา</label>
+    <div class="seg" id="oPriceMode"></div>
+    <label>กำหนดส่ง</label><input type="date" id="oDue">
     <label>รายการสินค้า <span class="meta">(เลือกสเปกแบบเดียวกับที่จดในแอปเดิม — ใส่จำนวนถุง ระบบคูณเป็นใบให้เอง)</span></label>
     <div id="oItems"></div>
     <button class="mini" id="oAdd">+ เพิ่มรายการ</button>
@@ -431,8 +442,9 @@ async function loadData(){
   }).join('');
   $('dlProd').innerHTML = DATA.products.map(p => '<option value="' + esc(p['ชื่อสินค้า']) + '">').join('');
   const S = DATA.spec || {};
-  if (!$('oBuyType').options.length){
-    $('oBuyType').innerHTML = opts(S['ประเภทการซื้อ'], '', false) || '';
+  if (!$('oPay').options.length){
+    seg('oBuyType', S['ประเภทการซื้อ'] || [], (S['ประเภทการซื้อ']||[])[0]);
+    seg('oPriceMode', S['ราคา'] || [], (S['ราคา']||[])[0]);
     $('oPay').innerHTML  = opts(S['สถานะเงิน'], '', 'ยังไม่ระบุ');
     $('oArt').innerHTML  = opts(S['สถานะแบบ'], '', 'ยังไม่ระบุ');
     $('oTeam').innerHTML = opts(S['ทีมสกรีน'], '', 'ยังไม่จ่ายทีม');
@@ -461,6 +473,18 @@ function renderHome(){
 // ─── ออเดอร์ ───
 // ช่องสินค้า = ตัวเลือกจากทะเบียนสินค้า (กันพิมพ์ชื่อเพี้ยนจนผูกสต๊อกไม่ติด)
 // ยังขายของนอกทะเบียนได้ผ่านตัวเลือก "อื่น ๆ" — ระบบจะเตือนว่าอยู่นอกระบบสต๊อก
+// ปุ่มเลือกแบบแอปเดิม (แตะทีเดียว เห็นทุกตัวเลือกพร้อมกัน — เร็วกว่า dropdown บนมือถือ)
+function seg(id, list, sel){
+  const box = $(id);
+  box.innerHTML = (list||[]).map(x => '<button type="button"' + (x===sel?' class="on"':'') + '>' + esc(x) + '</button>').join('');
+  box.addEventListener('click', e => {
+    const b = e.target.closest('button'); if (!b) return;
+    [...box.children].forEach(x => x.classList.remove('on'));
+    b.classList.add('on');
+  });
+}
+function segVal(id){ const b = $(id).querySelector('button.on'); return b ? b.textContent : ''; }
+
 function prodPicker(sel){
   const list = (DATA && DATA.products) || [];
   const known = list.some(p => p['ชื่อสินค้า'] === sel);
@@ -593,11 +617,12 @@ $('oSave').addEventListener('click', async () => {
   if (!items.length) return toast('เลือกสินค้าและใส่จำนวนก่อน');
   const j = await api('pkOrderSave', {
     customer, items, due: $('oDue').value, note: $('oNote').value,
-    buyType: $('oBuyType').value, payStatus: $('oPay').value, artStatus: $('oArt').value,
+    buyType: segVal('oBuyType'), priceMode: segVal('oPriceMode'), brand: $('oBrand').value.trim(),
+    payStatus: $('oPay').value, artStatus: $('oArt').value,
     blockFee: $('oBlock').value, screenTeam: $('oTeam').value, urgent: $('oUrgent').checked,
   });
   toast('✅ ' + j.id + ' · ' + baht(j.total) + ' บ.' + (j.unmapped.length ? ' ⚠️ นอกระบบสต๊อก: ' + j.unmapped.join(',') : ''));
-  $('oCust').value=''; $('oNote').value=''; $('oBlock').value=''; $('oUrgent').checked=false;
+  $('oCust').value=''; $('oNote').value=''; $('oBlock').value=''; $('oUrgent').checked=false; $('oBrand').value='';
   $('oItems').innerHTML=''; addSpecRow(); calcTotal();
   loadData();
 });
@@ -728,10 +753,37 @@ function jobCard(j, type){
     '<button class="mini" data-act="close" data-type="' + type + '" data-id="' + esc(j['Job_ID']) + '">ปิดงาน</button>' +
     '</div></div></li>';
 }
+// การ์ดงานสกรีน — ทำตามแอปเดิม: แตะทีมเพื่อรับงาน แตะ "เสร็จแล้ว" เพื่อปิด ไม่ต้องกรอกจำนวน
+// (ปุ่ม "ลงผลผลิต" ยังมีไว้ให้ ถ้าอยากบันทึกดี/เกรด B/เสีย ละเอียด)
+function screenCard(j){
+  const teams = ((DATA.spec && DATA.spec['ทีมสกรีน']) || ['ทีม 1','ทีม 2','ทีม 3']);
+  const cur = j['ทีม'] || '';
+  return '<li><div class="li-top"><div><b>' + esc(j['สินค้า'] || j['ลาย/สี']) + '</b> <span class="meta">' + esc(j['Order_ID']) +
+    (cur ? ' · ' + esc(cur) : '') + '</span></div>' +
+    '<span class="chip ' + CHIP(j['สถานะ']) + '">' + esc(j['สถานะ']) + '</span></div>' +
+    '<div class="team-btns">' +
+    teams.map(t => '<button data-team="' + esc(t) + '" data-sid="' + esc(j['Job_ID']) + '"' + (t===cur?' class="done"':'') + '>' + esc(t) + '</button>').join('') +
+    '<button class="done" data-sdone="' + esc(j['Job_ID']) + '">✓ เสร็จแล้ว</button>' +
+    '<button data-act="log" data-type="screen" data-id="' + esc(j['Job_ID']) + '">ลงจำนวน</button>' +
+    '</div></li>';
+}
 function renderJobs(){
   $('prodList').innerHTML = DATA.production.map(j => jobCard(j,'prod')).join('') || '<li class="meta">ไม่มีงานค้าง 🎉</li>';
-  $('screenList').innerHTML = DATA.screens.map(j => jobCard(j,'screen')).join('') || '<li class="meta">ไม่มีงานค้าง 🎉</li>';
+  $('screenList').innerHTML = DATA.screens.map(screenCard).join('') || '<li class="meta">ไม่มีงานค้าง 🎉</li>';
 }
+$('screenList').addEventListener('click', async e => {
+  const b = e.target.closest('button'); if (!b) return;
+  const team = b.dataset.team, sid = b.dataset.sid, done = b.dataset.sdone;
+  if (done) {
+    if (!confirm('ปิดงานสกรีนนี้? (ถือว่าได้ครบตามสั่ง)')) return;
+    await api('pkScreenAssign', { id: done, done: true });
+    toast('✅ ปิดงานสกรีนแล้ว'); loadData(); return;
+  }
+  if (team && sid) {
+    await api('pkScreenAssign', { id: sid, team });
+    toast('จ่ายให้ ' + team + ' แล้ว'); loadData();
+  }
+});
 async function jobAction(e){
   const b = e.target.closest('button'); if (!b || !b.dataset.act) return;
   const { act, type, id } = b.dataset;
