@@ -47,6 +47,7 @@ button.mini.gold{background:var(--gold-soft); color:var(--gold);}
 .item-row input[type=checkbox]{width:18px; height:18px; justify-self:center;}
 .spec-row{border:1px solid var(--line); border-radius:10px; padding:10px; margin-bottom:10px; background:var(--surface);}
 .spec-row .sg{display:grid; grid-template-columns:repeat(auto-fit,minmax(104px,1fr)); gap:6px;}
+.spec-row .sg>div[hidden]{display:none;}
 .spec-row .sg label{font-size:11px; color:var(--muted); margin:0 0 2px;}
 .spec-row select,.spec-row input{margin:0;}
 .spec-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:6px; gap:8px;}
@@ -119,8 +120,8 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 <body>
 
 <div id="login" hidden>
-  <div class="logo">🏭 P&K โรงขวด</div>
-  <div class="sub2">แอปทีมงาน — เข้าระบบด้วยชื่อเล่น + PIN ของคุณ</div>
+  <div class="logo" id="lgLogo">🏭 P&K โรงขวด</div>
+  <div class="sub2" id="lgSub">แอปทีมงาน — เข้าระบบด้วยชื่อเล่น + PIN ของคุณ</div>
   <div class="card">
     <label>ชื่อเล่น</label><input id="lgNick" autocomplete="username">
     <label>PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password">
@@ -132,13 +133,14 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 
 <div id="app" hidden>
 <header>
-  <h1>🏭 P&K โรงขวด</h1>
+  <h1 id="appTitle">🏭 P&K โรงขวด</h1>
   <div class="u"><span id="uName"></span><br><a id="logout">ออกจากระบบ</a></div>
 </header>
 <nav id="nav"></nav>
 <main>
 <div class="banner" id="qBanner" hidden><span id="qText"></span><button class="mini" id="qRetry">ส่งอีกครั้ง</button></div>
 <div class="banner" id="verBanner" hidden><span id="verText"></span></div>
+<div class="banner" id="appBanner" hidden><span id="appText"></span></div>
 
 <section class="tabpane" id="t-home">
     <div class="card"><h2>วันนี้ของฉัน</h2><p id="homeSum" class="meta" style="margin:0"></p></div>
@@ -333,7 +335,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-08-30l';
+const WEB_VERSION = '2026-08-30m';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -432,6 +434,27 @@ $('lgPin').addEventListener('keydown', e => { if (e.key === 'Enter') $('lgBtn').
 $('logout').addEventListener('click', () => doLogout());
 
 // ─── เมนูตามแผนก ───
+// ─── แยกเป็น "แอปของแต่ละทีม" ด้วย ?app= ท้ายลิงก์ (โค้ดชุดเดียว แต่แจกคนละลิงก์) ───
+// ของเดิมเป็น AppSheet 4 แอปแยกกัน — ทีมสกรีนเปิดมาต้องเจองานสกรีนเลย ไม่ต้องเลื่อนหาแท็บ
+// ไม่ใส่ ?app= = แอปรวม (เห็นทุกแท็บที่แผนกตัวเองมีสิทธิ์ เหมือนเดิม) — ไว้ให้ออฟฟิศ/ผู้บริหาร
+const APP_DEF = {
+  office: { icon:'🧾', name:'ออฟฟิศ',      tabs:['home','order','deliver','office','history'] },
+  prod:   { icon:'⚙️', name:'งานผลิต',     tabs:['home','prod','stock','history'] },
+  screen: { icon:'🎨', name:'ทีมสกรีนสี',  tabs:['home','screen','history'] },
+  deliver:{ icon:'🚚', name:'ส่งของ',      tabs:['home','deliver','history'] },
+};
+// จำไว้ในเครื่อง — ทีมงานบันทึกลิงก์ไว้หน้าจอมือถือแล้วเปิดซ้ำ ไม่ต้องมี ?app= ทุกครั้ง
+const APP_KEY = (new URLSearchParams(location.search).get('app') || localStorage.getItem('pk_app') || '').trim();
+const APP = APP_DEF[APP_KEY] || null;
+if (APP) localStorage.setItem('pk_app', APP_KEY); else localStorage.removeItem('pk_app');
+if (APP) {
+  document.title = 'P&K ' + APP.name;
+  $('lgLogo').textContent = APP.icon + ' P&K ' + APP.name;
+  $('lgSub').textContent = 'เข้าระบบด้วยชื่อเล่น + PIN ของคุณ';
+  $('appTitle').textContent = APP.icon + ' ' + APP.name;
+}
+
+const GENERIC = ['home', 'history'];   // แท็บที่ทุกแผนกมี — ไม่นับว่าเป็น "งาน" ของทีมไหน
 const TAB_DEF = [
   { id:'home',    label:'หน้าหลัก', depts:'*' },
   { id:'order',   label:'รับออเดอร์', depts:['ออฟฟิศ','บริหาร'] },
@@ -444,13 +467,26 @@ const TAB_DEF = [
 ];
 function myTabs(){
   const d = ((ME && ME.dept) || '').trim();
-  return TAB_DEF.filter(t => t.depts === '*' || t.depts.includes(d));   // แผนกไม่รู้จัก = เห็นแค่หน้าหลัก (แจ้งผู้บริหารแก้แผนกในบอร์ด)
+  // สิทธิ์มาจาก "แผนก" เสมอ — ?app= แค่ย่อให้เหลือเฉพาะงานของทีมนั้น เปลี่ยนลิงก์เองไม่ได้สิทธิ์เพิ่ม
+  const mine = TAB_DEF.filter(t => t.depts === '*' || t.depts.includes(d));
+  if (!APP) return mine;
+  const narrowed = mine.filter(t => APP.tabs.includes(t.id));
+  // นับเฉพาะ "แท็บงาน" — หน้าหลัก/ประวัติ ทุกคนมีอยู่แล้ว ถ้าเหลือแค่สองอันนี้เท่ากับเปิดผิดแอป
+  // (เช่น ทีมสกรีนเปิดลิงก์ออฟฟิศ) → คืนของแผนกตัวเองไป ไม่งั้นเข้ามาแล้วทำอะไรไม่ได้เลย
+  return narrowed.some(t => !GENERIC.includes(t.id)) ? narrowed : mine;
 }
 function buildNav(){
   const tabs = myTabs();
-  $('nav').innerHTML = tabs.map((t,i) => '<button data-t="' + t.id + '"' + (i===0?' class="on"':'') + '>' + t.label + '</button>').join('');
+  // บอกให้รู้ตัวว่าเปิดผิดลิงก์ จะได้ไปเปิดของทีมตัวเอง
+  const d = ((ME && ME.dept) || '').trim();
+  const wrongApp = APP && !tabs.some(t => !GENERIC.includes(t.id) && APP.tabs.includes(t.id));
+  $('appBanner').hidden = !wrongApp;
+  if (wrongApp) $('appText').textContent = 'ลิงก์นี้คือแอป "' + APP.name + '" แต่คุณอยู่แผนก ' + (d || 'ยังไม่ระบุ') +
+    ' — ขอลิงก์ของทีมตัวเองจากผู้บริหาร (ตอนนี้แสดงงานของแผนกคุณให้แทน)';
+  const first = (APP && tabs.find(t => !GENERIC.includes(t.id))) || tabs[0];
+  $('nav').innerHTML = tabs.map(t => '<button data-t="' + t.id + '"' + (t===first?' class="on"':'') + '>' + t.label + '</button>').join('');
   document.querySelectorAll('.tabpane').forEach(x => x.classList.remove('on'));
-  $('t-' + tabs[0].id).classList.add('on');
+  $('t-' + first.id).classList.add('on');
 }
 $('nav').addEventListener('click', e => {
   const b = e.target.closest('button'); if (!b) return;
@@ -577,15 +613,15 @@ function addSpecRow(it={}){
     '<button class="mini warn i-del" type="button">ลบ</button></div>' +
     '<div class="sg">' +
       '<div><label>ประเภท</label><select class="i-type">' + opts(S['ประเภทสินค้า'], it.type) + '</select></div>' +
-      '<div><label>ขนาด</label><select class="i-size"></select></div>' +
-      '<div><label>คอขวด</label><select class="i-neck">' + opts(S['คอขวด'], it.neck) + '</select></div>' +
-      '<div><label>รูปทรง</label><select class="i-shape">' + opts(S['รูปทรง'], it.shape) + '</select></div>' +
-      '<div><label>สี</label><select class="i-color">' + opts(S['สี'], it.color) + '</select></div>' +
-      '<div><label>สีสกรีน</label><select class="i-scrcolor">' + opts(S['สีสกรีน'], it.screenColor, 'ไม่สกรีน') + '</select></div>' +
-      '<div><label>พร้อมฝาสี</label><select class="i-cap">' + opts(S['พร้อมฝาสี'], it.capColor, 'ไม่มีฝา') + '</select></div>' +
-      '<div><label>จำนวน (ถุง)</label><input class="i-bags" type="number" inputmode="numeric" value="' + esc(it.bags||'') + '"></div>' +
-      '<div><label>เศษ (ใบ)</label><input class="i-extra" type="number" inputmode="numeric" value="' + esc(it.extra||'') + '"></div>' +
-      '<div><label>ราคา/ใบ</label><input class="i-price" type="number" step="0.01" value="' + esc(it.price||'') + '"></div>' +
+      '<div data-axis="ขนาด"><label>ขนาด</label><select class="i-size"></select></div>' +
+      '<div data-axis="คอขวด"><label>คอขวด</label><select class="i-neck">' + opts(S['คอขวด'], it.neck) + '</select></div>' +
+      '<div data-axis="รูปทรง"><label>รูปทรง</label><select class="i-shape">' + opts(S['รูปทรง'], it.shape) + '</select></div>' +
+      '<div data-axis="สี"><label>สี</label><select class="i-color">' + opts(S['สี'], it.color) + '</select></div>' +
+      '<div data-axis="สีสกรีน"><label>สีสกรีน</label><select class="i-scrcolor">' + opts(S['สีสกรีน'], it.screenColor, 'ไม่สกรีน') + '</select></div>' +
+      '<div data-axis="พร้อมฝาสี"><label>พร้อมฝาสี</label><select class="i-cap">' + opts(S['พร้อมฝาสี'], it.capColor, 'ไม่มีฝา') + '</select></div>' +
+      '<div data-qty="bags"><label>จำนวน (ถุง)</label><input class="i-bags" type="number" inputmode="numeric" value="' + esc(it.bags||'') + '"></div>' +
+      '<div data-qty="extra"><label>เศษ (ใบ)</label><input class="i-extra" type="number" inputmode="numeric" value="' + esc(it.extra||'') + '"></div>' +
+      '<div data-qty="price"><label>ราคา/ใบ</label><input class="i-price" type="number" step="0.01" value="' + esc(it.price||'') + '"></div>' +
     '</div><div class="qty-note"></div>';
 
   const q = s => d.querySelector(s);
@@ -594,17 +630,50 @@ function addSpecRow(it={}){
     const sizes = (S['ขนาดตามประเภท'] || {})[t] || [];
     q('.i-size').innerHTML = opts(sizes, it.size);
   }
+  // หน่วยนับของประเภทนี้ — ถ้าหลังบ้านยังเป็นรุ่นเก่าที่ไม่มีตารางหน่วย ให้เดาจากสูตรใบ/ถุงแทน
+  // (มีสูตร = หน้างานนับเป็นถุง) ไม่งั้นขวดจะโดนซ่อนช่องถุงตอนหน้าเว็บใหม่แต่ GAS ยังเก่า
+  function unitOf(t){
+    if (!t) return 'ถุง';
+    const m = (S['หน่วยนับตามประเภท'] || {})[t];
+    if (m) return m;
+    const per = (DATA && DATA.perBag) || {};
+    return Object.keys(per).some(k => k.indexOf(t + '|') === 0) ? 'ถุง' : 'ชิ้น';
+  }
+  // โชว์เฉพาะแกนที่ประเภทนั้นใช้จริง — ฟิล์ม/ฝา ไม่มีคอขวด/รูปทรงของขวดโผล่มาแล้ว
+  // และหน่วยนับก็ต่างกัน: ขวด/ถัง นับเป็นถุง · ที่เหลือนับเป็นชิ้นตรง ๆ (ตามที่หน้างานกรอกจริง)
+  function applyAxes(){
+    const t = q('.i-type').value;
+    const use = (S['แกนตามประเภท'] || {})[t];      // ประเภทที่ยังไม่รู้จัก = โชว์ทุกแกนไว้ก่อน
+    d.querySelectorAll('[data-axis]').forEach(box => {
+      const on = !t || !use || use.includes(box.dataset.axis);
+      box.hidden = !on;
+      if (!on) box.querySelector('select').value = '';   // ล้างค่า กันติดไปกับออเดอร์
+    });
+    const unit = unitOf(t);
+    const byBag = unit === 'ถุง';
+    d.querySelector('[data-qty="bags"]').hidden = !byBag;
+    if (!byBag) q('.i-bags').value = '';
+    d.querySelector('[data-qty="extra"] label').textContent = byBag ? 'เศษ (ใบ)' : 'จำนวน (' + unit + ')';
+    d.querySelector('[data-qty="price"] label').textContent = 'ราคา/' + (byBag ? 'ใบ' : unit);
+  }
   function refresh(){
+    applyAxes();
     const t = q('.i-type').value, sz = q('.i-size').value;
+    const unit = unitOf(t);
     const per = ((DATA && DATA.perBag) || {})[t + '|' + sz] || 0;
     const bags = Number(q('.i-bags').value) || 0, extra = Number(q('.i-extra').value) || 0;
     const total = per > 0 && bags > 0 ? bags * per + extra : extra;
     q('.s-title').textContent = [t, sz, q('.i-shape').value, q('.i-neck').value, q('.i-color').value]
       .filter(Boolean).join(' ') || 'รายการใหม่';
-    let msg = per > 0
-      ? (bags ? bags + ' ถุง × ' + per + ' ใบ' + (extra ? ' + ' + extra + ' ใบ' : '') + ' = ' + baht(total) + ' ใบ'
-              : 'สินค้านี้ ' + per + ' ใบ/ถุง — ใส่จำนวนถุงได้เลย')
-      : (total ? 'รวม ' + baht(total) + ' ใบ' : 'สินค้านี้ยังไม่มีสูตรใบ/ถุง — กรอกจำนวนที่ช่อง "เศษ (ใบ)"');
+    let msg;
+    if (unit !== 'ถุง') {
+      msg = total ? 'รวม ' + baht(total) + ' ' + unit : 'สินค้านี้นับเป็น' + unit + ' — กรอกที่ช่อง "จำนวน (' + unit + ')"';
+    } else if (per > 0) {
+      msg = bags ? bags + ' ถุง × ' + per + ' ใบ' + (extra ? ' + ' + extra + ' ใบ' : '') + ' = ' + baht(total) + ' ใบ'
+                 : 'สินค้านี้ ' + per + ' ใบ/ถุง — ใส่จำนวนถุงได้เลย';
+    } else {
+      msg = total ? 'รวม ' + baht(total) + ' ใบ' : 'สินค้านี้ยังไม่มีสูตรใบ/ถุง — กรอกจำนวนที่ช่อง "เศษ (ใบ)"';
+    }
     // ขั้นต่ำการสั่ง (จากตารางราคาเดิม) — เตือนอย่างเดียว ไม่บล็อก เพราะหน้างานยืดหยุ่นได้
     const min = ((DATA && DATA.minOrder) || {})[t + '|' + sz] || 0;
     if (min && total > 0 && total < min) msg += ' · ⚠️ ต่ำกว่าขั้นต่ำ ' + baht(min) + ' ใบ';
@@ -624,10 +693,13 @@ function readSpecItems(){
     const type = g('.i-type'), size = g('.i-size');
     const per = ((DATA && DATA.perBag) || {})[type + '|' + size] || 0;
     const bags = Number(g('.i-bags')) || 0, extra = Number(g('.i-extra')) || 0;
-    return { type, size, neck: g('.i-neck'), shape: g('.i-shape'), color: g('.i-color'),
-      screenColor: g('.i-scrcolor'), capColor: g('.i-cap'), bags, extra, perBag: per,
+    const use = ((DATA && DATA.spec && DATA.spec['แกนตามประเภท']) || {})[type];
+    const ax = (label, v) => (!use || use.includes(label)) ? v : '';
+    return { type, size: ax('ขนาด', size), neck: ax('คอขวด', g('.i-neck')), shape: ax('รูปทรง', g('.i-shape')),
+      color: ax('สี', g('.i-color')), screenColor: ax('สีสกรีน', g('.i-scrcolor')),
+      capColor: ax('พร้อมฝาสี', g('.i-cap')), bags, extra, perBag: per,
       qty: per > 0 && bags > 0 ? bags * per + extra : extra,
-      price: Number(g('.i-price')) || 0, screen: !!g('.i-scrcolor') };
+      price: Number(g('.i-price')) || 0, screen: !!ax('สีสกรีน', g('.i-scrcolor')) };
   }).filter(it => it.type && it.qty > 0);
 }
 function addItemRow(target='oItems', it={}){

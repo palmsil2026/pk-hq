@@ -17,7 +17,9 @@
 | `docs/products/` | ทะเบียนสินค้ามาตรฐาน 29 รายการ (SKU 6 หมวด) + รายงานสภาพข้อมูล | ทุกแชท |
 
 URL จริงหลังเปิด GitHub Pages ของ repo นี้ (Settings → Pages → branch `main`):
-`https://palmsil2026.github.io/pk-hq/` (แอปทีมงาน) · `…/pk-hq/exec/?key=รหัส` (บอร์ดบริหาร) · `…/pk-hq/finance/?key=รหัส` (การเงิน)
+แอปทีมงาน **แจกคนละลิงก์ตามทีม** (โค้ดชุดเดียว แยกด้วย `?app=` · ปุ่มคัดลอกอยู่ในบอร์ดบริหาร):
+`…/pk-hq/?app=office` ออฟฟิศ · `?app=prod` งานผลิต · `?app=screen` ทีมสกรีนสี · `?app=deliver` ส่งของ
+`https://palmsil2026.github.io/pk-hq/` (แอปรวม) · `…/pk-hq/exec/?key=รหัส` (บอร์ดบริหาร) · `…/pk-hq/finance/?key=รหัส` (การเงิน — ยังไม่เปิด)
 
 ## ติดตั้งครั้งแรก (คุณปาล์มทำ ~10 นาที)
 

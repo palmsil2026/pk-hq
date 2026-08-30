@@ -53,6 +53,9 @@ button.mini.ghost{background:var(--green-soft); color:var(--green);}
 .meta{font-size:12px; color:var(--muted);}
 .verline{text-align:center; font-size:11.5px; color:var(--muted); padding:14px 8px 24px; line-height:1.8;}
 .verline b{color:var(--text); font-weight:600;} .verline .old{color:var(--warn); font-weight:600;}
+.lnk{display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 0; border-bottom:1px dashed var(--line); flex-wrap:wrap;}
+.lnk:last-child{border-bottom:none;}
+.lnk code{font-size:11.5px; color:var(--muted); word-break:break-all;}
 .alert-strip{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin:14px 0;}
 .alert{border-radius:10px; padding:12px 14px; border:1px solid var(--warn); background:var(--warn-soft); font-size:13.5px;}
 .alert b{font-family:"Anuphan",sans-serif;}
@@ -141,6 +144,13 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 <div class="card"><h2>ปรับยอด/ของเสียล่าสุด <span class="meta">(จุดที่ควรสุ่มตรวจ)</span></h2><table id="adjTable"></table></div>
 <div class="card"><h2>ความเคลื่อนไหวล่าสุด</h2><table id="actTable"></table></div>
 <div class="card"><h2>ออเดอร์ล่าสุด</h2><table id="ordTable"></table></div>
+
+<div class="card">
+  <h2>🔗 ลิงก์แอปของแต่ละทีม <span class="meta">(แจกให้ทีมงาน — ให้เขาบันทึกไว้หน้าจอมือถือ)</span></h2>
+  <div id="appLinks"></div>
+  <p class="meta" style="margin:8px 0 0">ทุกลิงก์ยังต้องล็อกอินด้วยชื่อเล่น+PIN เหมือนเดิม —
+  สิทธิ์มาจาก<b>แผนก</b>ของแต่ละคน ไม่ใช่จากลิงก์ เปลี่ยนลิงก์เองไม่ได้สิทธิ์เพิ่ม</p>
+</div>
 <div class="verline" id="verLine"></div>
 
 </main>
@@ -171,7 +181,7 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-08-30l';
+const WEB_VERSION = '2026-08-30m';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -227,6 +237,7 @@ function render(){
   $('stamp').textContent = 'เดือน ' + d.month + ' · v' + d.version;
   // หน้าเว็บขึ้นทันทีที่ push (Pages) · GAS วางแยก → โชว์ทั้งสองเลข จะได้รู้ว่าอะไรอัปเดตแล้ว
   const same = !d.version || d.version >= WEB_VERSION;   // เตือนเฉพาะตอนหลังบ้านเก่ากว่าหน้าเว็บ
+  renderAppLinks();
   $('verLine').innerHTML = 'เวอร์ชัน · หน้าเว็บ <b>' + esc(WEB_VERSION) + '</b> · ระบบหลังบ้าน <b class="' +
     (same ? '' : 'old') + '">' + esc(d.version) + '</b>' + (same ? '' : ' ← ยังไม่ได้วางโค้ดรุ่นใหม่');
 
@@ -314,6 +325,31 @@ $('npAdd').addEventListener('click', async () => {
   toast('✅ เพิ่ม ' + name);
   $('npName').value=''; $('npUnit').value=''; $('npPrice').value='';
   reload();
+});
+
+// ─── ลิงก์แอปของแต่ละทีม (โค้ดชุดเดียว แยกด้วย ?app=) ───
+const TEAM_APPS = [
+  ['office', '🧾 ออฟฟิศ',     'รับออเดอร์ · ส่งของ · บิล/ใบวางบิล'],
+  ['prod',   '⚙️ งานผลิต',    'คิวงานผลิต · ลงผลผลิต · สต๊อก'],
+  ['screen', '🎨 ทีมสกรีนสี', 'คิวงานสกรีน · แตะทีม/เสร็จแล้ว'],
+  ['deliver','🚚 ส่งของ',     'คิวส่งของ · บันทึกการส่ง'],
+];
+function renderAppLinks(){
+  // แอปทีมงานอยู่โฟลเดอร์แม่ของบอร์ดนี้เสมอ (…/pk-hq/exec/ → …/pk-hq/)
+  const teamUrl = location.href.replace(/[?#].*$/, '').replace(/exec\/?[^/]*$/, '');
+  $('appLinks').innerHTML = TEAM_APPS.map(([k,name,what]) => {
+    const u = teamUrl + '?app=' + k;
+    return '<div class="lnk"><div><b>' + esc(name) + '</b> <span class="meta">' + esc(what) + '</span><br>' +
+      '<code>' + esc(u) + '</code></div>' +
+      '<button class="mini ghost" data-copy="' + esc(u) + '">คัดลอก</button></div>';
+  }).join('') +
+    '<div class="lnk"><div><b>🏭 แอปรวม</b> <span class="meta">เห็นทุกงานที่แผนกตัวเองมีสิทธิ์ — สำหรับออฟฟิศ/ผู้บริหาร</span><br>' +
+    '<code>' + esc(teamUrl) + '</code></div><button class="mini ghost" data-copy="' + esc(teamUrl) + '">คัดลอก</button></div>';
+}
+$('appLinks').addEventListener('click', async e => {
+  const b = e.target.closest('button[data-copy]'); if (!b) return;
+  try { await navigator.clipboard.writeText(b.dataset.copy); toast('คัดลอกลิงก์แล้ว'); }
+  catch(err){ toast('คัดลอกไม่ได้ — กดค้างที่ลิงก์แล้วคัดลอกเอง'); }
 });
 
 // ─── พนักงาน ───
