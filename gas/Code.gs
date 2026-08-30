@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30c';
+const CODE_VERSION = '2026-08-30d';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -158,6 +158,19 @@ function appendObj(name, obj) {
   const sh = tab(name);
   const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
   sh.appendRow(head.map(function (h) { return obj[h] !== undefined ? obj[h] : ''; }));
+}
+// เขียนหลายแถวรวดเดียว — ใช้กับงานก้อนใหญ่ (import) เพราะ appendObj ทีละแถว = อ่านหัวตาราง+เขียน
+// อย่างละ 1 เรียก API ต่อ 1 แถว หลักพันแถวจะชนเพดานรัน 6 นาทีของ Apps Script แน่นอน
+function appendObjs(name, objs) {
+  if (!objs || !objs.length) return 0;
+  const sh = tab(name);
+  const cols = sh.getLastColumn();
+  const head = sh.getRange(1, 1, 1, cols).getValues()[0].map(String);
+  const rows = objs.map(function (o) {
+    return head.map(function (h) { return o[h] !== undefined ? o[h] : ''; });
+  });
+  sh.getRange(sh.getLastRow() + 1, 1, rows.length, cols).setValues(rows);
+  return rows.length;
 }
 function updateWhere(name, idLabel, idValue, patch) {
   const sh = tab(name);
@@ -989,6 +1002,7 @@ function importLegacyAccounting(srcId) {
   srcId = srcId || LEGACY_SNAPSHOT_ID;
   const src = SpreadsheetApp.openById(srcId);
   let bills = 0, ar = 0, customers = 0;
+  const outBills = [], outCust = [];   // สะสมไว้เขียนทีเดียวตอนจบ (ดู appendObjs)
   const seenCust = {};
   rowsToObjs('Customers').forEach(function (c) { seenCust[String(c['ชื่อลูกค้า']).trim()] = true; });
   let custCount = Object.keys(seenCust).length;
@@ -1010,7 +1024,7 @@ function importLegacyAccounting(srcId) {
         const name = String(v[i][nc]).trim();
         if (!name || seenCust[name]) continue;
         seenCust[name] = true; custCount++;
-        appendObj('Customers', { 'Customer_ID': 'C' + ('000' + custCount).slice(-4), 'ชื่อลูกค้า': name, 'สร้างเมื่อ': now() });
+        outCust.push({ 'Customer_ID': 'C' + ('000' + custCount).slice(-4), 'ชื่อลูกค้า': name, 'สร้างเมื่อ': now() });
         customers++;
       }
       return;
@@ -1031,7 +1045,7 @@ function importLegacyAccounting(srcId) {
         const owe = num(r[head.indexOf('ยอดค้าง')]);
         const status = String(r[head.indexOf('สถานะ')] || '').trim();
         if (!owe) continue;
-        appendObj('Bills', {
+        outBills.push({
           'Bill_No': 'เก่า-' + tabName + '-' + no, 'วันที่': rawDate, 'ลูกค้า': name, 'ยอดรวม': owe, 'ประเภท': 'เครดิต',
           'สถานะ': (status.indexOf('จ่าย') >= 0 || status.indexOf('ชำระ') >= 0 || status.indexOf('เก็บ') >= 0) ? 'ชำระแล้ว' : 'ค้างชำระ',
           'ช่องทางชำระ': String(r[head.indexOf('ช่องทางชำระ')] || ''), 'หมายเหตุ': String(r[head.indexOf('หมายเหตุ')] || ''), 'ที่มา': 'นำเข้า:' + tabName,
@@ -1041,7 +1055,7 @@ function importLegacyAccounting(srcId) {
         const cash = num(r[head.indexOf('เงินสด')]);
         const credit = num(r[head.indexOf('เครดิต')]);
         if (!cash && !credit) continue;
-        appendObj('Bills', {
+        outBills.push({
           'Bill_No': 'เก่า-' + tabName + '-' + no, 'วันที่': rawDate, 'ลูกค้า': name, 'ยอดรวม': cash + credit,
           'ประเภท': credit ? 'เครดิต' : 'เงินสด', 'ช่องทางชำระ': String(r[head.indexOf('ช่องทางชำระ')] || ''),
           'สถานะ': credit ? 'ค้างชำระ' : 'ชำระแล้ว', 'ชำระเมื่อ': credit ? '' : rawDate,
@@ -1050,12 +1064,16 @@ function importLegacyAccounting(srcId) {
         bills++;
         if (name !== 'สด' && name !== 'สดเซล' && !seenCust[name]) {
           seenCust[name] = true; custCount++;
-          appendObj('Customers', { 'Customer_ID': 'C' + ('000' + custCount).slice(-4), 'ชื่อลูกค้า': name, 'สร้างเมื่อ': now() });
+          outCust.push({ 'Customer_ID': 'C' + ('000' + custCount).slice(-4), 'ชื่อลูกค้า': name, 'สร้างเมื่อ': now() });
           customers++;
         }
       }
     }
   });
+  // เขียนลงชีตทีเดียวจบ (2 เรียก API แทนหลักพัน) — ตายกลางทางแล้วรันซ้ำได้ ไม่เบิ้ล เพราะ seenBill/seenCust กรองของเดิมไว้แล้ว
+  appendObjs('Customers', outCust);
+  appendObjs('Bills', outBills);
+
   // seed ตัวนับลูกค้า กัน custSave ออก Customer_ID ชนกับที่ import มา
   const stg = tab('Settings');
   const sv = stg.getDataRange().getValues();
