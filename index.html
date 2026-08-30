@@ -72,6 +72,20 @@ button.mini.gold{background:var(--gold-soft); color:var(--gold);}
 .total{font-family:"Anuphan",sans-serif; font-weight:700; font-size:18px; color:var(--green); text-align:right; margin-top:8px;}
 .progress{height:8px; background:var(--ground); border-radius:99px; overflow:hidden; margin:6px 0 4px; border:1px solid var(--line);}
 .progress i{display:block; height:100%; background:var(--green);}
+.tree{margin:0; padding:0; list-style:none; font-variant-numeric:tabular-nums;}
+.tree li{display:flex; justify-content:space-between; align-items:center; gap:8px; min-height:44px;
+  padding:9px 8px; border-bottom:1px dashed var(--line); cursor:pointer;}
+.tree li:last-child{border-bottom:none;}
+.tree li>div:first-child{flex:1 1 auto; min-width:0;}
+.tree .car{display:inline-block; width:14px; color:var(--muted); font-size:11px;}
+.tree .amt{flex:0 0 auto; white-space:nowrap; text-align:right; font:700 14px "Anuphan",sans-serif; color:var(--green);}
+#oView button{font-size:12.5px; padding:8px 4px; min-height:38px;}
+.tree .d0{background:var(--green-soft); border-radius:8px; margin-top:6px; border-bottom:none;}
+.tree .d0 b{font-size:15px;}
+.tree .d1{padding-left:22px;} .tree .d2{padding-left:40px;} .tree .d3{padding-left:58px;}
+.tree .d3{border-left:2px solid var(--line);}
+.tree .ord .amt{color:var(--ink); font-weight:600;}
+.tree .ord>div:first-child .meta{display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .msg{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:var(--ground); padding:10px 22px; border-radius:99px; font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:99; max-width:88vw; text-align:center;}
 .msg.show{opacity:1;}
 .tabpane{display:none;} .tabpane.on{display:block;}
@@ -157,7 +171,19 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
     <div class="total" id="oTotal">รวม 0 บาท</div>
     <button class="btn" id="oSave">บันทึกออเดอร์</button>
   </div>
-  <div class="card"><h2>ออเดอร์</h2><ul class="list" id="orderList"></ul></div>
+  <div class="card">
+    <div class="li-top"><h2 style="margin:0">ออเดอร์</h2>
+      <div class="seg" id="oView" style="max-width:230px; margin:0">
+        <button type="button" class="on" data-view="list">รายใบ</button>
+        <button type="button" data-view="tree">รวมตามสินค้า</button>
+      </div>
+    </div>
+    <ul class="list" id="orderList"></ul>
+    <div id="treeWrap" hidden>
+      <p class="meta" id="treeSum" style="margin:8px 0 2px"></p>
+      <ul class="tree" id="orderTree"></ul>
+    </div>
+  </div>
 </section>
 
 <section class="tabpane" id="t-prod"><div class="card"><h2>คิวงานผลิต (รายสินค้า)</h2><ul class="list" id="prodList"></ul></div></section>
@@ -640,6 +666,7 @@ function orderBadges(o){
   return s;
 }
 function renderOrders(){
+  renderOrderTree();
   $('orderList').innerHTML = DATA.orders.slice(0,40).map(o =>
     '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer"><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + ' · แตะดูรายละเอียด</span></div>' +
     '<div>' + orderBadges(o) + '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
@@ -656,6 +683,97 @@ $('orderList').addEventListener('click', async e => {
   }
   const li = e.target.closest('li[data-open]');
   if (li) openOrderDetail(li.dataset.open);
+});
+
+// ─── มุมมอง "รวมตามสินค้า" — ทำตามหน้า "ออเดอร์" ของแอปเดิม ───
+// เดิมพนักงานดูยอดค้างแบบซ้อนชั้น: ขวด 148,376 → 250 ml 104,076 → แยกสี → ค่อยเห็นว่าใบไหนของใคร
+// นับเฉพาะออเดอร์ที่ยังไม่จบ (ตัด "ส่งแล้ว"/"ยกเลิก") เพราะนี่คือ "ของที่ยังต้องทำ" ไม่ใช่ยอดขายย้อนหลัง
+const TREE_OPEN = {};   // จำกิ่งที่กางไว้ ระหว่างโหลดข้อมูลรอบใหม่จะได้ไม่หุบเอง
+function orderTreeData(){
+  const roots = {};
+  (DATA.orders || []).forEach(o => {
+    if (['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ'])) return;
+    let items = []; try { items = JSON.parse(o['รายการ'] || '[]'); } catch(e){}
+    items.forEach(it => {
+      const qty = Number(it.qty) || 0; if (!qty) return;
+      const kT = it.type || 'ไม่ระบุประเภท', kS = it.size || 'ไม่ระบุขนาด', kC = it.color || 'ไม่ระบุสี';
+      const t = roots[kT] || (roots[kT] = { key:kT, qty:0, kids:{} });
+      t.qty += qty;
+      const z = t.kids[kS] || (t.kids[kS] = { key:kS, qty:0, perBag:0, kids:{} });
+      z.qty += qty; if (!z.perBag) z.perBag = Number(it.perBag) || 0;
+      const c = z.kids[kC] || (z.kids[kC] = { key:kC, qty:0, rows:[] });
+      c.qty += qty;
+      c.rows.push({ id:o['Order_ID'], customer:o['ลูกค้า'], brand:o['แบรนด์'] || '', due:o['กำหนดส่ง'] || '',
+        status:o['สถานะ'], urgent:o['ด่วน'] || '', qty:qty, bags:Number(it.bags) || 0,
+        shape:it.shape || '', neck:it.neck || '', screen:it.screenColor || '', cap:it.capColor || '' });
+    });
+  });
+  const byQty = obj => Object.keys(obj).map(k => obj[k]).sort((a,b) => b.qty - a.qty);
+  const out = byQty(roots);
+  out.forEach(t => {
+    t.list = byQty(t.kids);
+    t.list.forEach(z => {
+      z.list = byQty(z.kids);
+      z.list.forEach(c => c.rows.sort((a,b) => String(a.due||'9999').localeCompare(String(b.due||'9999'))));
+    });
+  });
+  return out;
+}
+function tBags(qty, perBag){ return perBag ? ' <span class="meta">≈ ' + baht(Math.floor(qty/perBag)) + ' ถุง</span>' : ''; }
+function tNode(depth, path, label, qty, sub, hasKids){
+  const open = !!TREE_OPEN[path];
+  return '<li class="d' + depth + '" data-tk="' + esc(path) + '">' +
+    '<div><span class="car">' + (hasKids ? (open ? '▾' : '▸') : '·') + '</span><b>' + esc(label) + '</b>' +
+    (sub ? ' ' + sub : '') + '</div>' +
+    '<div class="amt">' + baht(qty) + ' <span class="meta">ใบ</span></div></li>';
+}
+function renderOrderTree(){
+  const data = orderTreeData();
+  const grand = data.reduce((s,t) => s + t.qty, 0);
+  const ids = {}; data.forEach(t => t.list.forEach(z => z.list.forEach(c => c.rows.forEach(r => ids[r.id] = 1))));
+  $('treeSum').textContent = 'ค้างอยู่ ' + baht(grand) + ' ใบ · ' + baht(Object.keys(ids).length) + ' ออเดอร์' +
+    (grand ? ' — แตะเพื่อกางดูทีละชั้น' : '');
+  let h = '';
+  data.forEach(t => {
+    const pT = t.key;
+    h += tNode(0, pT, t.key, t.qty, '<span class="meta">' + t.list.length + ' ขนาด</span>', true);
+    if (!TREE_OPEN[pT]) return;
+    t.list.forEach(z => {
+      const pZ = pT + '/' + z.key;
+      h += tNode(1, pZ, z.key, z.qty, tBags(z.qty, z.perBag), true);
+      if (!TREE_OPEN[pZ]) return;
+      z.list.forEach(c => {
+        const pC = pZ + '/' + c.key;
+        h += tNode(2, pC, c.key, c.qty, '<span class="meta">' + c.rows.length + ' ใบสั่ง</span>', true);
+        if (!TREE_OPEN[pC]) return;
+        c.rows.forEach(r => {
+          const bits = [r.brand, r.screen ? 'สกรีน' + r.screen : '', r.cap ? 'ฝา' + r.cap : '',
+                        r.shape, r.neck, r.due ? 'ส่ง ' + r.due : ''].filter(Boolean).map(esc).join(' · ');
+          h += '<li class="d3 ord" data-open="' + esc(r.id) + '">' +
+            '<div><span class="car">·</span><b>' + (r.urgent ? '⚡ ' : '') + esc(r.customer) + '</b> ' +
+            '<span class="chip ' + CHIP(r.status) + '">' + esc(r.status) + '</span>' +
+            (bits ? '<br><span class="meta" style="padding-left:14px">' + bits + '</span>' : '') + '</div>' +
+            '<div class="amt">' + baht(r.qty) + ' <span class="meta">ใบ' + (r.bags ? ' / ' + baht(r.bags) + ' ถุง' : '') + '</span></div></li>';
+        });
+      });
+    });
+  });
+  $('orderTree').innerHTML = h || '<li class="meta">ไม่มีออเดอร์ค้าง</li>';
+}
+$('orderTree').addEventListener('click', e => {
+  const li = e.target.closest('li'); if (!li) return;
+  if (li.dataset.open) return openOrderDetail(li.dataset.open);
+  const k = li.dataset.tk; if (!k) return;
+  TREE_OPEN[k] = !TREE_OPEN[k];
+  renderOrderTree();
+});
+$('oView').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  [...$('oView').children].forEach(x => x.classList.remove('on'));
+  b.classList.add('on');
+  const tree = b.dataset.view === 'tree';
+  $('treeWrap').hidden = !tree;
+  $('orderList').hidden = tree;
 });
 
 // ─── รายละเอียดออเดอร์ (แตะจากลิสต์ไหนก็เปิดได้) ───
