@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>P&K — บอร์ดบริหาร</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap">
+<style>
+:root{
+  --ground:#F4F7F6; --surface:#FFFFFF; --ink:#1B2A26; --muted:#5E6F6A;
+  --green:#175A4C; --green-soft:#E1EFE9; --gold:#B8912F; --gold-soft:#F6EED9;
+  --ok:#2E7D4F; --warn:#B3541E; --warn-soft:#F7E8DE; --danger:#A63A3A; --line:#D8E2DE;
+}
+@media (prefers-color-scheme: dark){
+  :root{
+    --ground:#0E1815; --surface:#16241F; --ink:#E7F0EC; --muted:#93A8A0;
+    --green:#7FC7B2; --green-soft:#16352C; --gold:#D9B65C; --gold-soft:#332A14;
+    --ok:#6FBE92; --warn:#E0925F; --warn-soft:#3A2313; --danger:#E08585; --line:#26382F;
+  }
+}
+*{box-sizing:border-box}
+body{margin:0; background:var(--ground); color:var(--ink); font:15px/1.6 "Sarabun",system-ui,sans-serif; padding:0 16px 60px;}
+header{max-width:1040px; margin:0 auto; padding:22px 0 6px; display:flex; justify-content:space-between; align-items:baseline; flex-wrap:wrap; gap:8px;}
+h1{font-family:"Anuphan",sans-serif; font-size:22px; margin:0;}
+h1 small{color:var(--gold); font-size:13px; font-weight:600;}
+.stamp{font-size:12.5px; color:var(--muted);}
+main{max-width:1040px; margin:0 auto;}
+.grid{display:grid; grid-template-columns:repeat(auto-fit,minmax(155px,1fr)); gap:10px; margin:14px 0;}
+.kpi{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:13px 15px;}
+.kpi .l{font-size:12px; color:var(--muted); font-family:"Anuphan",sans-serif; font-weight:600;}
+.kpi .v{font-family:"Anuphan",sans-serif; font-weight:700; font-size:21px; margin-top:2px; font-variant-numeric:tabular-nums;}
+.kpi .v.warn{color:var(--warn);} .kpi .v.gold{color:var(--gold);} .kpi .v.green{color:var(--green);} .kpi .v.danger{color:var(--danger);}
+.kpi .s{font-size:11.5px; color:var(--muted);}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px 18px; margin-bottom:14px;}
+h2{font-family:"Anuphan",sans-serif; font-size:16px; margin:0 0 10px;}
+.cols{display:grid; grid-template-columns:1fr 1fr; gap:14px;}
+@media (max-width:800px){ .cols{grid-template-columns:1fr;} }
+table{width:100%; border-collapse:collapse; font-size:14px;}
+th{font-family:"Anuphan",sans-serif; font-size:11.5px; color:var(--muted); text-align:left; padding:6px 8px; border-bottom:1px solid var(--line); letter-spacing:.05em;}
+td{padding:7px 8px; border-bottom:1px dashed var(--line); font-variant-numeric:tabular-nums;}
+tr:last-child td{border-bottom:none;}
+.r{text-align:right;}
+.bars{display:flex; align-items:flex-end; gap:2px; height:90px; margin-top:8px;}
+.bars div{flex:1; background:var(--green); opacity:.75; border-radius:2px 2px 0 0; min-height:2px;}
+.bars div.today{background:var(--gold); opacity:1;}
+input,select{padding:7px 9px; border:1px solid var(--line); border-radius:7px; background:var(--ground); color:var(--ink); font:inherit; width:100%;}
+input:focus,select:focus{outline:2px solid var(--green);}
+button.mini{background:var(--green); color:var(--ground); border:0; border-radius:7px; padding:6px 14px; font:600 12.5px "Anuphan",sans-serif; cursor:pointer;}
+button.mini.gold{background:var(--gold);}
+button.mini.ghost{background:var(--green-soft); color:var(--green);}
+.chip{font:600 11.5px "Anuphan",sans-serif; padding:2px 10px; border-radius:99px; background:var(--green-soft); color:var(--green); white-space:nowrap; display:inline-block;}
+.chip.warn{background:var(--warn-soft); color:var(--warn);}
+.meta{font-size:12px; color:var(--muted);}
+.alert-strip{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin:14px 0;}
+.alert{border-radius:10px; padding:12px 14px; border:1px solid var(--warn); background:var(--warn-soft); font-size:13.5px;}
+.alert b{font-family:"Anuphan",sans-serif;}
+.alert.calm{border-color:var(--line); background:var(--surface); color:var(--muted);}
+.alert ul{margin:6px 0 0; padding-left:18px;}
+.msg{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:var(--ground); padding:10px 22px; border-radius:99px; font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:99;}
+.msg.show{opacity:1;}
+.price-row{display:grid; grid-template-columns:1fr 80px 105px 80px; gap:8px; align-items:center; padding:6px 0; border-bottom:1px dashed var(--line);}
+.up{color:var(--warn);} .down{color:var(--ok);}
+#err{max-width:1040px;margin:30px auto;text-align:center;color:var(--muted);display:none;}
+.modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:center; justify-content:center; z-index:50; padding:16px;}
+.modal-bg.on{display:flex;}
+.modal{background:var(--surface); border-radius:14px; padding:20px; width:100%; max-width:440px; max-height:90vh; overflow-y:auto;}
+.row{display:flex; gap:8px;} .row>*{flex:1;}
+label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
+.low{color:var(--warn); font-weight:600;}
+</style>
+</head>
+<body>
+<header>
+  <h1>🏭 P&K โรงขวด <small>บอร์ดบริหาร</small></h1>
+  <span class="stamp" id="stamp">กำลังโหลด…</span>
+</header>
+<div id="err"></div>
+<main id="board" hidden>
+
+<div class="alert-strip" id="alerts"></div>
+
+<div class="grid">
+  <div class="kpi"><div class="l">ยอดขายเดือนนี้</div><div class="v green" id="kMonth">–</div><div class="s" id="kSplit"></div></div>
+  <div class="kpi"><div class="l">ยอดขายวันนี้</div><div class="v" id="kToday">–</div></div>
+  <div class="kpi"><div class="l">ลูกหนี้ค้างเก็บ</div><div class="v warn" id="kAr">–</div><div class="s" id="kStmt"></div></div>
+  <div class="kpi"><div class="l">เลยกำหนดชำระ</div><div class="v danger" id="kOver">–</div><div class="s" id="kOverC"></div></div>
+  <div class="kpi"><div class="l">คิวผลิต</div><div class="v gold" id="kProd">–</div><div class="s" id="kProdS"></div></div>
+  <div class="kpi"><div class="l">คิวสกรีน</div><div class="v gold" id="kScr">–</div><div class="s" id="kScrS"></div></div>
+</div>
+
+<div class="card">
+  <h2>ยอดขายรายวัน 30 วันหลัง</h2>
+  <div class="bars" id="bars"></div>
+  <div class="meta" id="barsMeta"></div>
+</div>
+
+<div class="cols">
+  <div class="card"><h2>ลูกหนี้ค้างเก็บ — รายลูกค้า</h2><table id="arTable"></table></div>
+  <div class="card"><h2>ลูกค้าท็อปเดือนนี้</h2><table id="custTable"></table></div>
+</div>
+
+<div class="cols">
+  <div class="card">
+    <h2>ผลิต 30 วัน</h2>
+    <p style="margin:0 0 8px"><b id="pGood">–</b> ดี · <b id="pWaste" class="low">–</b> เสีย <span class="meta" id="pRate"></span></p>
+    <table id="wasteTable"></table>
+  </div>
+  <div class="card"><h2>เงินสดรับวันนี้ — รายคน</h2><table id="cashTable"></table><p class="meta" style="margin:8px 0 0">ใช้เช็คยอดนำส่งเงินสดเข้าออฟฟิศตอนเย็น</p></div>
+</div>
+
+<div class="cols">
+  <div class="card"><h2>สต๊อกสินค้าสำเร็จ</h2><table id="stockProd"></table></div>
+  <div class="card"><h2>สต๊อกวัตถุดิบ</h2><table id="stockMat"></table></div>
+</div>
+
+<div class="card">
+  <h2>พนักงาน — วันนี้ <span class="meta">(เข้างาน/ออกงาน)</span></h2>
+  <table id="attTable"></table>
+</div>
+<div class="card">
+  <h2>ผลงาน 30 วัน — รายคน <span class="meta">(นับจากผู้ลงข้อมูล — หัวหน้ากะอาจลงแทนทั้งทีม อย่าใช้ตัดสินรายคนเพียว ๆ)</span></h2>
+  <table id="staffTable"></table>
+</div>
+<div class="card">
+  <h2>จัดการพนักงาน</h2>
+  <table id="staffMg"></table>
+  <button class="mini gold" id="stAdd" style="margin-top:10px">+ เพิ่มพนักงาน</button>
+</div>
+
+<div class="card">
+  <h2>💰 ราคาสินค้า <span class="meta">(โซนประธานใหญ่ — เป็นราคากลางหน้ารับออเดอร์ทันที ทุกการปรับมีประวัติ)</span></h2>
+  <div class="price-row" style="border-bottom:1px solid var(--line)"><b class="meta">สินค้า</b><b class="meta">หน่วย</b><b class="meta">ราคา/หน่วย</b><span></span></div>
+  <div id="priceList"></div>
+  <div class="price-row" style="border-bottom:none">
+    <input id="npName" placeholder="เพิ่มสินค้าใหม่…">
+    <input id="npUnit" placeholder="หน่วย">
+    <input id="npPrice" type="number" step="0.01" placeholder="ราคา">
+    <button class="mini gold" id="npAdd">เพิ่ม</button>
+  </div>
+</div>
+<div class="card"><h2>ประวัติการปรับราคา</h2><table id="histTable"></table></div>
+
+<div class="card"><h2>ปรับยอด/ของเสียล่าสุด <span class="meta">(จุดที่ควรสุ่มตรวจ)</span></h2><table id="adjTable"></table></div>
+<div class="card"><h2>ความเคลื่อนไหวล่าสุด</h2><table id="actTable"></table></div>
+<div class="card"><h2>ออเดอร์ล่าสุด</h2><table id="ordTable"></table></div>
+
+</main>
+
+<div class="modal-bg" id="stModal">
+  <div class="modal">
+    <h2 id="stTitle">เพิ่มพนักงาน</h2>
+    <label>ชื่อจริง</label><input id="sfName">
+    <div class="row">
+      <div><label>ชื่อเล่น (ใช้ล็อกอิน)</label><input id="sfNick"></div>
+      <div><label>แผนก</label><select id="sfDept"><option>ผลิต</option><option>สกรีน</option><option>ส่งของ</option><option>ออฟฟิศ</option><option>บริหาร</option></select></div>
+    </div>
+    <div class="row">
+      <div><label>PIN <span class="meta" id="sfPinHint">(4-6 หลัก)</span></label><input id="sfPin" inputmode="numeric"></div>
+      <div><label>สถานะ</label><select id="sfStatus"><option>ทำงาน</option><option>พัก</option><option>ลาออก</option></select></div>
+    </div>
+    <label>หมายเหตุ</label><input id="sfNote">
+    <div class="row" style="margin-top:14px">
+      <button class="mini" id="sfSave" style="padding:10px">บันทึก</button>
+      <button class="mini ghost" id="sfCancel" style="padding:10px">ปิด</button>
+    </div>
+  </div>
+</div>
+
+<div class="msg" id="msg"></div>
+<script>
+// ═══ ตั้งค่า: วาง URL Web App ของ GAS "P&K System" (ตัวเดียวกับ index.html) ═══
+const GAS_URL = 'PASTE_PK_GAS_WEBAPP_URL_HERE';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
+function toast(t){ const m=$('msg'); m.textContent=t; m.classList.add('show'); setTimeout(()=>m.classList.remove('show'),2600); }
+function fail(t){ const e=$('err'); e.style.display='block'; e.textContent=t; $('stamp').textContent=''; }
+
+const qs = new URLSearchParams(location.search);
+let KEY = qs.get('key') || localStorage.getItem('pk_exec_key') || '';
+if (qs.get('key')) history.replaceState(null, '', location.pathname); // เอารหัสออกจาก address bar
+let DATA = null, EDIT_ID = null;
+
+async function api(action, payload=null, params={}){
+  const q = new URLSearchParams({ action, key: KEY, ...params });
+  if (payload) q.set('payload', JSON.stringify(payload));
+  let j;
+  try {
+    const r = await fetch(GAS_URL + '?' + q.toString());
+    j = await r.json();
+  } catch(e){
+    if (action !== 'pkExec') toast('❌ เน็ตมีปัญหา — ลองใหม่');
+    const err = new Error('เน็ตมีปัญหา'); err.net = true; throw err;
+  }
+  if (!j.ok){
+    if (action !== 'pkExec') toast('❌ ' + (j.error || 'ผิดพลาด'));
+    const err = new Error(j.error || 'ผิดพลาด');
+    err.badKey = !!j.needLogin || j.error === 'เฉพาะผู้บริหาร' || j.error === 'รหัสผู้บริหารไม่ถูกต้อง';
+    throw err;
+  }
+  return j;
+}
+window.addEventListener('unhandledrejection', ev => { ev.preventDefault(); });
+async function load(){
+  if (GAS_URL.indexOf('PASTE_') === 0) return fail('ยังไม่ได้ตั้ง GAS_URL ในไฟล์ exec/index.html');
+  if (!KEY) KEY = prompt('ใส่รหัสผู้บริหาร P&K') || '';
+  try { DATA = await api('pkExec'); localStorage.setItem('pk_exec_key', KEY); }
+  catch(e){
+    if (e.badKey) localStorage.removeItem('pk_exec_key');
+    return fail(e.net ? 'เชื่อมต่อไม่ได้ — เช็คเน็ตแล้วรีเฟรช (รหัสยังจำไว้ให้)' : 'เข้าไม่ได้: ' + e.message + (e.badKey ? ' — รีเฟรชแล้วใส่รหัสใหม่' : ' — รีเฟรชอีกครั้ง (รหัสยังจำไว้ให้)'));
+  }
+  render();
+}
+async function reload(){ DATA = await api('pkExec'); render(); }
+
+function alertBox(title, items, fmt){
+  if (!items || !items.length) return '';
+  return '<div class="alert"><b>⚠️ ' + title + ' (' + items.length + ')</b><ul>' +
+    items.slice(0,5).map(fmt).map(t => '<li>' + t + '</li>').join('') +
+    (items.length > 5 ? '<li class="meta">…อีก ' + (items.length-5) + ' รายการ</li>' : '') + '</ul></div>';
+}
+function render(){
+  const d = DATA;
+  $('board').hidden = false;
+  $('stamp').textContent = 'เดือน ' + d.month + ' · v' + d.version;
+
+  const A = d.alerts || {};
+  let html = alertBox('ออเดอร์เลยกำหนดส่ง', A.lateOrders, o => esc(o.customer) + ' (' + esc(o.id) + ' กำหนด ' + esc(o.due) + ')')
+    + alertBox('ใบวางบิลเลยกำหนดเก็บ', A.lateStmts, s => esc(s.customer) + ' ' + baht(s.amt) + ' บ. (เก็บ ' + esc(s.due) + ')')
+    + alertBox('สต๊อกต่ำกว่าจุดเตือน', A.lowStock, s => esc(s.name) + ' เหลือ ' + baht(s.bal) + ' (จุดเตือน ' + baht(s.min) + ')')
+    + alertBox('ลืมลงเวลาออก', A.attOpen, a => esc(a['ชื่อ']) + ' วันที่ ' + esc(a['วันที่']) + ' <button class="mini ghost" data-fix="' + esc(a['วันที่']) + '|' + esc(a['Staff_ID']) + '">แก้เวลา</button>');
+  $('alerts').innerHTML = html || '<div class="alert calm">✅ ไม่มีเรื่องด่วนต้องจัดการ</div>';
+
+  $('kMonth').textContent = baht(d.kpi.monthTotal);
+  $('kSplit').textContent = 'สด ' + baht(d.kpi.monthCash) + ' · เครดิต ' + baht(d.kpi.monthCredit);
+  $('kToday').textContent = baht(d.kpi.todaySales);
+  $('kAr').textContent = baht(d.kpi.arTotal);
+  $('kStmt').textContent = 'ใบวางบิลรอเก็บ ' + d.stmtsWait + ' ใบ';
+  $('kOver').textContent = baht(d.kpi.overdueSum);
+  $('kOverC').textContent = d.kpi.overdueCount + ' บิล';
+  $('kProd').textContent = d.queues.prodWait + d.queues.prodDoing;
+  $('kProdS').textContent = 'รอ ' + d.queues.prodWait + ' · กำลังทำ ' + d.queues.prodDoing;
+  $('kScr').textContent = d.queues.scrWait + d.queues.scrDoing;
+  $('kScrS').textContent = 'รอ ' + d.queues.scrWait + ' · กำลังทำ ' + d.queues.scrDoing;
+
+  const max = Math.max(...d.daily30.map(x=>x.amt), 1);
+  $('bars').innerHTML = d.daily30.map((x,i)=>'<div title="' + esc(x.d) + ' · ' + baht(x.amt) + ' บ." style="height:' + Math.round(x.amt/max*100) + '%"' + (i===d.daily30.length-1?' class="today"':'') + '></div>').join('');
+  $('barsMeta').textContent = 'รวม 30 วัน ' + baht(d.daily30.reduce((s,x)=>s+x.amt,0)) + ' บาท · แท่งทอง = วันนี้';
+
+  const tbl = (rows, headHtml, empty) => headHtml + (rows.join('') || '<tr><td colspan="9" class="meta">' + empty + '</td></tr>');
+  $('arTable').innerHTML = tbl(d.arTop.map(x=>'<tr><td>'+esc(x.name)+'</td><td class="r">'+baht(x.amt)+'</td></tr>'), '<tr><th>ลูกค้า</th><th class="r">ค้าง (บาท)</th></tr>', 'ไม่มีหนี้ค้าง 🎉');
+  $('custTable').innerHTML = tbl(d.custTop.map(x=>'<tr><td>'+esc(x.name)+'</td><td class="r">'+baht(x.amt)+'</td></tr>'), '<tr><th>ลูกค้า</th><th class="r">ยอดซื้อ (บาท)</th></tr>', 'ยังไม่มียอดเดือนนี้');
+
+  $('pGood').textContent = baht(d.prod30.good);
+  $('pWaste').textContent = baht(d.prod30.waste);
+  const tot = d.prod30.good + d.prod30.waste;
+  $('pRate').textContent = tot ? '· ของเสีย ' + (d.prod30.waste/tot*100).toFixed(1) + '%' : '';
+  $('wasteTable').innerHTML = tbl(d.prod30.wasteBy.map(w=>'<tr><td>'+esc(w.reason)+'</td><td class="r">'+baht(w.qty)+'</td></tr>'), '<tr><th>สาเหตุของเสีย</th><th class="r">จำนวน</th></tr>', 'ยังไม่มีของเสีย 🎉');
+  $('cashTable').innerHTML = tbl(d.cashToday.map(c=>'<tr><td>'+esc(c.name)+'</td><td class="r">'+baht(c.amt)+'</td></tr>'), '<tr><th>ผู้รับเงิน</th><th class="r">เงินสดวันนี้ (บาท)</th></tr>', 'ยังไม่มีเงินสดวันนี้');
+
+  const stRow = (name, bal, min) => {
+    const low = min !== '' && Number(String(bal).replace(/,/g,'')) <= Number(String(min).replace(/,/g,''));
+    return '<tr><td>'+esc(name)+'</td><td class="r'+(low?' low':'')+'">'+baht(bal)+'</td><td class="r meta">'+esc(min===''?'—':min)+'</td></tr>';
+  };
+  $('stockProd').innerHTML = tbl(d.stock.products.map(p=>stRow(p['ชื่อสินค้า'], p['คงเหลือ'], p['จุดเตือน'])), '<tr><th>สินค้า</th><th class="r">คงเหลือ</th><th class="r">จุดเตือน</th></tr>', 'ยังไม่มีสินค้า');
+  $('stockMat').innerHTML = tbl(d.stock.materials.map(m=>stRow(m['ชื่อวัตถุดิบ'], m['คงเหลือ'], m['จุดสั่งซื้อ'])), '<tr><th>วัตถุดิบ</th><th class="r">คงเหลือ</th><th class="r">จุดสั่งซื้อ</th></tr>', 'ยังไม่มีวัตถุดิบ');
+
+  $('attTable').innerHTML = tbl(d.staffToday.map(a=>'<tr><td>'+esc(a['ชื่อ'])+'</td><td>'+esc(a['เข้า']||'—')+'</td><td>'+esc(a['ออก']||'—')+'</td><td class="r">'+esc(a['ชั่วโมง']||'')+'</td></tr>'), '<tr><th>ชื่อ</th><th>เข้า</th><th>ออก</th><th class="r">ชม.</th></tr>', 'วันนี้ยังไม่มีใครลงเวลา');
+  $('staffTable').innerHTML = tbl(d.staff30.map(s=>'<tr><td>'+esc(s.name)+'</td><td class="meta">'+esc(s.dept||'-')+'</td><td class="r">'+s.days+'</td><td class="r">'+s.logs+'</td><td class="r">'+baht(s.good)+'</td><td class="r'+(s.waste?' low':'')+'">'+baht(s.waste)+'</td></tr>'), '<tr><th>ชื่อ</th><th>แผนก</th><th class="r">วันเข้างาน</th><th class="r">ครั้งที่ลงงาน</th><th class="r">ดี</th><th class="r">เสีย</th></tr>', 'ยังไม่มีข้อมูล');
+  $('staffMg').innerHTML = tbl(d.staffList.map(s=>'<tr><td><b>'+esc(s['ชื่อ'])+'</b> <span class="meta">('+esc(s['ชื่อเล่น'])+')</span></td><td class="meta">'+esc(s['แผนก']||'-')+'</td><td><span class="chip'+(s['สถานะ']!=='ทำงาน'?' warn':'')+'">'+esc(s['สถานะ'])+'</span></td><td class="r"><button class="mini ghost" data-edit="'+esc(s['Staff_ID'])+'">แก้ไข/PIN</button></td></tr>'), '<tr><th>ชื่อ</th><th>แผนก</th><th>สถานะ</th><th></th></tr>', 'ยังไม่มีพนักงาน — เพิ่มคนแรกเลย');
+
+  $('priceList').innerHTML = (d.products||[]).map(p=>
+    '<div class="price-row"><div><b>'+esc(p['ชื่อสินค้า'])+'</b>'+((p['สถานะ']||'ใช้งาน')==='เลิกขาย'?' <span class="chip warn">เลิกขาย</span>':'')+'</div><div class="meta">'+esc(p['หน่วย']||'-')+'</div>'+
+    '<input type="number" step="0.01" value="'+esc(p['ราคา/หน่วย'])+'" id="pr-'+esc(p['Product_ID'])+'">'+
+    '<button class="mini" data-price="'+esc(p['Product_ID'])+'">บันทึก</button></div>').join('')
+    || '<div class="meta" style="padding:8px 0">ยังไม่มีสินค้า — เพิ่มด้านล่าง</div>';
+  $('histTable').innerHTML = tbl((d.priceHistory||[]).map(h=>{
+    const first = h['ราคาเดิม']==='';
+    const up = Number(h['ราคาใหม่']) > Number(h['ราคาเดิม']||0);
+    return '<tr><td class="meta">'+esc(h['วันที่'])+'</td><td>'+esc(h['ชื่อสินค้า'])+'</td><td class="r meta">'+(first?'ตั้งครั้งแรก':baht(h['ราคาเดิม']))+'</td><td class="r '+(first?'':(up?'up':'down'))+'"><b>'+baht(h['ราคาใหม่'])+'</b></td><td class="meta">'+esc(h['ผู้ปรับ']||'')+'</td></tr>';
+  }), '<tr><th>เมื่อ</th><th>สินค้า</th><th class="r">เดิม</th><th class="r">ใหม่</th><th>ผู้ปรับ</th></tr>', 'ยังไม่เคยปรับราคา');
+
+  $('adjTable').innerHTML = tbl((d.adjust30||[]).map(m=>'<tr><td class="meta">'+esc(m['เมื่อ'])+'</td><td><span class="chip'+(m['ประเภท']==='ของเสีย'?' warn':'')+'">'+esc(m['ประเภท'])+'</span></td><td>'+esc(m['ชื่อ'])+'</td><td class="r">'+baht(m['จำนวน'])+'</td><td class="meta">'+esc(m['ผู้ทำ'])+'</td><td class="meta">'+esc(m['หมายเหตุ']||'')+'</td></tr>'), '<tr><th>เมื่อ</th><th>ประเภท</th><th>รายการ</th><th class="r">จำนวน</th><th>ใคร</th><th>เหตุผล</th></tr>', 'ไม่มีการปรับยอด/ของเสีย 30 วันหลัง');
+  $('actTable').innerHTML = tbl((d.activity||[]).map(a=>'<tr><td class="meta">'+esc(a['เมื่อ'])+'</td><td>'+esc(a['ใคร'])+'</td><td>'+esc(a['การกระทำ'])+'</td><td class="meta">'+esc(a['อ้างอิง'])+' '+esc(a['รายละเอียด'])+'</td></tr>'), '<tr><th>เมื่อ</th><th>ใคร</th><th>ทำอะไร</th><th>รายละเอียด</th></tr>', 'ยังไม่มีความเคลื่อนไหว');
+  $('ordTable').innerHTML = tbl((d.recentOrders||[]).map(o=>'<tr><td class="meta">'+esc(o['Order_ID'])+'</td><td>'+esc(o['ลูกค้า'])+'</td><td class="r">'+baht(o['ยอดรวม'])+'</td><td><span class="chip'+(['รอผลิต','รอสกรีน'].includes(o['สถานะ'])?' warn':'')+'">'+esc(o['สถานะ'])+'</span></td></tr>'), '<tr><th>ออเดอร์</th><th>ลูกค้า</th><th class="r">ยอด</th><th>สถานะ</th></tr>', 'ยังไม่มีออเดอร์');
+}
+
+// ─── ราคา (ประธาน) ───
+$('priceList').addEventListener('click', async e => {
+  const id = e.target.dataset && e.target.dataset.price;
+  if (!id) return;
+  const p = DATA.products.find(x => x['Product_ID'] === id);
+  const v = $('pr-' + id).value;
+  if (v === '') return toast('ใส่ราคาก่อน');
+  const note = prompt('หมายเหตุการปรับราคา (ไม่ใส่ก็ได้)', '');
+  if (note === null) return;
+  await api('pkPriceSet', { name: p['ชื่อสินค้า'], price: Number(v), note });
+  toast('✅ ' + p['ชื่อสินค้า'] + ' → ' + baht(v) + ' บ.');
+  reload();
+});
+$('npAdd').addEventListener('click', async () => {
+  const name = $('npName').value.trim(), price = $('npPrice').value;
+  if (!name || price === '') return toast('ใส่ชื่อสินค้ากับราคาก่อน');
+  await api('pkPriceSet', { name, unit: $('npUnit').value.trim(), price: Number(price), note: 'เพิ่มสินค้าใหม่' });
+  toast('✅ เพิ่ม ' + name);
+  $('npName').value=''; $('npUnit').value=''; $('npPrice').value='';
+  reload();
+});
+
+// ─── พนักงาน ───
+function openStaffModal(s){
+  EDIT_ID = s ? s['Staff_ID'] : null;
+  $('stTitle').textContent = s ? 'แก้ไข — ' + s['ชื่อ'] : 'เพิ่มพนักงาน';
+  $('sfName').value = s ? s['ชื่อ'] : '';
+  $('sfNick').value = s ? s['ชื่อเล่น'] : '';
+  $('sfDept').value = s ? (s['แผนก'] || 'ผลิต') : 'ผลิต';
+  $('sfStatus').value = s ? s['สถานะ'] : 'ทำงาน';
+  $('sfNote').value = s ? (s['หมายเหตุ'] || '') : '';
+  $('sfPin').value = '';
+  $('sfPinHint').textContent = s ? '(เว้นว่าง = ไม่เปลี่ยน)' : '(4-6 หลัก)';
+  $('stModal').classList.add('on');
+}
+$('stAdd').addEventListener('click', () => openStaffModal(null));
+$('staffMg').addEventListener('click', e => {
+  const id = e.target.dataset && e.target.dataset.edit;
+  if (!id) return;
+  openStaffModal(DATA.staffList.find(s => s['Staff_ID'] === id));
+});
+$('sfCancel').addEventListener('click', () => $('stModal').classList.remove('on'));
+$('sfSave').addEventListener('click', async () => {
+  const pay = { id: EDIT_ID, name: $('sfName').value.trim(), nick: $('sfNick').value.trim(), dept: $('sfDept').value, status: $('sfStatus').value, note: $('sfNote').value };
+  if ($('sfPin').value.trim()) pay.pin = $('sfPin').value.trim();
+  try {
+    const j = await api('pkStaffSave', pay);
+    toast('✅ บันทึก ' + pay.name);
+    $('stModal').classList.remove('on');
+    reload();
+  } catch(e){}
+});
+$('alerts').addEventListener('click', async e => {
+  const fx = e.target.dataset && e.target.dataset.fix;
+  if (!fx) return;
+  const [date, staffId] = fx.split('|');
+  const out = prompt('เวลาออกจริงของวันที่ ' + date + ' (เช่น 17:30):');
+  if (!out) return;
+  await api('pkAttFix', { date, staffId, out, note: 'ผู้บริหารแก้ให้' });
+  toast('✅ แก้เวลาแล้ว');
+  reload();
+});
+
+load();
+</script>
+</body>
+</html>

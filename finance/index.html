@@ -1,0 +1,722 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
+  <title>💵 การเงินโรงขวด</title>
+
+  <!-- ⚠️ หลัง deploy GAS (finance/gas/Code.gs) แล้ว วาง URL /exec ตรงนี้ -->
+  <script>
+    const GAS_URL = "PASTE_GAS_URL_HERE";
+  </script>
+
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet" />
+
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    :root {
+      --green: #1E5E3F; --green-dark: #14432D; --green-light: #E4F0E8;
+      --gold: #C8A96E; --gold-light: #F5EDD9;
+      --cream: #F7F5EE; --cream-dark: #ECE7DA;
+      --text: #1C2B22; --sub: #75857B; --border: #D5D0C2; --white: #fff;
+      --red: #C0392B; --orange: #C8842A; --blue: #2B6CB0;
+      --radius: 12px;
+    }
+    body {
+      font-family: 'Sarabun', sans-serif; color: var(--text);
+      background: linear-gradient(160deg, #DFEDE3 0%, #F5EDD9 55%, #E4F0E8 100%);
+      background-attachment: fixed; min-height: 100vh; padding-bottom: 84px;
+    }
+    .wrap { max-width: 720px; margin: 0 auto; padding: 14px 14px 0; }
+
+    header { display: flex; align-items: center; gap: 10px; padding: 8px 2px 14px; }
+    header .logo { font-size: 30px; }
+    header h1 { font-size: 19px; color: var(--green-dark); }
+    header .ver { font-size: 11px; color: var(--sub); margin-top: 2px; }
+
+    .card { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 14px; margin-bottom: 12px; box-shadow: 0 1px 4px rgba(20,67,45,.06); }
+    .card h2 { font-size: 15px; color: var(--green-dark); margin-bottom: 10px; }
+
+    label { font-size: 12.5px; color: var(--sub); display: block; margin: 8px 0 3px; }
+    input, select, textarea { width: 100%; font: inherit; font-size: 15px; padding: 9px 10px;
+      border: 1px solid var(--border); border-radius: 9px; background: var(--cream); color: var(--text); }
+    input:focus, textarea:focus { outline: 2px solid var(--green); background: var(--white); }
+    .row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+
+    .chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+    .chip { padding: 6px 12px; border-radius: 999px; border: 1px solid var(--border);
+      background: var(--white); font-size: 13.5px; cursor: pointer; user-select: none; }
+    .chip.on { background: var(--green); border-color: var(--green); color: #fff; font-weight: 600; }
+
+    .btn { display: inline-block; width: 100%; padding: 12px; margin-top: 12px; font: inherit;
+      font-size: 16px; font-weight: 700; color: #fff; background: var(--green); border: 0;
+      border-radius: 10px; cursor: pointer; }
+    .btn:disabled { opacity: .55; }
+    .btn.sub { background: var(--cream-dark); color: var(--text); font-weight: 600; }
+    .btn.danger { background: var(--red); }
+    .btn.sm { width: auto; padding: 7px 14px; margin: 0; font-size: 13.5px; }
+
+    /* รายการบิล */
+    .bill { display: flex; align-items: center; gap: 9px; padding: 9px 4px;
+      border-bottom: 1px dashed var(--border); }
+    .bill:last-child { border-bottom: 0; }
+    .bill .no { min-width: 40px; text-align: center; font-weight: 700; color: var(--green-dark);
+      background: var(--green-light); border-radius: 8px; padding: 4px 2px; font-size: 13.5px; }
+    .bill .who { flex: 1; min-width: 0; }
+    .bill .who b { font-size: 15px; }
+    .bill .who small { display: block; color: var(--sub); font-size: 12px; }
+    .bill .amt { text-align: right; font-size: 14.5px; white-space: nowrap; }
+    .bill .amt .cash { color: var(--green); font-weight: 700; }
+    .bill .amt .credit { color: var(--orange); font-weight: 700; }
+    .bill .ops { display: flex; gap: 2px; }
+    .iconbtn { border: 0; background: none; font-size: 17px; cursor: pointer; padding: 4px; }
+
+    .tag { display: inline-block; font-size: 11.5px; padding: 2px 8px; border-radius: 999px; }
+    .tag.owe { background: #FBEAD9; color: var(--orange); }
+    .tag.paid { background: var(--green-light); color: var(--green); }
+
+    /* สถิติการ์ด */
+    .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .stat { background: var(--white); border: 1px solid var(--border); border-radius: var(--radius);
+      padding: 12px; }
+    .stat .k { font-size: 12.5px; color: var(--sub); }
+    .stat .v { font-size: 21px; font-weight: 700; color: var(--green-dark); margin-top: 2px; }
+    .stat.warn .v { color: var(--orange); }
+    .stat.big { grid-column: 1 / -1; background: var(--green); border-color: var(--green); }
+    .stat.big .k { color: #CFE5D6; }
+    .stat.big .v { color: #fff; font-size: 26px; }
+
+    table { width: 100%; border-collapse: collapse; font-size: 13.5px; }
+    th { text-align: left; color: var(--sub); font-weight: 600; padding: 6px 6px; border-bottom: 1px solid var(--border); }
+    td { padding: 6px 6px; border-bottom: 1px dashed var(--border); }
+    td.num, th.num { text-align: right; white-space: nowrap; }
+
+    /* กลุ่มลูกค้าเครดิต */
+    .cus { border: 1px solid var(--border); border-radius: 10px; margin-bottom: 8px; overflow: hidden; background: var(--white); }
+    .cus > .head { display: flex; align-items: center; gap: 8px; padding: 10px 12px; cursor: pointer; }
+    .cus > .head b { flex: 1; font-size: 15px; }
+    .cus > .head .sum { color: var(--orange); font-weight: 700; }
+    .cus > .head small { color: var(--sub); }
+    .cus .items { display: none; border-top: 1px dashed var(--border); padding: 4px 12px; background: var(--cream); }
+    .cus.open .items { display: block; }
+    .citem { display: flex; align-items: center; gap: 9px; padding: 7px 0; border-bottom: 1px dashed var(--border); font-size: 14px; }
+    .citem:last-child { border-bottom: 0; }
+    .citem input[type=checkbox] { width: 19px; height: 19px; accent-color: var(--green); }
+    .citem .d { color: var(--sub); min-width: 46px; }
+    .citem .a { margin-left: auto; font-weight: 700; color: var(--orange); white-space: nowrap; }
+
+    /* แถบเลือกจ่าย */
+    #payBar { position: fixed; left: 0; right: 0; bottom: 64px; display: none; z-index: 30; }
+    #payBar .inner { max-width: 720px; margin: 0 auto; padding: 0 14px; }
+    #payBar .box { display: flex; align-items: center; gap: 10px; background: var(--green-dark);
+      color: #fff; border-radius: 12px; padding: 11px 14px; box-shadow: 0 4px 14px rgba(0,0,0,.25); }
+    #payBar .box b { font-size: 15px; }
+    #payBar button { font: inherit; font-weight: 700; border: 0; border-radius: 9px; padding: 8px 16px;
+      background: var(--gold); color: var(--green-dark); cursor: pointer; margin-left: auto; }
+
+    /* nav ล่าง */
+    nav { position: fixed; left: 0; right: 0; bottom: 0; background: var(--white);
+      border-top: 1px solid var(--border); display: flex; z-index: 20; }
+    nav button { flex: 1; font: inherit; border: 0; background: none; padding: 9px 0 10px;
+      font-size: 12px; color: var(--sub); cursor: pointer; }
+    nav button .ic { display: block; font-size: 21px; margin-bottom: 1px; }
+    nav button.on { color: var(--green); font-weight: 700; }
+
+    .view { display: none; }
+    .view.on { display: block; }
+    .muted { color: var(--sub); font-size: 13px; }
+    .center { text-align: center; }
+    .mt8 { margin-top: 8px; } .mt12 { margin-top: 12px; }
+
+    /* modal */
+    .mask { position: fixed; inset: 0; background: rgba(20,43,30,.45); display: none;
+      align-items: flex-end; justify-content: center; z-index: 40; }
+    .mask.on { display: flex; }
+    .modal { background: var(--white); width: 100%; max-width: 720px; border-radius: 16px 16px 0 0;
+      padding: 18px 16px 24px; }
+    .modal h3 { font-size: 16px; color: var(--green-dark); margin-bottom: 8px; }
+
+    #toast { position: fixed; top: 14px; left: 50%; transform: translateX(-50%); z-index: 60;
+      background: var(--green-dark); color: #fff; padding: 10px 18px; border-radius: 999px;
+      font-size: 14px; box-shadow: 0 4px 14px rgba(0,0,0,.25); display: none; max-width: 92vw; }
+
+    #loader { position: fixed; inset: 0; background: rgba(247,245,238,.7); display: none;
+      align-items: center; justify-content: center; z-index: 50; font-size: 15px; color: var(--green-dark); font-weight: 600; }
+    #loader.on { display: flex; }
+
+    .warn-inline { color: var(--red); font-size: 12.5px; margin-top: 3px; display: none; }
+    .monthbar { display: flex; align-items: center; gap: 8px; margin-bottom: 12px; }
+    .monthbar select { flex: 1; }
+    pre.report { background: var(--cream); border: 1px solid var(--border); border-radius: 9px;
+      padding: 10px; font-size: 12.5px; overflow-x: auto; font-family: inherit; white-space: pre-wrap; }
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div class="logo">💵</div>
+    <div>
+      <h1>การเงินโรงขวด</h1>
+      <div class="ver" id="verLine">เช็คบิล · เครดิต · สรุปยอด — ซิงก์กับชีทเดิม</div>
+    </div>
+  </header>
+
+  <!-- ─── จอใส่รหัส ─── -->
+  <div id="gate" class="card" style="display:none">
+    <h2>🔐 ใส่รหัสเข้าแอป</h2>
+    <p class="muted">ขอรหัสจากคุณปาล์ม แล้วเปิดลิงก์แบบ <code>?key=รหัส</code> ได้เลย หรือพิมพ์ตรงนี้</p>
+    <input id="gateKey" type="password" placeholder="รหัสเข้าแอป" />
+    <button class="btn" onclick="gateGo()">เข้าใช้งาน</button>
+  </div>
+
+  <!-- ─── จอยังไม่ตั้งค่า GAS ─── -->
+  <div id="setup" class="card" style="display:none">
+    <h2>⚙️ ยังไม่ได้เชื่อม GAS</h2>
+    <p class="muted">แอปนี้ยังไม่ได้ใส่ URL ของ Google Apps Script — ทำตามขั้นตอนใน <b>finance/README.md</b> (สร้างโปรเจกต์ GAS → วาง Code.gs → ตั้ง Script Properties → deploy → เอา URL /exec มาวางในไฟล์ index.html บรรทัด <code>GAS_URL</code>)</p>
+  </div>
+
+  <div id="app" style="display:none">
+
+    <!-- ═══ 🧾 บันทึกบิล ═══ -->
+    <div class="view on" id="v-entry">
+      <div class="card">
+        <h2 id="formTitle">🧾 บันทึกบิลใหม่</h2>
+        <div class="row2">
+          <div>
+            <label>วันที่</label>
+            <input type="date" id="fD" onchange="dateChanged()" />
+          </div>
+          <div>
+            <label>เลขที่บิล</label>
+            <input type="number" id="fNo" inputmode="numeric" />
+            <div class="warn-inline" id="dupWarn">⚠️ เลขบิลนี้มีแล้วในเดือนนี้</div>
+          </div>
+        </div>
+        <label>ชื่อลูกค้า</label>
+        <input id="fCus" list="cusList" placeholder="พิมพ์ชื่อ… (มีตัวช่วยจากทะเบียนลูกค้า)" autocomplete="off" />
+        <datalist id="cusList"></datalist>
+        <div class="row2">
+          <div>
+            <label>เงินสด/รับแล้ว (บาท)</label>
+            <input type="number" id="fCash" inputmode="decimal" placeholder="0" />
+          </div>
+          <div>
+            <label>เครดิต/ค้างจ่าย (บาท)</label>
+            <input type="number" id="fCredit" inputmode="decimal" placeholder="0" />
+          </div>
+        </div>
+        <label>ช่องทางชำระ (ของยอดที่รับแล้ว)</label>
+        <div class="chips" id="fCh"></div>
+        <label>หมายเหตุ</label>
+        <input id="fNote" placeholder="—" />
+        <button class="btn" id="saveBtn" onclick="saveBill()">💾 บันทึกบิล</button>
+        <button class="btn sub" id="cancelEdit" style="display:none" onclick="resetForm()">ยกเลิกการแก้ไข</button>
+      </div>
+
+      <div class="card">
+        <h2 id="dayTitle">บิลของวันนี้</h2>
+        <div id="dayList" class="muted center">—</div>
+      </div>
+    </div>
+
+    <!-- ═══ 💳 เครดิตค้าง ═══ -->
+    <div class="view" id="v-credit">
+      <div class="stats" style="margin-bottom:12px">
+        <div class="stat warn"><div class="k">เครดิตค้างทั้งหมด</div><div class="v" id="cOweSum">—</div></div>
+        <div class="stat"><div class="k">ค้างอยู่ (บิล / ลูกค้า)</div><div class="v" id="cOweCnt">—</div></div>
+      </div>
+      <div class="card">
+        <input id="cSearch" placeholder="🔍 ค้นหาชื่อลูกค้า…" oninput="renderCredit()" />
+        <div id="creditList" class="mt12"></div>
+      </div>
+      <div class="card">
+        <h2>✅ รับชำระเดือนนี้ (<span id="paidMonthLabel"></span>)</h2>
+        <div id="paidList" class="muted center">—</div>
+      </div>
+    </div>
+
+    <!-- ═══ 📊 สรุป ═══ -->
+    <div class="view" id="v-sum">
+      <div class="monthbar">
+        <label style="margin:0">เดือน</label>
+        <select id="sMonth" onchange="changeMonth(this.value)"></select>
+      </div>
+      <div class="stats">
+        <div class="stat big"><div class="k">เงินเข้าเดือนนี้ (รับสด + เก็บเครดิตได้)</div><div class="v" id="sIn">—</div></div>
+        <div class="stat"><div class="k">รับสด/โอน ณ วันขาย</div><div class="v" id="sCash">—</div></div>
+        <div class="stat"><div class="k">เก็บเครดิตได้เดือนนี้</div><div class="v" id="sPaid">—</div></div>
+        <div class="stat warn"><div class="k">ขายเครดิตเดือนนี้</div><div class="v" id="sNewCredit">—</div></div>
+        <div class="stat warn"><div class="k">เครดิตค้างสะสมทั้งหมด</div><div class="v" id="sOweAll">—</div></div>
+      </div>
+      <div class="card mt12">
+        <h2>แยกตามช่องทางรับเงิน</h2>
+        <div id="sChannels" class="muted">—</div>
+      </div>
+      <div class="card">
+        <h2>รายวัน</h2>
+        <div style="overflow-x:auto">
+          <table>
+            <thead><tr><th>วันที่</th><th class="num">บิล</th><th class="num">รับสด/โอน</th><th class="num">ขายเครดิต</th></tr></thead>
+            <tbody id="sDaily"><tr><td colspan="4" class="muted center">—</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- ═══ ⚙️ อื่น ๆ ═══ -->
+    <div class="view" id="v-etc">
+      <div class="card">
+        <h2>📥 นำเข้าข้อมูลเก่าจากแท็บเดิม</h2>
+        <p class="muted">อ่านแท็บ "บัญชีส่งเงิน" กับ "รายการเครดิต" เดิมทุกแท็บ แล้วรวมเป็นบิลในแท็บ <b>App_Bills</b>
+          (บิลกับสถานะเครดิตจับคู่ให้อัตโนมัติ) — <b>ไม่แก้ไขแท็บเดิมแม้แต่ช่องเดียว</b> และกดซ้ำได้ ไม่นำเข้าซ้ำ</p>
+        <button class="btn sub" onclick="legacyScan()">🔍 สแกนดูก่อน (ยังไม่นำเข้า)</button>
+        <div id="legacyReport"></div>
+        <button class="btn" id="legacyGo" style="display:none" onclick="legacyImport()">📥 นำเข้าจริง</button>
+      </div>
+      <div class="card">
+        <h2>🔗 ทางลัด</h2>
+        <button class="btn sub" onclick="window.open('https://docs.google.com/spreadsheets/d/1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE/edit','_blank')">เปิดชีท Google Sheets</button>
+        <button class="btn sub" onclick="pingSys()">🩺 เช็คระบบ (เวอร์ชัน GAS)</button>
+        <button class="btn sub" onclick="logout()">🚪 ออกจากระบบ (ล้างรหัสในเครื่องนี้)</button>
+      </div>
+    </div>
+
+  </div><!-- /app -->
+</div><!-- /wrap -->
+
+<!-- แถบรับชำระ -->
+<div id="payBar"><div class="inner"><div class="box">
+  <b id="payBarText">เลือก 0 บิล</b>
+  <button onclick="openPayModal()">รับชำระ</button>
+</div></div></div>
+
+<!-- modal รับชำระ -->
+<div class="mask" id="payMask">
+  <div class="modal">
+    <h3>✅ รับชำระเครดิต</h3>
+    <div id="paySummary" class="muted"></div>
+    <label>วันที่รับเงิน</label>
+    <input type="date" id="payD" />
+    <label>ช่องทางรับเงิน</label>
+    <div class="chips" id="payCh"></div>
+    <button class="btn" onclick="confirmPay()">ยืนยันรับชำระ</button>
+    <button class="btn sub" onclick="$('payMask').classList.remove('on')">ยกเลิก</button>
+  </div>
+</div>
+
+<nav>
+  <button class="on" data-v="entry" onclick="go('entry')"><span class="ic">🧾</span>บันทึก</button>
+  <button data-v="credit" onclick="go('credit')"><span class="ic">💳</span>เครดิต<span id="navOwe"></span></button>
+  <button data-v="sum" onclick="go('sum')"><span class="ic">📊</span>สรุป</button>
+  <button data-v="etc" onclick="go('etc')"><span class="ic">⚙️</span>อื่น ๆ</button>
+</nav>
+
+<div id="toast"></div>
+<div id="loader">⏳ กำลังโหลดข้อมูล…</div>
+
+<script>
+const $ = id => document.getElementById(id);
+const CHANNELS = ['เงินสด', 'โอน KBank', 'โอน KTB', 'โอน BBL', 'เช็ค'];
+const fmt = n => (Math.round((+n || 0) * 100) / 100).toLocaleString('th-TH');
+const THM = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const thDate = iso => { if (!/^\d{4}-\d{2}-\d{2}/.test(iso)) return iso || '—';
+  return (+iso.slice(8,10)) + ' ' + THM[+iso.slice(5,7)-1] + ' ' + (+iso.slice(0,4)+543).toString().slice(-2); };
+const thMonth = ym => { if (!/^\d{4}-\d{2}/.test(ym)) return ym;
+  return THM[+ym.slice(5,7)-1] + ' ' + (+ym.slice(0,4)+543); };
+
+let KEY = '';
+let DATA = null;          // ผลจาก action=data
+let editId = '';          // บิลที่กำลังแก้
+let selPay = {};          // id → บิล ที่ติ๊กเลือกรอรับชำระ
+
+// ─── เริ่มระบบ ───
+(function init() {
+  const u = new URL(location.href);
+  const k = u.searchParams.get('key');
+  if (k) { localStorage.setItem('bf_key', k); }
+  KEY = localStorage.getItem('bf_key') || '';
+
+  if (GAS_URL.indexOf('PASTE_GAS_URL') >= 0) { $('setup').style.display = 'block'; return; }
+  if (!KEY) { $('gate').style.display = 'block'; return; }
+
+  $('app').style.display = 'block';
+  chips($('fCh'), '');
+  chips($('payCh'), 'เงินสด');
+  load();
+})();
+
+function gateGo() {
+  const k = $('gateKey').value.trim();
+  if (!k) return;
+  localStorage.setItem('bf_key', k);
+  location.reload();
+}
+function logout() { localStorage.removeItem('bf_key'); location.href = location.pathname; }
+
+// ─── เรียก API ───
+async function api(params, retries = 2) {
+  const qs = new URLSearchParams(Object.assign({ key: KEY }, params)).toString();
+  for (let i = 0; ; i++) {
+    try {
+      const ctl = new AbortController();
+      const tm = setTimeout(() => ctl.abort(), 30000);
+      const res = await fetch(GAS_URL + '?' + qs, { signal: ctl.signal, redirect: 'follow' });
+      clearTimeout(tm);
+      return await res.json();
+    } catch (e) {
+      if (i >= retries) throw new Error('เชื่อมต่อไม่สำเร็จ ลองใหม่อีกครั้ง');
+      await new Promise(r => setTimeout(r, 1200 * (i + 1)));
+    }
+  }
+}
+async function post(fields) {
+  const res = await fetch(GAS_URL, { method: 'POST', redirect: 'follow',
+    body: new URLSearchParams(Object.assign({ key: KEY }, fields)) });
+  return await res.json();
+}
+
+function toast(msg) {
+  const t = $('toast'); t.textContent = msg; t.style.display = 'block';
+  clearTimeout(t._tm); t._tm = setTimeout(() => t.style.display = 'none', 2600);
+}
+
+// ─── โหลดข้อมูล ───
+async function load(month) {
+  $('loader').classList.add('on');
+  try {
+    const p = { action: 'data' };
+    if (month) p.month = month;
+    const j = await api(p);
+    if (!j.ok) { toast('⚠️ ' + (j.msg || 'โหลดไม่สำเร็จ')); if (/รหัส/.test(j.msg || '')) logout(); return; }
+    DATA = j;
+    $('verLine').textContent = 'เช็คบิล · เครดิต · สรุปยอด — ' + j.version;
+    if (!$('fD').value) $('fD').value = j.today;
+    $('cusList').innerHTML = j.customers.map(c => '<option value="' + esc(c) + '">').join('');
+    renderAll();
+  } catch (e) { toast('⚠️ ' + e.message); }
+  finally { $('loader').classList.remove('on'); }
+}
+
+function renderAll() { renderDay(); renderCredit(); renderPaid(); renderSummary(); suggestNo(); }
+
+// ─── สลับหน้า ───
+function go(v) {
+  document.querySelectorAll('.view').forEach(x => x.classList.remove('on'));
+  $('v-' + v).classList.add('on');
+  document.querySelectorAll('nav button').forEach(b => b.classList.toggle('on', b.dataset.v === v));
+}
+
+// ─── chips ───
+function chips(box, val) {
+  box.innerHTML = '';
+  CHANNELS.forEach(c => {
+    const el = document.createElement('span');
+    el.className = 'chip' + (c === val ? ' on' : '');
+    el.textContent = c;
+    el.onclick = () => {
+      const was = el.classList.contains('on');
+      box.querySelectorAll('.chip').forEach(x => x.classList.remove('on'));
+      if (!was) el.classList.add('on');   // กดซ้ำ = เอาออก
+    };
+    box.appendChild(el);
+  });
+}
+const chipVal = box => { const on = box.querySelector('.chip.on'); return on ? on.textContent : ''; };
+function chipSet(box, val) {
+  box.querySelectorAll('.chip').forEach(x => x.classList.toggle('on', x.textContent === val));
+}
+
+// ═══════════ 🧾 บันทึกบิล ═══════════
+
+function billsOfDate(d) { return (DATA ? DATA.bills : []).filter(b => b.d === d); }
+
+async function dateChanged() {
+  const d = $('fD').value;
+  if (DATA && d && d.slice(0, 7) !== DATA.month) await load(d.slice(0, 7));
+  renderDay(); suggestNo();
+}
+
+function suggestNo() {
+  if (!DATA || editId) return;
+  let mx = 0;
+  DATA.bills.forEach(b => { const n = parseInt(b.no, 10); if (!isNaN(n) && n > mx) mx = n; });
+  $('fNo').value = mx + 1;
+  checkDup();
+}
+function checkDup() {
+  const no = $('fNo').value.trim();
+  const dup = DATA && no && DATA.bills.some(b => b.no === no && b.id !== editId);
+  $('dupWarn').style.display = dup ? 'block' : 'none';
+}
+$('fNo').addEventListener('input', checkDup);
+
+function renderDay() {
+  const d = $('fD').value || (DATA && DATA.today);
+  $('dayTitle').textContent = 'บิลวันที่ ' + thDate(d);
+  const list = billsOfDate(d);
+  if (!list.length) { $('dayList').innerHTML = '<div class="muted center">ยังไม่มีบิลของวันนี้</div>'; return; }
+  let cash = 0, credit = 0;
+  $('dayList').innerHTML = list.map(b => {
+    cash += b.cash; credit += b.credit;
+    return '<div class="bill">' +
+      '<div class="no">' + esc(b.no || '–') + '</div>' +
+      '<div class="who"><b>' + esc(b.cus) + '</b><small>' +
+        (b.ch ? esc(b.ch) : '') + (b.note ? ' · ' + esc(b.note) : '') +
+        (b.credit > 0 ? ' <span class="tag ' + (b.st === 'จ่ายแล้ว' ? 'paid">เครดิต·จ่ายแล้ว' : 'owe">เครดิต·ค้าง') + '</span>' : '') +
+      '</small></div>' +
+      '<div class="amt">' + (b.cash ? '<div class="cash">' + fmt(b.cash) + '</div>' : '') +
+        (b.credit ? '<div class="credit">' + fmt(b.credit) + '</div>' : '') + '</div>' +
+      '<div class="ops"><button class="iconbtn" onclick="editBill(\'' + b.id + '\')">✏️</button>' +
+      '<button class="iconbtn" onclick="delBill(\'' + b.id + '\')">🗑️</button></div>' +
+    '</div>';
+  }).join('') +
+  '<div class="mt8 muted center">รวม ' + list.length + ' บิล · รับสด/โอน <b>' + fmt(cash) +
+    '</b> · เครดิต <b>' + fmt(credit) + '</b> บาท</div>';
+}
+
+async function saveBill() {
+  const btn = $('saveBtn');
+  const cus = $('fCus').value.trim();
+  if (!cus) { toast('⚠️ ใส่ชื่อลูกค้าก่อน'); return; }
+  const cash = +($('fCash').value || 0), credit = +($('fCredit').value || 0);
+  if (!cash && !credit) { toast('⚠️ ใส่ยอดเงินสดหรือเครดิตอย่างน้อยหนึ่งช่อง'); return; }
+  btn.disabled = true; btn.textContent = '⏳ กำลังบันทึก…';
+  try {
+    const j = await post({ action: 'save', id: editId, d: $('fD').value, no: $('fNo').value.trim(),
+      cus: cus, cash: cash, credit: credit, ch: chipVal($('fCh')), note: $('fNote').value.trim() });
+    if (!j.ok) throw new Error(j.msg || 'บันทึกไม่สำเร็จ');
+    toast('✅ ' + j.msg);
+    resetForm();
+    await load(DATA.month);
+  } catch (e) { toast('⚠️ ' + e.message); }
+  btn.disabled = false; btn.textContent = '💾 บันทึกบิล';
+}
+
+function editBill(id) {
+  const b = DATA.bills.find(x => x.id === id); if (!b) return;
+  editId = id;
+  $('formTitle').textContent = '✏️ แก้ไขบิลเลขที่ ' + (b.no || '—');
+  $('fD').value = b.d; $('fNo').value = b.no; $('fCus').value = b.cus;
+  $('fCash').value = b.cash || ''; $('fCredit').value = b.credit || '';
+  chipSet($('fCh'), b.ch); $('fNote').value = b.note;
+  $('saveBtn').textContent = '💾 อัปเดตบิล';
+  $('cancelEdit').style.display = 'block';
+  checkDup();
+  window.scrollTo({ top: 0, behavior: 'smooth' });
+}
+
+function resetForm() {
+  editId = '';
+  $('formTitle').textContent = '🧾 บันทึกบิลใหม่';
+  $('fCus').value = ''; $('fCash').value = ''; $('fCredit').value = ''; $('fNote').value = '';
+  chipSet($('fCh'), '');
+  $('saveBtn').textContent = '💾 บันทึกบิล';
+  $('cancelEdit').style.display = 'none';
+  suggestNo();
+}
+
+async function delBill(id) {
+  const b = DATA.bills.find(x => x.id === id); if (!b) return;
+  if (!confirm('ลบบิลเลขที่ ' + (b.no || '—') + ' ของ "' + b.cus + '" ?')) return;
+  try {
+    const j = await post({ action: 'del', id: id });
+    if (!j.ok) throw new Error(j.msg);
+    toast('🗑️ ' + j.msg);
+    if (editId === id) resetForm();
+    await load(DATA.month);
+  } catch (e) { toast('⚠️ ' + e.message); }
+}
+
+// ═══════════ 💳 เครดิตค้าง ═══════════
+
+function renderCredit() {
+  if (!DATA) return;
+  const q = ($('cSearch').value || '').trim();
+  const out = DATA.outstanding;
+  const sum = out.reduce((s, b) => s + b.credit, 0);
+  const cusSet = {};
+  out.forEach(b => cusSet[b.cus] = 1);
+  $('cOweSum').textContent = fmt(sum);
+  $('cOweCnt').textContent = out.length + ' / ' + Object.keys(cusSet).length;
+  $('navOwe').textContent = out.length ? ' (' + out.length + ')' : '';
+
+  const groups = {};
+  out.forEach(b => { if (q && b.cus.indexOf(q) < 0) return; (groups[b.cus] = groups[b.cus] || []).push(b); });
+  const names = Object.keys(groups).sort((a, z) =>
+    groups[z].reduce((s, b) => s + b.credit, 0) - groups[a].reduce((s, b) => s + b.credit, 0));
+
+  if (!names.length) { $('creditList').innerHTML = '<div class="muted center">ไม่มีเครดิตค้าง 🎉</div>'; return; }
+  $('creditList').innerHTML = names.map(n => {
+    const items = groups[n].slice().sort((a, z) => a.d < z.d ? -1 : 1);
+    const t = items.reduce((s, b) => s + b.credit, 0);
+    return '<div class="cus" data-cus="' + esc(n) + '">' +
+      '<div class="head" onclick="this.parentNode.classList.toggle(\'open\')">' +
+        '<b>' + esc(n) + '</b><small>' + items.length + ' บิล</small>' +
+        '<span class="sum">' + fmt(t) + '</span></div>' +
+      '<div class="items">' + items.map(b =>
+        '<div class="citem"><input type="checkbox" data-id="' + b.id + '" onchange="tickPay(this)"' +
+          (selPay[b.id] ? ' checked' : '') + ' />' +
+        '<span class="d">' + thDate(b.d) + '</span>' +
+        '<span>บิล ' + esc(b.no || '—') + (b.note ? ' · ' + esc(b.note) : '') +
+          (b.src && b.src.indexOf('นำเข้า') === 0 ? ' <small class="muted">(ข้อมูลเก่า)</small>' : '') + '</span>' +
+        '<span class="a">' + fmt(b.credit) + '</span></div>').join('') +
+      '</div></div>';
+  }).join('');
+  updatePayBar();
+}
+
+function tickPay(cb) {
+  const id = cb.dataset.id;
+  if (cb.checked) { const b = DATA.outstanding.find(x => x.id === id); if (b) selPay[id] = b; }
+  else delete selPay[id];
+  updatePayBar();
+}
+function updatePayBar() {
+  const ids = Object.keys(selPay);
+  const t = ids.reduce((s, id) => s + selPay[id].credit, 0);
+  $('payBar').style.display = ids.length ? 'block' : 'none';
+  $('payBarText').textContent = 'เลือก ' + ids.length + ' บิล · รวม ' + fmt(t) + ' บาท';
+}
+function openPayModal() {
+  const ids = Object.keys(selPay); if (!ids.length) return;
+  const t = ids.reduce((s, id) => s + selPay[id].credit, 0);
+  const cusSet = {}; ids.forEach(id => cusSet[selPay[id].cus] = 1);
+  $('paySummary').textContent = Object.keys(cusSet).join(', ') + ' — ' + ids.length + ' บิล รวม ' + fmt(t) + ' บาท';
+  $('payD').value = DATA.today;
+  $('payMask').classList.add('on');
+}
+async function confirmPay() {
+  const ids = Object.keys(selPay); if (!ids.length) return;
+  try {
+    const j = await post({ action: 'pay', ids: JSON.stringify(ids),
+      payD: $('payD').value, payCh: chipVal($('payCh')) });
+    if (!j.ok) throw new Error(j.msg);
+    toast('✅ ' + j.msg);
+    selPay = {};
+    $('payMask').classList.remove('on');
+    await load(DATA.month);
+  } catch (e) { toast('⚠️ ' + e.message); }
+}
+
+function renderPaid() {
+  if (!DATA) return;
+  $('paidMonthLabel').textContent = thMonth(DATA.month);
+  const list = DATA.paidInMonth.slice().sort((a, z) => a.payD < z.payD ? 1 : -1);
+  if (!list.length) { $('paidList').innerHTML = '<div class="muted center">เดือนนี้ยังไม่มีรับชำระเครดิต</div>'; return; }
+  $('paidList').innerHTML = list.map(b =>
+    '<div class="bill"><div class="no">' + esc(b.no || '–') + '</div>' +
+    '<div class="who"><b>' + esc(b.cus) + '</b><small>บิล ' + thDate(b.d) + ' · รับ ' + thDate(b.payD) +
+      (b.payCh ? ' · ' + esc(b.payCh) : '') + '</small></div>' +
+    '<div class="amt"><div class="cash">' + fmt(b.credit) + '</div></div>' +
+    '<div class="ops"><button class="iconbtn" title="ดึงกลับเป็นค้างจ่าย" onclick="undoPay(\'' + b.id + '\')">↩️</button></div></div>'
+  ).join('');
+}
+async function undoPay(id) {
+  if (!confirm('ดึงบิลนี้กลับเป็น "ค้างจ่าย" ?')) return;
+  try {
+    const j = await post({ action: 'pay', ids: JSON.stringify([id]), revert: '1' });
+    if (!j.ok) throw new Error(j.msg);
+    toast('↩️ ' + j.msg);
+    await load(DATA.month);
+  } catch (e) { toast('⚠️ ' + e.message); }
+}
+
+// ═══════════ 📊 สรุป ═══════════
+
+function changeMonth(ym) { load(ym); }
+
+function renderSummary() {
+  if (!DATA) return;
+  const months = DATA.months.slice();
+  if (months.indexOf(DATA.month) < 0) months.unshift(DATA.month);
+  $('sMonth').innerHTML = months.map(m =>
+    '<option value="' + m + '"' + (m === DATA.month ? ' selected' : '') + '>' + thMonth(m) + '</option>').join('');
+
+  const cash = DATA.bills.reduce((s, b) => s + b.cash, 0);
+  const paid = DATA.paidInMonth.reduce((s, b) => s + b.credit, 0);
+  const newCredit = DATA.bills.reduce((s, b) => s + b.credit, 0);
+  const oweAll = DATA.outstanding.reduce((s, b) => s + b.credit, 0);
+  $('sIn').textContent = fmt(cash + paid);
+  $('sCash').textContent = fmt(cash);
+  $('sPaid').textContent = fmt(paid);
+  $('sNewCredit').textContent = fmt(newCredit);
+  $('sOweAll').textContent = fmt(oweAll);
+
+  // แยกช่องทาง: ยอดรับสด (ตามช่องทางบิล) + เครดิตที่เก็บได้ (ตามช่องทางรับ)
+  const ch = {};
+  DATA.bills.forEach(b => { if (b.cash) ch[b.ch || 'ไม่ระบุ'] = (ch[b.ch || 'ไม่ระบุ'] || 0) + b.cash; });
+  DATA.paidInMonth.forEach(b => { ch[b.payCh || 'ไม่ระบุ'] = (ch[b.payCh || 'ไม่ระบุ'] || 0) + b.credit; });
+  const keys = Object.keys(ch).sort((a, z) => ch[z] - ch[a]);
+  $('sChannels').innerHTML = keys.length
+    ? '<table><tbody>' + keys.map(k => '<tr><td>' + esc(k) + '</td><td class="num"><b>' +
+        fmt(ch[k]) + '</b></td></tr>').join('') + '</tbody></table>'
+    : '<div class="muted center">—</div>';
+
+  const days = {};
+  DATA.bills.forEach(b => {
+    const d = days[b.d] = days[b.d] || { n: 0, cash: 0, credit: 0 };
+    d.n++; d.cash += b.cash; d.credit += b.credit;
+  });
+  const dk = Object.keys(days).sort();
+  $('sDaily').innerHTML = dk.length ? dk.map(d =>
+    '<tr><td>' + thDate(d) + '</td><td class="num">' + days[d].n + '</td>' +
+    '<td class="num">' + fmt(days[d].cash) + '</td><td class="num">' + fmt(days[d].credit) + '</td></tr>').join('')
+    : '<tr><td colspan="4" class="muted center">เดือนนี้ยังไม่มีบิล</td></tr>';
+}
+
+// ═══════════ ⚙️ อื่น ๆ ═══════════
+
+async function pingSys() {
+  try {
+    const j = await api({ action: 'ping' });
+    toast(j.ok ? '🩺 GAS ทำงานปกติ — ' + j.version : '⚠️ ' + j.msg);
+  } catch (e) { toast('⚠️ ' + e.message); }
+}
+
+function legacyRow(r) {
+  if (r.type === 'บัญชีส่งเงิน')
+    return '📄 ' + r.tab + ' (บัญชีส่งเงิน): ' + r.rows + ' แถว → นำเข้า ' + r.import +
+      (r.already ? ' · นำเข้าแล้ว(ข้าม) ' + r.already : '') +
+      (r.badDate ? ' · วันที่อ่านไม่ออก ' + r.badDate : '') +
+      (r.skip ? ' · ข้าม ' + r.skip : '');
+  return '💳 ' + r.tab + ' (รายการเครดิต): ' + r.rows + ' แถว → จับคู่บิลได้ ' + r.matched +
+    ' · สร้างใหม่ ' + r.created +
+    (r.already ? ' · นำเข้าแล้ว(ข้าม) ' + r.already : '') +
+    (r.skip ? ' · ข้าม ' + r.skip : '');
+}
+
+async function legacyScan() {
+  $('loader').classList.add('on');
+  try {
+    const j = await api({ action: 'legacyScan' });
+    if (!j.ok) throw new Error(j.msg);
+    $('legacyReport').innerHTML = '<pre class="report">' +
+      j.report.map(legacyRow).map(esc).join('\n') +
+      '\n\nสรุป: จะเพิ่ม ' + j.willAdd + ' บิล / อัปเดตสถานะบิลเดิม ' + j.willUpdate + ' บิล</pre>';
+    $('legacyGo').style.display = j.willAdd + j.willUpdate > 0 ? 'block' : 'none';
+  } catch (e) { toast('⚠️ ' + e.message); }
+  finally { $('loader').classList.remove('on'); }
+}
+
+async function legacyImport() {
+  if (!confirm('นำเข้าข้อมูลเก่าตามผลสแกน? (เพิ่มลงแท็บ App_Bills เท่านั้น ไม่แตะแท็บเดิม)')) return;
+  $('loader').classList.add('on');
+  try {
+    const j = await post({ action: 'legacyImport' });
+    if (!j.ok) throw new Error(j.msg);
+    toast('✅ ' + j.msg);
+    $('legacyGo').style.display = 'none';
+    $('legacyReport').innerHTML = '<pre class="report">' + esc(j.msg) + '</pre>';
+    await load(DATA ? DATA.month : undefined);
+  } catch (e) { toast('⚠️ ' + e.message); }
+  finally { $('loader').classList.remove('on'); }
+}
+
+// ─── util ───
+function esc(s) { return String(s).replace(/[&<>"']/g, c =>
+  ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
+</script>
+</body>
+</html>
