@@ -44,8 +44,12 @@
 3. **แก้อะไรที่กระทบของจริง (GAS) → อัปเดต `STATUS.md`** (เขียนทับสถานะ ไม่ append) + **bump `CODE_VERSION`** หัวไฟล์ .gs ที่แก้
 4. ประวัติการแก้ = `git log` อย่างเดียว ไม่จด changelog ซ้ำในไฟล์ .md
 5. หน้าเว็บทั้งหมดเสิร์ฟจาก **GitHub Pages ของ repo นี้** → push `main` = ขึ้นจริง
-   ส่วนไฟล์ `.gs` ต้องวางใน Apps Script เอง → **วางจากไฟล์ใน `main` เท่านั้น** แล้ว Manage deployments → ✏️ → **New version**
-   (ห้าม New deployment — URL เปลี่ยนแล้วลิงก์ที่แจกทีมพัง)
+   ส่วนไฟล์ `.gs` มี **deploy อัตโนมัติด้วย clasp** แล้ว (`.github/workflows/deploy-gas.yml`) — push `main` = ขึ้น Apps Script เอง
+   ⏳ แต่ยังรอคุณปาล์มใส่ Secret `CLASPRC_JSON` + Script ID ก่อน · จนกว่าจะเปิด ให้วางมือ:
+   **วางจากไฟล์ใน `main` เท่านั้น** แล้ว Manage deployments → ✏️ → **New version** (ห้าม New deployment — URL เปลี่ยนแล้วลิงก์ที่แจกทีมพัง)
+   → รายละเอียดทั้งหมดอยู่ **`DEPLOY.md`**
+6. **แก้ `.gs` → bump `CODE_VERSION` · แก้ `.html` → bump `WEB_VERSION`** (ค่าคงที่หัวไฟล์)
+   แอปโชว์สองเลขนี้ท้ายหน้า ถ้าไม่ตรงกันจะขึ้นแถบเตือนว่าหลังบ้านยังไม่ได้วาง
 
 ## 📏 ข้อตกลงข้อมูล (ทุกแชทต้องเคารพ)
 

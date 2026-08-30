@@ -1,0 +1,21 @@
+# ---- ความลับ / ค่าเฉพาะเครื่อง (ห้ามขึ้น repo เด็ดขาด) ----
+# .clasprc.json = token login ของ clasp — เท่ากับรหัสผ่าน Google
+.clasprc.json
+# .clasp.json = Script ID ผูกกับบัญชีเจ้าของ (workflow สร้างเองตอนรัน)
+**/.clasp.json
+.claude/settings.local.json
+.env
+.env.*
+
+# ---- ของที่ระบบสร้างเอง ----
+node_modules/
+package-lock.json
+*.log
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# ---- ไฟล์ชั่วคราว ----
+*.tmp
+*.bak
+~$*

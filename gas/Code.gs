@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30j';
+const CODE_VERSION = '2026-08-30k';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -912,6 +912,22 @@ function execData() {
 // mutating ทุกตัวอยู่ใน lock เดียว + ลง ActivityLog อัตโนมัติ
 // ─────────────────────────────────────────────
 function jsonOut(o) { return ContentService.createTextOutput(JSON.stringify(o)).setMimeType(ContentService.MimeType.JSON); }
+// วางโค้ดรุ่นใหม่ = โครงชีตต้องตามด้วย (รุ่นใหม่มักเพิ่มแท็บ/คอลัมน์) — ทำให้เองที่คำขอแรกหลังเวอร์ชันเปลี่ยน
+// setupPkSystem() เติมแบบต่อท้ายอย่างเดียว ไม่แทรกกลาง ไม่ลบ → รันซ้ำปลอดภัย · ทำครั้งเดียวต่อเวอร์ชัน
+function autoMigrate_() {
+  if (!prop('PK_SHEET_ID')) return;                    // ยังไม่เคยติดตั้ง — ต้องรัน setupPkSystem() ใน editor ก่อน
+  if (prop('SCHEMA_AT') === CODE_VERSION) return;
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(30000)) return;                    // คำขออื่นทำอยู่ — รอบหน้าค่อยว่า
+  try {
+    if (prop('SCHEMA_AT') !== CODE_VERSION) {          // เช็คซ้ำหลังได้ lock กันทำสองรอบ
+      setupPkSystem();
+      setProp('SCHEMA_AT', CODE_VERSION);
+    }
+  } catch (e) {
+    Logger.log('autoMigrate_ ล้มเหลว: ' + e);          // ไม่ให้ล้มทั้งคำขอ — คำขอนี้อาจยังทำงานได้
+  } finally { lock.releaseLock(); }
+}
 const ACT_LABEL = {
   pkLogin: 'เข้าสู่ระบบ', pkOrderSave: 'ลงออเดอร์', pkOrderEdit: 'แก้ออเดอร์', pkOrderCancel: 'ยกเลิกออเดอร์',
   pkJobStart: 'เริ่มงาน', pkProdLog: 'ลงผลผลิต', pkJobClose: 'ปิดงาน', pkDeliver: 'ส่งของ',
@@ -921,7 +937,7 @@ const ACT_LABEL = {
 };
 function ACTIONS() {
   return {
-    pkHealth: { auth: 'none', fn: function () { return { ok: true, version: CODE_VERSION, sheet: !!prop('PK_SHEET_ID') }; } },
+    pkHealth: { auth: 'none', fn: function () { return { ok: true, version: CODE_VERSION, sheet: !!prop('PK_SHEET_ID'), schemaAt: prop('SCHEMA_AT') || '(ยังไม่เคยปรับ)' }; } },
     pkLogin: { auth: 'none', mut: true, fn: function (pay) { return login(pay); } },
     pkTeamData: { auth: 'team', fn: function (pay, me, p) { return teamData(p, me); } },
     pkBills: { auth: 'team', fn: function (pay, me, p) { return { ok: true, bills: billList(p) }; } },
@@ -957,6 +973,7 @@ function doGet(e) {
   try {
     const spec = ACTIONS()[a];
     if (!spec) return jsonOut({ ok: false, error: 'ไม่รู้จัก action: ' + a });
+    autoMigrate_();
     let me = null;
     if (spec.auth !== 'none') {
       me = who(p);

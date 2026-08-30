@@ -1,0 +1,84 @@
+# ============================================================
+#  Deploy อัตโนมัติขึ้น Google Apps Script (โรงขวด P&K)
+#  ทำงานเมื่อ: gas/Code.gs หรือ finance/gas/Code.gs เข้า main
+#              หรือกดปุ่ม "Run workflow" เองในหน้า Actions
+#  ต้องมี Secret ชื่อ CLASPRC_JSON = เนื้อไฟล์ ~/.clasprc.json ของเจ้าของบัญชี
+#  รายละเอียด + วิธีถอนสิทธิ์: DEPLOY.md
+# ============================================================
+name: Deploy to Apps Script
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'gas/Code.gs'
+      - 'gas/appsscript.json'
+      - 'finance/gas/Code.gs'
+      - 'finance/gas/appsscript.json'
+  workflow_dispatch:
+    inputs:
+      apps:
+        description: 'โปรเจกต์ที่จะ deploy'
+        required: true
+        default: all
+        type: choice
+        options:
+          - all
+          - gas
+          - finance/gas
+
+# กัน deploy ซ้อนกัน (สอง push ติด ๆ กัน = ต่อคิว ไม่ชนกันกลางคัน)
+concurrency:
+  group: deploy-gas
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: ดึงโค้ด
+        uses: actions/checkout@v5
+        with:
+          fetch-depth: 0   # ต้องมีประวัติ เพื่อเทียบว่าโปรเจกต์ไหนโค้ดเปลี่ยน
+
+      - name: ติดตั้ง Node
+        uses: actions/setup-node@v5
+        with:
+          node-version: '22'
+
+      - name: ตรวจโค้ดก่อน deploy
+        run: |
+          for f in gas/Code.gs finance/gas/Code.gs; do
+            [ -f "$f" ] || continue
+            cp "$f" "/tmp/$(echo "$f" | tr '/' '_').js"
+            node --check "/tmp/$(echo "$f" | tr '/' '_').js" || { echo "::error::$f ไวยากรณ์ผิด"; exit 1; }
+            echo "  ✓ $f"
+          done
+
+      - name: ติดตั้ง clasp
+        run: npm install -g @google/clasp@3.4.0
+
+      - name: ใส่ token ของเจ้าของบัญชี (จาก GitHub Secret)
+        env:
+          CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
+        run: |
+          if [ -z "$CLASPRC_JSON" ]; then
+            echo "::error::ยังไม่ได้ตั้ง Secret ชื่อ CLASPRC_JSON — ดูวิธีใน DEPLOY.md"
+            exit 1
+          fi
+          printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
+          chmod 600 "$HOME/.clasprc.json"
+
+      - name: deploy
+        env:
+          INPUT_APPS: ${{ github.event.inputs.apps }}
+          EVENT_BEFORE: ${{ github.event.before }}
+        run: bash .github/scripts/deploy-gas.sh
+
+      - name: ลบ token ทิ้ง
+        if: always()
+        run: rm -f "$HOME/.clasprc.json"

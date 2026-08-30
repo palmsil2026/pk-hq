@@ -51,6 +51,8 @@ button.mini.ghost{background:var(--green-soft); color:var(--green);}
 .chip{font:600 11.5px "Anuphan",sans-serif; padding:2px 10px; border-radius:99px; background:var(--green-soft); color:var(--green); white-space:nowrap; display:inline-block;}
 .chip.warn{background:var(--warn-soft); color:var(--warn);}
 .meta{font-size:12px; color:var(--muted);}
+.verline{text-align:center; font-size:11.5px; color:var(--muted); padding:14px 8px 24px; line-height:1.8;}
+.verline b{color:var(--text); font-weight:600;} .verline .old{color:var(--warn); font-weight:600;}
 .alert-strip{display:grid; grid-template-columns:repeat(auto-fit,minmax(230px,1fr)); gap:10px; margin:14px 0;}
 .alert{border-radius:10px; padding:12px 14px; border:1px solid var(--warn); background:var(--warn-soft); font-size:13.5px;}
 .alert b{font-family:"Anuphan",sans-serif;}
@@ -139,6 +141,7 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 <div class="card"><h2>ปรับยอด/ของเสียล่าสุด <span class="meta">(จุดที่ควรสุ่มตรวจ)</span></h2><table id="adjTable"></table></div>
 <div class="card"><h2>ความเคลื่อนไหวล่าสุด</h2><table id="actTable"></table></div>
 <div class="card"><h2>ออเดอร์ล่าสุด</h2><table id="ordTable"></table></div>
+<div class="verline" id="verLine"></div>
 
 </main>
 
@@ -167,6 +170,8 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 // ═══ ตั้งค่า: วาง URL Web App ของ GAS "P&K System" (ตัวเดียวกับ index.html) ═══
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 
+// เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
+const WEB_VERSION = '2026-08-30k';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -220,6 +225,10 @@ function render(){
   const d = DATA;
   $('board').hidden = false;
   $('stamp').textContent = 'เดือน ' + d.month + ' · v' + d.version;
+  // หน้าเว็บขึ้นทันทีที่ push (Pages) · GAS วางแยก → โชว์ทั้งสองเลข จะได้รู้ว่าอะไรอัปเดตแล้ว
+  const same = d.version === WEB_VERSION;
+  $('verLine').innerHTML = 'เวอร์ชัน · หน้าเว็บ <b>' + esc(WEB_VERSION) + '</b> · ระบบหลังบ้าน <b class="' +
+    (same ? '' : 'old') + '">' + esc(d.version) + '</b>' + (same ? '' : ' ← ยังไม่ได้วางโค้ดรุ่นใหม่');
 
   const A = d.alerts || {};
   let html = alertBox('ออเดอร์เลยกำหนดส่ง', A.lateOrders, o => esc(o.customer) + ' (' + esc(o.id) + ' กำหนด ' + esc(o.due) + ')')
