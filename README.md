@@ -26,7 +26,7 @@ URL จริงหลังเปิด GitHub Pages ของ repo นี้ (
 3. Script properties เพิ่ม: `PK_EXEC_KEY` (รหัสผู้บริหาร — ตั้งยาว ๆ เดายาก) และ `PK_KEY` (รหัส API สำรองสำหรับสคริปต์/แชทการเงิน — พนักงานไม่ใช้)
 4. รัน `importLegacyAccounting()` → ดึงบิล/ลูกหนี้/ลูกค้าเก่าจากสแนปช็อต "ระบบบัญชี"
 5. Deploy → New deployment → **Web app** (Execute as: Me / Anyone) → คัดลอก URL
-6. เอา URL วางแทน `PASTE_PK_GAS_WEBAPP_URL_HERE` ใน `index.html` + `exec/index.html` → commit push
+6. ~~เอา URL วางแทน `PASTE_PK_GAS_WEBAPP_URL_HERE` ใน `index.html` + `exec/index.html`~~ ✅ **ทำแล้ว 30 ส.ค.** (ถ้า deploy ใหม่จน URL เปลี่ยน ค่อยแก้ `const GAS_URL` ในสองไฟล์นั้น)
 7. เปิดบอร์ด `exec/?key=รหัส` → **จัดการพนักงาน → เพิ่มพนักงาน** (ชื่อเล่น+PIN) → ให้ทีมล็อกอินแอปหน้าแรกด้วยชื่อเล่น+PIN ของตัวเอง
    (แก้โค้ด GAS ครั้งถัดไป: Manage deployments → ✏️ → New version เท่านั้น + bump `CODE_VERSION`)
 
