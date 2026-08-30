@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30g';
+const CODE_VERSION = '2026-08-30h';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -145,6 +145,7 @@ function setupPkSystem() {
   if (st.getLastRow() <= 1) SETTINGS_SEED.forEach(function (r) { st.appendRow(r); });
   const s1 = ss.getSheetByName('Sheet1') || ss.getSheetByName('ชีต1');
   if (s1 && ss.getSheets().length > 1) ss.deleteSheet(s1);
+  _SS = null;   // ล้างแคช handle เดิม เผื่อเพิ่งเพิ่มแท็บใหม่ในรอบนี้
   Logger.log('PKSystem พร้อมใช้: ' + ss.getUrl());
 }
 
@@ -995,6 +996,7 @@ function doGet(e) {
 // นำเข้าข้อมูลเก่าจาก "ระบบบัญชี" (รันครั้งเดียวใน editor — อ่านอย่างเดียว)
 // ─────────────────────────────────────────────
 function importLegacyAccounting(srcId) {
+  setupPkSystem();   // เผื่อโค้ดรุ่นใหม่มีแท็บ/คอลัมน์ที่ชีตยังไม่มี — รันซ้ำปลอดภัย
   srcId = srcId || LEGACY_SNAPSHOT_ID;
   const src = SpreadsheetApp.openById(srcId);
   let bills = 0, ar = 0, customers = 0;
@@ -1119,6 +1121,7 @@ const PRODUCT_SEED = [   // [Product_ID, ชื่อสินค้า, หน�
   ['PK-MSC-PREFORM','หลอดพรีฟอร์ม (ขายยกกระสอบ)','กระสอบ',735,'⚠️ รอยืนยัน'],
 ];
 function seedProducts() {
+  setupPkSystem();   // เผื่อโค้ดรุ่นใหม่มีแท็บ/คอลัมน์ที่ชีตยังไม่มี — รันซ้ำปลอดภัย
   const have = {};
   rowsToObjs('Products').forEach(function (p) { have[String(p['ชื่อสินค้า']).trim()] = true; });
   const add = PRODUCT_SEED.filter(function (r) { return !have[r[1]]; }).map(function (r) {
@@ -1191,6 +1194,7 @@ function parseLegacyNote_(note) {
 }
 
 function importLegacyOrders(srcId) {
+  setupPkSystem();   // เผื่อโค้ดรุ่นใหม่มีแท็บ/คอลัมน์ที่ชีตยังไม่มี — รันซ้ำปลอดภัย
   const src = SpreadsheetApp.openById(srcId || LEGACY_ORDER_SHEET_ID);
   const sh = src.getSheets()[0];
   const v = sh.getDataRange().getValues();
@@ -1262,6 +1266,7 @@ function importLegacyOrders(srcId) {
 // ใส่ทะเบียนเครื่องฉีด 12 ตัว (รันครั้งเดียว — รันซ้ำได้ ไม่เบิ้ล)
 // ─────────────────────────────────────────────
 function seedMachines() {
+  setupPkSystem();   // เผื่อโค้ดรุ่นใหม่มีแท็บ/คอลัมน์ที่ชีตยังไม่มี — รันซ้ำปลอดภัย
   const have = {};
   rowsToObjs('Machines').forEach(function (m) { have[String(m['ชื่อเครื่อง']).trim()] = true; });
   const add = MACHINE_SEED.filter(function (n) { return !have[n]; })
@@ -1278,6 +1283,7 @@ function seedMachines() {
 const LEGACY_CUSTOMER_SHEET_ID = '1yg1p_WjFpDh68WtK5KVJeCcx_K57x-X3m1etsDnX__Q';
 
 function importLegacyCustomers(srcId) {
+  setupPkSystem();   // เผื่อโค้ดรุ่นใหม่มีแท็บ/คอลัมน์ที่ชีตยังไม่มี — รันซ้ำปลอดภัย
   const src = SpreadsheetApp.openById(srcId || LEGACY_CUSTOMER_SHEET_ID);
   // หาแท็บที่เป็นทะเบียนจริง (มีหัว "เส้นทาง-2")
   let sh = null, head = null;
