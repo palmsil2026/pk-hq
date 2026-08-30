@@ -12,7 +12,7 @@
 | ชิ้นส่วน | ที่รันจริง | สถานะ |
 |---|---|---|
 | หน้าเว็บทั้งหมด (`index.html` / `exec/` / `finance/`) | GitHub Pages ของ repo นี้ — `https://palmsil2026.github.io/pk-hq/` | ✅ **เปิดแล้ว 30 ส.ค.** (build run #1 สำเร็จ) — push `main` = ขึ้นจริงใน ~1 นาที |
-| GAS **P&K System** (repo = `2026-08-30k`) | deployment `AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-` รัน `2026-08-30d` | ⏳ **รอวางทับด้วย `k`** (ตัดลงเวลา + ฟอร์มสเปก + เกรด B/เครื่องจักร + ขั้นต่ำ + import ออเดอร์/ลูกค้า) แล้ว Manage deployments → ✏️ → New version · ของเดิม `d` — ยิง `?action=pkHealth` ตอบ `version 2026-08-30d` + `sheet: true` · ทดสอบแล้ว: ล็อกอินผิดตอบ error ถูกต้อง · เรียก action ที่ต้องล็อกอินโดยไม่มี token ถูกบล็อก · **URL นี้ต่อเข้า `index.html` + `exec/index.html` แล้ว** (แก้โค้ดครั้งหน้า: Manage deployments → ✏️ → New version เท่านั้น + bump `CODE_VERSION`) |
+| GAS **P&K System** (repo = `2026-08-30k`) | deployment `AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-` รัน `2026-08-30k` | ✅ **ตรงกับ repo แล้ว** — วางด้วย **ระบบอัตโนมัติครั้งแรก** 30 ส.ค. (Actions run #2 สำเร็จ) ไม่ได้ก๊อปวางมือ · ยืนยันจริง: `?action=pkHealth` ตอบ `version 2026-08-30k` · `sheet: true` · `schemaAt: 2026-08-30k` (โครงชีตปรับตามเองแล้ว ไม่ได้รัน `setupPkSystem()` มือ) · **แก้โค้ดครั้งหน้า: push `main` พอ ไม่ต้องทำอะไรอีก** (bump `CODE_VERSION` ด้วย) |
 | GAS **Bottle Finance** (`finance/gas/Code.gs` เวอร์ชัน `bottle-fin 2026-08-29a`) | — | ⏳ ยังไม่สร้างโปรเจกต์ — ตาม `finance/README.md` · ⚠️ **อ่าน "ประเด็นที่ต้องเคาะ" ข้างล่างก่อนติดตั้ง** |
 | GAS **P&K HR** (เงินเดือน — โค้ดอยู่ repo `origin-hq` → `payroll-app/` v2.3) | deployment `AKfycbwosxTyYyw8oE_xBC3jhZjk3ZOe7WpEpXDxbYr0Qmo8UoA-Khb_bPTiVsBqr4dYxWF4` @9 | ✅ **วางแล้ว** (smoke test ผ่าน 2026-08-30) — เหลือคุณปาล์มกด **🔧 ติดตั้งระบบ** ครั้งแรกในแอป (ชีต `P&KSystem` ฝั่ง HR ยังว่าง) + เพิ่มพนักงานโรงขวด |
 
@@ -74,8 +74,8 @@
 ### 🚀 deploy หลังบ้านอัตโนมัติ — ตั้งไว้แล้ว รอเปิดสวิตช์
 `.github/workflows/deploy-gas.yml` + `.github/scripts/deploy-gas.sh` (ชุดเดียวกับ `origin-hq` ที่ใช้มาตั้งแต่ 24 ส.ค.)
 push `.gs` เข้า `main` → clasp push + **redeploy URL เดิม** + smoke test ยิง `pkHealth` จริงว่าได้เวอร์ชันใหม่
-② Script ID ของ P&K System = ✅ ใส่แล้ว · **รอคุณปาล์มอย่างเดียว: ① Secret `CLASPRC_JSON`** — วิธีทำอยู่ `DEPLOY.md`
-จนกว่าจะเปิด ยังต้องวางมือตามเดิม (Manage deployments → ✏️ → New version)
+✅ **เปิดใช้จริงแล้ว 30 ส.ค.** — Secret `CLASPRC_JSON` + Script ID `1ARJwDhIa…ON61yr` ครบ · run #2 สำเร็จ smoke test ผ่าน
+**ตั้งแต่นี้แก้ `.gs` แล้ว push `main` = ขึ้น GAS เอง ไม่ต้องก๊อปวางอีก** (จะสั่งเองก็ได้ที่ Actions → Deploy to Apps Script → Run workflow)
 
 ### 🔢 เลขเวอร์ชันโชว์ในแอปแล้ว
 ท้ายหน้าแอปทีมงาน/บอร์ดบริหารมีบรรทัด `เวอร์ชัน · หน้าเว็บ … · ระบบหลังบ้าน …`
