@@ -222,6 +222,34 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 </main>
 </div>
 
+<section class="tabpane" id="t-history">
+  <div class="card">
+    <h2>ประวัติออเดอร์ของลูกค้า</h2>
+    <label>ลูกค้า</label>
+    <input id="hCust" list="dlCust" placeholder="พิมพ์/เลือกชื่อลูกค้า">
+    <button class="btn" id="hCustGo">ดูประวัติ</button>
+    <p class="meta" id="hCustStat" style="margin:10px 0 0"></p>
+    <ul class="list" id="hCustList"></ul>
+  </div>
+  <div class="card">
+    <h2>ประวัติงานทีมสกรีน</h2>
+    <div class="row">
+      <div><label>ย้อนหลัง (วัน)</label><input id="hScrDays" type="number" inputmode="numeric" value="60"></div>
+      <div style="display:flex;align-items:flex-end"><button class="btn" id="hScrGo">ดูประวัติ</button></div>
+    </div>
+    <p class="meta" id="hScrStat" style="margin:10px 0 0"></p>
+    <ul class="list" id="hScrList"></ul>
+  </div>
+</section>
+
+<div class="modal-bg" id="odModal">
+  <div class="modal">
+    <h2 id="odTitle">รายละเอียดออเดอร์</h2>
+    <div id="odBody"></div>
+    <button class="btn ghost" id="odClose" style="margin-top:12px">ปิด</button>
+  </div>
+</div>
+
 <div class="modal-bg" id="plModal">
   <div class="modal">
     <h2 id="plTitle">ลงผลผลิต</h2>
@@ -367,6 +395,7 @@ const TAB_DEF = [
   { id:'deliver', label:'ส่งของ', depts:['ส่งของ','ออฟฟิศ','บริหาร'] },
   { id:'stock',   label:'สต๊อก', depts:['ผลิต','ออฟฟิศ','บริหาร'] },
   { id:'office',  label:'ออฟฟิศ', depts:['ออฟฟิศ','บริหาร'] },
+  { id:'history', label:'ประวัติ', depts:'*' },
 ];
 function myTabs(){
   const d = ((ME && ME.dept) || '').trim();
@@ -587,17 +616,102 @@ function orderBadges(o){
 }
 function renderOrders(){
   $('orderList').innerHTML = DATA.orders.slice(0,40).map(o =>
-    '<li><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + '</span></div>' +
+    '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer"><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + ' · แตะดูรายละเอียด</span></div>' +
     '<div>' + orderBadges(o) + '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
     (['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ']) ? '' : '<button class="mini warn" data-cancel="' + esc(o['Order_ID']) + '">ยกเลิก</button>') +
     '</div></div></li>').join('') || '<li class="meta">ยังไม่มีออเดอร์</li>';
 }
 $('orderList').addEventListener('click', async e => {
   const id = e.target.dataset && e.target.dataset.cancel;
-  if (!id) return;
-  const why = prompt('เหตุผลการยกเลิก ' + id + ':'); if (why === null) return;
-  await api('pkOrderCancel', { id, note: why });
-  toast('ยกเลิกแล้ว'); loadData();
+  if (id) {
+    const why = prompt('เหตุผลการยกเลิก ' + id + ':'); if (why === null) return;
+    await api('pkOrderCancel', { id, note: why });
+    toast('ยกเลิกแล้ว'); loadData();
+    return;
+  }
+  const li = e.target.closest('li[data-open]');
+  if (li) openOrderDetail(li.dataset.open);
+});
+
+// ─── รายละเอียดออเดอร์ (แตะจากลิสต์ไหนก็เปิดได้) ───
+function row_(label, val){ return val ? '<div style="display:flex;gap:8px;padding:3px 0"><span class="meta" style="min-width:96px">' + esc(label) + '</span><span>' + val + '</span></div>' : ''; }
+async function openOrderDetail(id){
+  $('odTitle').textContent = 'ออเดอร์ ' + id;
+  $('odBody').innerHTML = '<p class="meta">กำลังโหลด…</p>';
+  $('odModal').classList.add('on');
+  let d;
+  try { d = await api('pkOrderDetail', null, { id }); } catch(e){ $('odBody').innerHTML = '<p class="meta">โหลดไม่สำเร็จ</p>'; return; }
+  const o = d.order, c = d.customer || {};
+  const custLine = [c.route ? 'สาย ' + esc(c.route) : '', esc(c.district||''), esc(c.tel||'')].filter(Boolean).join(' · ');
+  const items = d.items.map(it =>
+    '<li><b>' + esc(it.name) + '</b><br><span class="meta">' +
+    (it.bags ? it.bags + ' ถุง × ' + it.perBag + ' ใบ' + (it.extra ? ' + ' + it.extra : '') + ' = ' : '') +
+    baht(it.qty) + ' ใบ' + (it.price ? ' · ' + baht(it.price) + ' บ./ใบ' : '') +
+    (it.screenColor ? ' · สกรีน' + esc(it.screenColor) : '') + (it.capColor ? ' · ฝา' + esc(it.capColor) : '') +
+    ' · <b>ส่งแล้ว ' + baht(it.sent) + '</b> เหลือ ' + baht(it.qty - it.sent) + '</span></li>').join('');
+  const jobLine = j => '<li>' + esc(j.item) + ' <span class="chip ' + CHIP(j.status) + '">' + esc(j.status) + '</span><br>' +
+    '<span class="meta">ดี ' + baht(j.good) + '/' + baht(j.ordered) +
+    (j.gradeB ? ' · เกรด B ' + baht(j.gradeB) : '') + (j.waste ? ' · เสีย ' + baht(j.waste) : '') +
+    (j.by ? ' · ' + esc(j.by) : '') + (j.stuck ? ' · ค้าง: ' + esc(j.stuck) : '') + '</span></li>';
+  $('odBody').innerHTML =
+    row_('ลูกค้า', '<b>' + esc(o['ลูกค้า']) + '</b>' + (custLine ? '<br><span class="meta">' + custLine + '</span>' : '')) +
+    (c.note ? row_('หมายเหตุลูกค้า', '<span style="color:var(--gold)">' + esc(c.note) + '</span>') : '') +
+    row_('สถานะ', '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' + orderBadges(o)) +
+    row_('วันที่รับ', esc(o['วันที่รับ'])) + row_('กำหนดส่ง', esc(o['กำหนดส่ง'])) +
+    row_('วันเสร็จจริง', esc(o['วันเสร็จจริง'])) + row_('ผู้รับออเดอร์', esc(o['ผู้รับออเดอร์'])) +
+    row_('ประเภทการซื้อ', esc(o['ประเภทการซื้อ'])) + row_('ค่าบล็อก', o['ค่าบล็อก'] ? baht(o['ค่าบล็อก']) + ' บาท' : '') +
+    row_('ยอดรวม', baht(o['ยอดรวม']) + ' บาท') + row_('หมายเหตุ', esc(o['หมายเหตุ'])) +
+    row_('บิล', d.bill ? esc(d.bill['Bill_No']) + ' · ' + esc(d.bill['สถานะ']) : '') +
+    '<h2 style="margin:14px 0 4px">รายการ</h2><ul class="list">' + (items || '<li class="meta">—</li>') + '</ul>' +
+    (d.prodJobs.length ? '<h2 style="margin:14px 0 4px">งานผลิต</h2><ul class="list">' + d.prodJobs.map(jobLine).join('') + '</ul>' : '') +
+    (d.screenJobs.length ? '<h2 style="margin:14px 0 4px">งานสกรีน</h2><ul class="list">' + d.screenJobs.map(jobLine).join('') + '</ul>' : '') +
+    (d.deliveries.length ? '<h2 style="margin:14px 0 4px">การส่งของ</h2><ul class="list">' +
+      d.deliveries.map(x => '<li>' + esc(x.when) + ' <span class="meta">โดย ' + esc(x.by) + (x.note ? ' · ' + esc(x.note) : '') + '</span></li>').join('') + '</ul>' : '');
+}
+$('odClose').addEventListener('click', () => $('odModal').classList.remove('on'));
+$('odModal').addEventListener('click', e => { if (e.target.id === 'odModal') $('odModal').classList.remove('on'); });
+
+// ─── ประวัติ: ออเดอร์รายลูกค้า ───
+$('hCustGo').addEventListener('click', async () => {
+  const name = $('hCust').value.trim();
+  if (!name) return toast('เลือกลูกค้าก่อน');
+  $('hCustList').innerHTML = '<li class="meta">กำลังโหลด…</li>'; $('hCustStat').textContent = '';
+  let d; try { d = await api('pkCustomerHistory', null, { customer: name }); } catch(e){ return; }
+  $('hCustStat').textContent = 'ทั้งหมด ' + baht(d.stat.count) + ' ออเดอร์ · ' + baht(d.stat.qty) + ' ใบ · ' +
+    baht(d.stat.baht) + ' บาท · ยังไม่จบ ' + baht(d.stat.open) + ' ใบงาน';
+  $('hCustList').innerHTML = d.orders.map(o =>
+    '<li data-open="' + esc(o.id) + '" style="cursor:pointer"><div class="li-top"><div><b>' + esc(o.date || '-') + '</b> ' +
+    '<span class="meta">' + esc(o.id) + ' · ' + baht(o.qty) + ' ใบ' + (o.total ? ' · ' + baht(o.total) + ' บ.' : '') + '</span></div>' +
+    '<span class="chip ' + CHIP(o.status) + '">' + esc(o.status) + '</span></div>' +
+    '<div class="meta">' + esc(o.summary || '') + (o.done ? ' · เสร็จ ' + esc(o.done) : '') + '</div></li>').join('')
+    || '<li class="meta">ไม่พบออเดอร์ของลูกค้ารายนี้</li>';
+});
+$('hCustList').addEventListener('click', e => {
+  const li = e.target.closest('li[data-open]'); if (li) openOrderDetail(li.dataset.open);
+});
+
+// ─── ประวัติ: งานทีมสกรีน ───
+$('hScrGo').addEventListener('click', async () => {
+  const days = Number($('hScrDays').value) || 60;
+  $('hScrList').innerHTML = '<li class="meta">กำลังโหลด…</li>'; $('hScrStat').textContent = '';
+  let d; try { d = await api('pkScreenHistory', null, { days }); } catch(e){ return; }
+  $('hScrStat').textContent = d.stat.jobs + ' งานใน ' + d.days + ' วัน · ดี ' + baht(d.stat.good) +
+    ' · เกรด B ' + baht(d.stat.gradeB) + ' · เสีย ' + baht(d.stat.waste);
+  $('hScrList').innerHTML = d.rows.map(j =>
+    '<li data-open="' + esc(j.order) + '" style="cursor:pointer"><div class="li-top"><div><b>' + esc(j.customer || j.order) + '</b> ' +
+    '<span class="meta">' + esc(j.item) + '</span></div>' +
+    '<span class="chip ' + CHIP(j.status) + '">' + esc(j.status) + '</span></div>' +
+    '<div class="meta">ดี ' + baht(j.good) + '/' + baht(j.ordered) +
+    (j.gradeB ? ' · เกรด B ' + baht(j.gradeB) : '') + (j.waste ? ' · เสีย ' + baht(j.waste) : '') +
+    (j.team ? ' · ' + esc(j.team) : '') + (j.by ? ' · ' + esc(j.by) : '') +
+    (j.end ? ' · ปิด ' + esc(j.end) : ' · เข้าคิว ' + esc(j.queued)) + '</div>' +
+    (j.logs.length ? '<div class="meta">' + j.logs.map(l => '· ' + esc(String(l.when).slice(5)) + ' ดี ' + baht(l.good) +
+      (l.gradeB ? ' เกรดB ' + baht(l.gradeB) : '') + (l.waste ? ' เสีย ' + baht(l.waste) + (l.reason ? '(' + esc(l.reason) + ')' : '') : '') +
+      ' โดย ' + esc(l.by)).join('<br>') + '</div>' : '') + '</li>').join('')
+    || '<li class="meta">ไม่มีงานสกรีนในช่วงนี้</li>';
+});
+$('hScrList').addEventListener('click', e => {
+  const li = e.target.closest('li[data-open]'); if (li) openOrderDetail(li.dataset.open);
 });
 
 // ─── งานผลิต / สกรีน ───

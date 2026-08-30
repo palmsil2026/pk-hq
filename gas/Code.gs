@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30h';
+const CODE_VERSION = '2026-08-30i';
 const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
@@ -935,6 +935,9 @@ function ACTIONS() {
     pkStockIn: { auth: 'team', mut: true, fn: stockIn },
     pkStockCount: { auth: 'team', mut: true, depts: ['ผลิต', 'ออฟฟิศ', 'บริหาร'], fn: stockCount },
     pkOrderFlags: { auth: 'team', mut: true, fn: orderFlags },
+    pkOrderDetail: { auth: 'team', fn: orderDetail },
+    pkCustomerHistory: { auth: 'team', fn: customerHistory },
+    pkScreenHistory: { auth: 'team', fn: screenHistory },
     pkExec: { auth: 'exec', fn: function () { return execData(); } },
     pkPriceSet: { auth: 'exec', mut: true, fn: priceSet },
     pkPriceHistory: { auth: 'exec', fn: function (pay, me, p) { return { ok: true, history: tailObjs('PriceHistory', Number(p.limit) || 100).reverse() }; } },
@@ -1334,6 +1337,100 @@ function importLegacyCustomers(srcId) {
   Logger.log('ลูกค้าใหม่ ' + added + ' ราย · เติมข้อมูลให้ของเดิม ' + filled + ' ราย');
   Logger.log('⚠️ ชื่อลูกค้าในออเดอร์เก่ามักมีชื่องานปนอยู่ ("ช้างทิพย์ ลี้ งานช้างทิพย์") จึงจับคู่กับทะเบียนไม่ติดทุกราย — ค่อยรวมมือทีหลังได้');
   return { added: added, filled: filled };
+}
+
+// ─────────────────────────────────────────────
+// ดูรายละเอียด / ประวัติ — อ่านอย่างเดียว ไม่ส่งมากับก้อนหลัก (ประวัติโตเรื่อย ๆ)
+// ─────────────────────────────────────────────
+function orderItems_(o) { try { return JSON.parse(o['รายการ'] || '[]'); } catch (e) { return []; } }
+
+// รายละเอียดออเดอร์ใบเดียว — รายการ + งานผลิต/สกรีน + ส่งไปแล้ว + บิล
+function orderDetail(pay) {
+  const o = rowsToObjs('Orders').filter(function (x) { return x['Order_ID'] === pay.id; })[0];
+  if (!o) return { ok: false, error: 'ไม่พบออเดอร์ ' + pay.id };
+  const items = orderItems_(o);
+  const sent = (deliveredMapAll_()[o['Order_ID']] || {});
+  const jobsOf = function (tabName) {
+    return rowsToObjs(tabName).filter(function (j) { return j['Order_ID'] === o['Order_ID']; })
+      .map(function (j) {
+        return { id: j['Job_ID'], item: j['สินค้า'] || j['งาน'] || j['ลาย/สี'], ordered: num(j['จำนวนสั่ง']),
+                 good: num(j['ดีสะสม']), gradeB: num(j['เกรดBสะสม']), waste: num(j['เสียสะสม']),
+                 status: j['สถานะ'], by: j['ผู้ทำ'] || '', start: j['เริ่มเมื่อ'] || '', end: j['เสร็จเมื่อ'] || '',
+                 stuck: j['สาเหตุค้าง'] || '' };
+      });
+  };
+  const cust = rowsToObjs('Customers').filter(function (c) { return String(c['ชื่อลูกค้า']).trim() === String(o['ลูกค้า']).trim(); })[0] || {};
+  return {
+    ok: true,
+    order: o,
+    customer: { tel: cust['เบอร์โทร'] || '', route: cust['เส้นทาง'] || '', district: cust['อำเภอ'] || '', note: cust['หมายเหตุ'] || '' },
+    items: items.map(function (it) {
+      const k = it.pid || it.name;
+      return { name: it.name, qty: it.qty, price: it.price, bags: it.bags || 0, extra: it.extra || 0, perBag: it.perBag || 0,
+               screenColor: it.screenColor || '', capColor: it.capColor || '', sent: sent[k] || 0 };
+    }),
+    prodJobs: jobsOf('Production'), screenJobs: jobsOf('ScreenJobs'),
+    deliveries: rowsToObjs('Deliveries').filter(function (d) { return d['Order_ID'] === o['Order_ID']; })
+      .map(function (d) { return { when: d['เมื่อ'], by: d['ผู้ส่ง'], note: d['หมายเหตุ'] || '', items: d['รายการ'] }; }),
+    bill: o['Bill_No'] ? (rowsToObjs('Bills').filter(function (b) { return b['Bill_No'] === o['Bill_No']; })[0] || null) : null,
+  };
+}
+
+// ประวัติออเดอร์ของลูกค้ารายหนึ่ง — เทียบเคียงชื่อแบบหลวม (ชื่อในออเดอร์เก่ามักมีชื่องานพ่วง)
+function customerHistory(pay) {
+  const key = String(pay.customer || '').trim();
+  if (!key) return { ok: false, error: 'ระบุชื่อลูกค้า' };
+  const loose = key.replace(/[\s()]/g, '');
+  const all = rowsToObjs('Orders').filter(function (o) {
+    const n = String(o['ลูกค้า']).trim();
+    return n === key || n.replace(/[\s()]/g, '').indexOf(loose) >= 0;
+  });
+  const rows = all.map(function (o) {
+    const items = orderItems_(o);
+    return { id: o['Order_ID'], date: o['วันที่รับ'], customer: o['ลูกค้า'], due: o['กำหนดส่ง'],
+             status: o['สถานะ'], total: num(o['ยอดรวม']), urgent: o['ด่วน'] || '',
+             pay: o['สถานะเงิน'] || '', art: o['สถานะแบบ'] || '', done: o['วันเสร็จจริง'] || '',
+             qty: items.reduce(function (s, it) { return s + (Number(it.qty) || 0); }, 0),
+             summary: items.map(function (it) { return it.name + ' ×' + baht_(it.qty); }).join(' · ') };
+  }).sort(function (a, b) { return String(b.date || '').localeCompare(String(a.date || '')); });
+  const live = rows.filter(function (r) { return ['ส่งแล้ว', 'ยกเลิก'].indexOf(r.status) < 0; });
+  return {
+    ok: true, customer: key, orders: rows.slice(0, 120),
+    stat: { count: rows.length, qty: rows.reduce(function (s, r) { return s + r.qty; }, 0),
+            baht: rows.reduce(function (s, r) { return s + r.total; }, 0), open: live.length },
+  };
+}
+function baht_(n) { return Number(n || 0).toLocaleString('en-US'); }
+
+// ประวัติงานทีมสกรีน — งานที่ปิดแล้ว + ยอดที่ลงในแต่ละครั้ง
+function screenHistory(pay) {
+  const days = Number(pay && pay.days) || 60;
+  const since = daysFromNow(-days);
+  const jobs = rowsToObjs('ScreenJobs').filter(function (j) {
+    const d = String(j['เสร็จเมื่อ'] || j['วันที่เข้าคิว'] || '').slice(0, 10);
+    return d >= since && (!pay.team || String(j['หมายเหตุ']).indexOf(pay.team) >= 0);
+  });
+  const ordBy = {};
+  rowsToObjs('Orders').forEach(function (o) { ordBy[o['Order_ID']] = o; });
+  const logs = tailSince_('ProductionLogs', 'เมื่อ', since, 800)
+    .filter(function (l) { return l['ประเภทงาน'] === 'สกรีน' && String(l['เมื่อ']).slice(0, 10) >= since; });
+  const logBy = {};
+  logs.forEach(function (l) { (logBy[l['Job_ID']] = logBy[l['Job_ID']] || []).push(l); });
+  const rows = jobs.map(function (j) {
+    const o = ordBy[j['Order_ID']] || {};
+    return { id: j['Job_ID'], order: j['Order_ID'], customer: o['ลูกค้า'] || '', team: o['ทีมสกรีน'] || '',
+             item: j['สินค้า'] || j['ลาย/สี'], ordered: num(j['จำนวนสั่ง']), good: num(j['ดีสะสม']),
+             gradeB: num(j['เกรดBสะสม']), waste: num(j['เสียสะสม']), status: j['สถานะ'],
+             by: j['ผู้ทำ'] || '', queued: j['วันที่เข้าคิว'] || '', end: j['เสร็จเมื่อ'] || '',
+             logs: (logBy[j['Job_ID']] || []).map(function (l) {
+               return { when: l['เมื่อ'], good: num(l['ดี']), gradeB: num(l['เกรดB']), waste: num(l['เสีย']),
+                        reason: l['สาเหตุเสีย'] || '', by: l['ผู้ลง'] || '', note: l['หมายเหตุ'] || '' };
+             }) };
+  }).sort(function (a, b) { return String(b.end || b.queued || '').localeCompare(String(a.end || a.queued || '')); });
+  return { ok: true, days: days, rows: rows.slice(0, 150),
+           stat: { jobs: rows.length, good: rows.reduce(function (s, r) { return s + r.good; }, 0),
+                   gradeB: rows.reduce(function (s, r) { return s + r.gradeB; }, 0),
+                   waste: rows.reduce(function (s, r) { return s + r.waste; }, 0) } };
 }
 
 function doPost(e) { return doGet(e); }
