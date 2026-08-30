@@ -1,20 +1,20 @@
 # STATUS — สถานะระบบจริง ณ ตอนนี้ (เขียนทับไฟล์นี้เสมอ **ห้าม append ต่อท้าย**)
 
 > ไฟล์นี้ตอบคำถามเดียว: **"โค้ดใน repo กับของที่รันจริง ตรงกันรึยัง / อะไรรอวาง"**
-> อัปเดตล่าสุด: 2026-08-30 โดยแชทเลขา palm-hq — แยก repo · แก้ import ชนเพดาน 6 นาที · **คุณปาล์มวาง GAS + deploy แล้ว ต่อ URL เข้าแอปเรียบร้อย**
+> อัปเดตล่าสุด: 2026-08-30 โดยแชทเลขา palm-hq — แยก repo · แก้ import ชนเพดาน 6 นาที · **วาง GAS + ต่อ URL + เปิด Pages ครบแล้ว ระบบพร้อมใช้**
 
 ## ของจริงที่รันอยู่ เทียบกับ repo
 
 | ชิ้นส่วน | ที่รันจริง | สถานะ |
 |---|---|---|
-| หน้าเว็บทั้งหมด (`index.html` / `exec/` / `finance/`) | GitHub Pages ของ repo นี้ | ❌ **ยังไม่เปิด Pages** — Settings → Pages → Deploy from a branch → `main` / (root) → Save แล้ว push `main` = ขึ้นจริง |
+| หน้าเว็บทั้งหมด (`index.html` / `exec/` / `finance/`) | GitHub Pages ของ repo นี้ — `https://palmsil2026.github.io/pk-hq/` | ✅ **เปิดแล้ว 30 ส.ค.** (build run #1 สำเร็จ) — push `main` = ขึ้นจริงใน ~1 นาที |
 | GAS **P&K System** (`gas/Code.gs` เวอร์ชัน `2026-08-30d`) | deployment `AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-` | ✅ **ตรงกับ repo** — ยิง `?action=pkHealth` ตอบ `version 2026-08-30d` + `sheet: true` · ทดสอบแล้ว: ล็อกอินผิดตอบ error ถูกต้อง · เรียก action ที่ต้องล็อกอินโดยไม่มี token ถูกบล็อก · **URL นี้ต่อเข้า `index.html` + `exec/index.html` แล้ว** (แก้โค้ดครั้งหน้า: Manage deployments → ✏️ → New version เท่านั้น + bump `CODE_VERSION`) |
 | GAS **Bottle Finance** (`finance/gas/Code.gs` เวอร์ชัน `bottle-fin 2026-08-29a`) | — | ⏳ ยังไม่สร้างโปรเจกต์ — ตาม `finance/README.md` · ⚠️ **อ่าน "ประเด็นที่ต้องเคาะ" ข้างล่างก่อนติดตั้ง** |
 | GAS **P&K HR** (เงินเดือน — โค้ดอยู่ repo `origin-hq` → `payroll-app/` v2.3) | deployment `AKfycbwosxTyYyw8oE_xBC3jhZjk3ZOe7WpEpXDxbYr0Qmo8UoA-Khb_bPTiVsBqr4dYxWF4` @9 | ✅ **วางแล้ว** (smoke test ผ่าน 2026-08-30) — เหลือคุณปาล์มกด **🔧 ติดตั้งระบบ** ครั้งแรกในแอป (ชีต `P&KSystem` ฝั่ง HR ยังว่าง) + เพิ่มพนักงานโรงขวด |
 
 ## ⏳ รอคุณปาล์ม (เรียงตามลำดับที่ควรทำ)
 
-1. **เปิด GitHub Pages ของ repo นี้** (ตารางบน — 1 นาที)
+1. ~~เปิด GitHub Pages~~ ✅ **เสร็จแล้ว** — แอปทีมงาน `https://palmsil2026.github.io/pk-hq/` · บอร์ดบริหาร `…/pk-hq/exec/?key=รหัส`
 2. ~~วาง GAS + deploy + ต่อ URL เข้าแอป~~ ✅ **เสร็จแล้ว 30 ส.ค.** — เหลือ 2 อย่างในโปรเจกต์นี้:
    · **รัน `importLegacyAccounting()` ให้จบ** (รุ่น `d` เขียนรวดเดียว จบในไม่กี่วินาที) — ถ้ารอบก่อนค้างไว้ รันซ้ำได้เลย ไม่ต้องล้างชีต ระบบข้ามของที่เข้าไปแล้วเอง · เช็คผลจาก Execution log บรรทัด "นำเข้าเสร็จ: บิล … ลูกหนี้เครดิต … ลูกค้าใหม่ …"
    · **เพิ่มพนักงาน (ชื่อเล่น+PIN)** ในบอร์ดบริหาร → จัดการพนักงาน → แล้วให้ทีมล็อกอินหน้าแอป
