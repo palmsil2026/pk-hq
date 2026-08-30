@@ -32,16 +32,14 @@ repo นี้มี **2 ท่อ** ที่แยกกันเด็ดข�
 > (workflow ลบไฟล์ token ทิ้งทุกครั้งหลังรันเสร็จ · ถอนสิทธิ์ได้ตลอดโดยลบ Secret ทิ้ง
 > หรือถอนที่ต้นทาง https://myaccount.google.com/permissions → **clasp** → Remove access)
 
-**2. เติม Script ID ของโปรเจกต์ P&K System**
-
-เปิดโปรเจกต์ใน https://script.google.com → **⚙️ Project Settings** → คัดลอก **Script ID**
-แล้วเอาไปแทนคำว่า `__PK_SYSTEM_SCRIPT_ID__` ในไฟล์ `.github/scripts/deploy-gas.sh`
-(บอกในแชทก็ได้ เดี๋ยวใส่ให้ — **Script ID ไม่ใช่ความลับ** ต่างจาก token ข้อ 1 ที่ห้ามบอกใคร)
+**2. เติม Script ID** — ✅ **ใส่แล้ว** (คุณปาล์มให้มา 30 ส.ค.)
 
 | โปรเจกต์ GAS | โฟลเดอร์ | Script ID | deployment ที่ทีมใช้ |
 |---|---|---|---|
-| **P&K System** | `gas/` | ⏳ รอเติม | `AKfycbw8guY7h7Q_...meWH-` |
+| **P&K System** | `gas/` | `1ARJwDhIahovJ7rxCNyY93Ey7LH2LbQEXK5NZGLLARujLhkzup_ON61yr` | `AKfycbw8guY7h7Q_...meWH-` |
 | **Bottle Finance** | `finance/gas/` | ⏳ ยังไม่ได้สร้างโปรเจกต์ | — |
+
+> Script ID ไม่ใช่ความลับ (เก็บใน repo ได้) ต่างจาก token ข้อ 1 ที่ห้ามบอกใคร
 
 > **P&K HR (เงินเดือน)** ไม่ได้อยู่ repo นี้ — โค้ดอยู่ `origin-hq` → `payroll-app/`
 > และเข้าระบบ deploy อัตโนมัติของ repo นั้นแล้ว

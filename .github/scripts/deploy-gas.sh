@@ -11,7 +11,7 @@ set -euo pipefail
 #  หา Script ID: เปิดโปรเจกต์ใน script.google.com → ⚙️ Project Settings → คัดลอก "Script ID"
 APPS=(
 # P&K System — แอปทีมงาน + บอร์ดบริหาร (ชีต PKSystem)
-"gas|__PK_SYSTEM_SCRIPT_ID__|AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-"
+"gas|1ARJwDhIahovJ7rxCNyY93Ey7LH2LbQEXK5NZGLLARujLhkzup_ON61yr|AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-"
 # Bottle Finance — แอปการเงิน (ยังไม่ได้สร้างโปรเจกต์ · ดู finance/README.md)
 "finance/gas|__BOTTLE_FINANCE_SCRIPT_ID__|"
 )

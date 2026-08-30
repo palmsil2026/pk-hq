@@ -74,7 +74,7 @@
 ### 🚀 deploy หลังบ้านอัตโนมัติ — ตั้งไว้แล้ว รอเปิดสวิตช์
 `.github/workflows/deploy-gas.yml` + `.github/scripts/deploy-gas.sh` (ชุดเดียวกับ `origin-hq` ที่ใช้มาตั้งแต่ 24 ส.ค.)
 push `.gs` เข้า `main` → clasp push + **redeploy URL เดิม** + smoke test ยิง `pkHealth` จริงว่าได้เวอร์ชันใหม่
-**รอคุณปาล์ม 2 อย่าง (ครั้งเดียวจบ)**: ① Secret `CLASPRC_JSON` ② Script ID ของโปรเจกต์ P&K System — วิธีทำอยู่ `DEPLOY.md`
+② Script ID ของ P&K System = ✅ ใส่แล้ว · **รอคุณปาล์มอย่างเดียว: ① Secret `CLASPRC_JSON`** — วิธีทำอยู่ `DEPLOY.md`
 จนกว่าจะเปิด ยังต้องวางมือตามเดิม (Manage deployments → ✏️ → New version)
 
 ### 🔢 เลขเวอร์ชันโชว์ในแอปแล้ว
