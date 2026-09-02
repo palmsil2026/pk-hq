@@ -41,9 +41,17 @@ button.mini.ghost{background:none; border:1px solid var(--line); color:var(--mut
 .seg button.on{background:var(--green); color:#fff; border-color:var(--green);}
 .seg.gold button.on{background:var(--gold); border-color:var(--gold);}
 .chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;}
-.chips button{padding:9px 13px; border:1px solid var(--line); background:var(--surface); border-radius:99px; font:500 14px "Sarabun",sans-serif; cursor:pointer; min-height:40px; color:var(--text);}
-.chips button.on{background:var(--green); color:#fff; border-color:var(--green);}
-.chips button.pin{border-color:var(--gold); color:var(--gold); font-weight:600;}
+/* กล่องแนะนำใต้ช่องพิมพ์ — เด้งตอนพิมพ์/โฟกัส หายเมื่อเลือกหรือแตะที่อื่น */
+.sugg-wrap{position:relative;}
+.sugg{position:absolute; left:0; right:0; top:100%; z-index:20; background:var(--surface); border:1px solid var(--line); border-radius:10px; box-shadow:0 8px 24px rgba(0,0,0,.12); max-height:52vh; overflow-y:auto; margin-top:4px;}
+.sugg[hidden]{display:none;}
+.sugg button{display:flex; width:100%; justify-content:space-between; align-items:center; gap:10px; text-align:left; padding:11px 12px; border:0; border-bottom:1px dashed var(--line); background:none; font:500 14.5px "Sarabun",sans-serif; color:var(--text); cursor:pointer; min-height:46px;}
+.sugg button:last-child{border-bottom:none;} .sugg button:hover,.sugg button.hi{background:var(--green-soft);}
+.sugg button.ord{background:var(--gold-soft);} .sugg button.ord:hover,.sugg button.ord.hi{background:#EEDFB7;}
+.sugg .sub{font-size:12px; color:var(--muted);}
+.sugg .head{font:600 11.5px "Anuphan",sans-serif; color:var(--muted); padding:8px 12px 2px; background:var(--ground);}
+.linkbox{display:flex; justify-content:space-between; align-items:center; gap:8px; background:var(--gold-soft); border:1px solid var(--gold); border-radius:10px; padding:9px 12px; margin-top:8px; font-size:13.5px;}
+.linkbox b{color:var(--gold);}
 .list{margin:0; padding:0; list-style:none;}
 .list li{padding:11px 0; border-bottom:1px dashed var(--line);}
 .list li:last-child{border-bottom:none;}
@@ -116,9 +124,12 @@ table.st td.r,table.st th.r{text-align:right;}
       <div><label>เลขที่บิล <span class="meta" id="paperHint"></span></label><input id="ePaper" inputmode="numeric" placeholder="เลขบนบิล"></div>
       <div><label>วันที่</label><input id="eDate" type="date"></div>
     </div>
-    <label>ลูกค้า <span class="meta">— แตะชื่อ หรือพิมพ์ค้น</span></label>
-    <input id="eCust" placeholder="พิมพ์ 2-3 ตัวอักษรก็เจอ" autocomplete="off">
-    <div class="chips" id="custChips"></div>
+    <label>ลูกค้า <span class="meta">— พิมพ์แล้วเลือกจากที่เด้งขึ้นมา</span></label>
+    <div class="sugg-wrap">
+      <input id="eCust" placeholder="พิมพ์ 2-3 ตัวอักษร" autocomplete="off">
+      <div class="sugg" id="sugg" hidden></div>
+    </div>
+    <div class="linkbox" id="linkBox" hidden><span>🔗 ผูกกับออเดอร์ <b id="linkOrd"></b> <span class="meta" id="linkSub"></span></span><button class="mini ghost" id="linkOff" type="button">✕</button></div>
     <label>ยอดเงิน (บาท)</label>
     <input id="eAmt" class="big" inputmode="decimal" placeholder="0">
     <label>ประเภท</label>
@@ -211,7 +222,7 @@ table.st td.r,table.st th.r{text-align:right;}
 // ═══ ตั้งค่า: GAS "P&K System" ตัวเดียวกับแอปทีมงาน/บอร์ดบริหาร — ไม่มี GAS แยกของบัญชี ═══
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (เดินเลขพร้อม index.html / exec / gas)
-const WEB_VERSION = '2026-09-02b';
+const WEB_VERSION = '2026-09-02c';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -221,7 +232,7 @@ function toast(t){ const m=$('msg'); m.textContent=t; m.classList.add('show'); s
 let TOKEN = localStorage.getItem('pk_token') || '';
 let ME = null; try { ME = JSON.parse(localStorage.getItem('pk_me') || 'null'); } catch(e){ localStorage.removeItem('pk_me'); }
 let DATA = null, INFLIGHT = false;
-const MUT = /^pk(AcctBill|AcctPay|AcctEdit|BillCancel|Login)$/;
+const MUT = /^pk(AcctBill|AcctPay|AcctEdit|AcctLink|BillCancel|Login)$/;
 
 async function api(action, payload=null, params={}, opts={}){
   const isMut = MUT.test(action);
@@ -300,28 +311,62 @@ async function loadData(){
   if (!$('eChan').children.length) { seg('eChan', DATA.channels, ''); seg('payChan', DATA.channels, ''); seg('edChan', DATA.channels, ''); }
   if (!$('ePaper').value && DATA.nextPaperNo) $('ePaper').value = DATA.nextPaperNo;
   $('paperHint').textContent = DATA.nextPaperNo ? '(ถัดไป ' + DATA.nextPaperNo + ')' : '';
-  renderChips(); renderToday(); renderRecent(); renderAr(); renderSum();
+  renderToday(); renderRecent(); renderAr(); renderSum();
 }
 
 // ─── ลูกค้า: ชิปกดเลือก + พิมพ์ค้น ───
-let CUST = '';
-function renderChips(){
+// ─── ลูกค้า: พิมพ์แล้วเด้งแนะนำ (ชื่อลูกค้า + บิลจากออเดอร์ที่ยังไม่ได้ผูกเลขกระดาษ) ───
+let CUST = '', LINK = null, HI = -1;
+function suggItems(){
   const q = $('eCust').value.trim().toLowerCase();
-  const all = DATA.customers || [];
-  const hit = q ? all.filter(c => c.name.toLowerCase().includes(q)) : all;
-  const top = hit.slice(0, q ? 20 : 12);
-  const pin = !q && !top.some(c => c.name === 'สด') ? [{name:'สด', pin:true}] : [];
-  $('custChips').innerHTML = pin.concat(top).map(c =>
-    '<button type="button" data-c="' + esc(c.name) + '"' + (c.name===CUST?' class="on"':'') + (c.pin?' class="pin"':'') + '>' + esc(c.name) + '</button>').join('')
-    + (q && !hit.length ? '<button type="button" data-c="' + esc($('eCust').value.trim()) + '" class="pin">+ ใช้ชื่อ "' + esc($('eCust').value.trim()) + '"</button>' : '');
+  const custs = (DATA.customers || []).filter(c => !q || c.name.toLowerCase().includes(q)).slice(0, q ? 12 : 8);
+  // บิลจากออเดอร์ — ของออฟฟิศที่รอบัญชีผูกเลขกระดาษ · แสดงก่อนเสมอ (ลดการพิมพ์ซ้ำ)
+  const ords = (DATA.orderBills || []).filter(b => !q || String(b.customer).toLowerCase().includes(q) || String(b.order).toLowerCase().includes(q)).slice(0, q ? 8 : 5);
+  const items = ords.map(b => ({ kind:'ord', bill:b, label:b.customer, sub:b.order + ' · ' + b.date + ' · ' + (b.status==='ชำระแล้ว' ? 'ชำระแล้ว ' + b.chan : 'เครดิต ค้าง'), amt:b.amt }))
+    .concat(!q && !custs.some(c => c.name === 'สด') ? [{ kind:'cust', name:'สด', label:'สด', sub:'ขายหน้าร้าน' }] : [])
+    .concat(custs.map(c => ({ kind:'cust', name:c.name, label:c.name, sub:c.count ? c.count + ' บิล' : 'ทะเบียน' })));
+  if (q && !items.some(i => i.kind==='cust' && i.name.toLowerCase() === q)) items.push({ kind:'new', name:$('eCust').value.trim(), label:'+ ใช้ชื่อ "' + $('eCust').value.trim() + '"', sub:'ลูกค้าใหม่' });
+  return items;
 }
-$('eCust').addEventListener('input', () => { CUST = ''; renderChips(); });
-$('eCust').addEventListener('keydown', e => { if (e.key === 'Enter') { const b = $('custChips').querySelector('button'); if (b) b.click(); } });
-$('custChips').addEventListener('click', e => {
-  const b = e.target.closest('button[data-c]'); if (!b) return;
-  CUST = b.dataset.c; $('eCust').value = CUST; renderChips();
+function renderSugg(show){
+  const items = suggItems(); const box = $('sugg');
+  if (!show || !items.length) { box.hidden = true; return; }
+  let h = '', lastKind = '';
+  items.forEach((it, i) => {
+    if (it.kind !== lastKind) { h += '<div class="head">' + (it.kind==='ord' ? '📦 บิลจากออเดอร์ — แตะเพื่อผูก ไม่ต้องพิมพ์ยอด' : it.kind==='new' ? '' : '👤 ลูกค้า') + '</div>'; lastKind = it.kind; }
+    h += '<button type="button" data-i="' + i + '" class="' + (it.kind==='ord'?'ord':'') + (i===HI?' hi':'') + '"><span>' + esc(it.label) + '<br><span class="sub">' + esc(it.sub) + '</span></span>' + (it.amt ? '<span class="amt owe">' + baht(it.amt) + '</span>' : '') + '</button>';
+  });
+  box.innerHTML = h; box.hidden = false;
+}
+function pickSugg(it){
+  $('sugg').hidden = true; HI = -1;
+  if (it.kind === 'ord') { setLink(it.bill); return; }
+  CUST = it.name; $('eCust').value = CUST; clearLink();
   $('eAmt').focus();   // เลือกชื่อแล้วกระโดดไปช่องยอดเลย
+}
+function setLink(b){
+  LINK = b; CUST = b.customer; $('eCust').value = b.customer;
+  $('eAmt').value = b.amt;                       // เติมยอดจากออเดอร์ — แก้ได้ ถ้าไม่ตรงระบบจะฟ้อง
+  [...$('eType').children].forEach(x => x.classList.toggle('on', x.dataset.v === (b.status==='ชำระแล้ว' ? 'เงินสด' : b.type)));
+  applyType();
+  $('linkOrd').textContent = b.order; $('linkSub').textContent = '· ออฟฟิศลงไว้ ' + baht(b.amt) + ' บ.' + (b.status==='ชำระแล้ว' ? ' · ชำระแล้ว' : '');
+  $('linkBox').hidden = false;
+  $('ePaper').focus();
+}
+function clearLink(){ LINK = null; $('linkBox').hidden = true; }
+$('linkOff').addEventListener('click', () => { clearLink(); $('eAmt').value = ''; });
+$('eCust').addEventListener('input', () => { CUST = ''; if (LINK) clearLink(); HI = -1; renderSugg(true); });
+$('eCust').addEventListener('focus', () => renderSugg(true));
+$('eCust').addEventListener('keydown', e => {
+  const items = suggItems();
+  if (e.key === 'ArrowDown') { HI = Math.min(HI + 1, items.length - 1); renderSugg(true); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { HI = Math.max(HI - 1, 0); renderSugg(true); e.preventDefault(); }
+  else if (e.key === 'Enter') { if (items.length) pickSugg(items[HI >= 0 ? HI : 0]); e.preventDefault(); }
+  else if (e.key === 'Escape') { $('sugg').hidden = true; }
 });
+$('sugg').addEventListener('mousedown', e => e.preventDefault());   // กันช่องพิมพ์เสียโฟกัสก่อนคลิกติด
+$('sugg').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (b) pickSugg(suggItems()[Number(b.dataset.i)]); });
+document.addEventListener('click', e => { if (!e.target.closest('.sugg-wrap')) $('sugg').hidden = true; });
 
 // ─── บันทึกบิล ───
 $('eAmt').addEventListener('keydown', e => { if (e.key === 'Enter') $('eSave').click(); });
@@ -333,8 +378,11 @@ $('eSave').addEventListener('click', async () => {
   if (!(amount > 0)) return toast('ใส่ยอดเงิน');
   if (type === 'เงินสด' && !channel) return toast('แตะเลือกว่าเงินเข้าทางไหน');
   try {
-    const j = await api('pkAcctBill', { paperNo: $('ePaper').value.trim(), customer, amount, type, channel, date: $('eDate').value });
-    toast('✅ ' + customer + ' ' + baht(amount) + ' บ.' + (type==='เงินสด' ? ' · ' + channel : ' · เครดิต'));
+    const j = LINK
+      ? await api('pkAcctLink', { no: LINK.no, paperNo: $('ePaper').value.trim(), amount, type, channel, date: $('eDate').value })
+      : await api('pkAcctBill', { paperNo: $('ePaper').value.trim(), customer, amount, type, channel, date: $('eDate').value });
+    toast('✅ ' + (LINK ? '🔗 ' + LINK.order + ' · ' : '') + customer + ' ' + baht(amount) + ' บ.' + (type==='เงินสด' ? ' · ' + channel : ' · เครดิต'));
+    clearLink();
     // เคลียร์เฉพาะที่เปลี่ยนทุกใบ — วันที่/ประเภท/ช่องทางคงไว้ (ลงติดกันหลายใบเร็วขึ้น)
     CUST = ''; $('eCust').value = ''; $('eAmt').value = '';
     const pn = Number($('ePaper').value); $('ePaper').value = pn ? String(pn + 1) : '';

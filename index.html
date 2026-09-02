@@ -335,7 +335,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-02b';
+const WEB_VERSION = '2026-09-02c';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');

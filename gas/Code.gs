@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-02b';
+const CODE_VERSION = '2026-09-02c';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -870,8 +870,12 @@ function acctData(p, me) {
     if (pa.slice(0, 7) === month) { mBy[ck] = (mBy[ck] || 0) + amt; mTot += amt; }
   });
   const list = function (m) { return Object.keys(m).map(function (k) { return { name: k, amt: m[k] }; }).sort(function (a, b) { return b.amt - a.amt; }); };
+  // บิลที่ออฟฟิศออกจากออเดอร์แล้วแต่ฝ่ายบัญชียังไม่ได้ผูกเลขบิลกระดาษ — คือจุดเชื่อมสองแอป
+  // (แทนที่บัญชีจะพิมพ์ชื่อ+ยอดซ้ำ ให้แตะเลือกแล้วผูกเข้าใบเดิม ไม่สร้างใบซ้ำ)
+  const orderBills = live.filter(function (b) { return b['Order_ID'] && !String(b['เลขบิลกระดาษ'] || '').trim(); })
+    .slice(-60).reverse().map(acctRow_);
   return { ok: true, version: CODE_VERSION, me: { id: me.id, name: me.name, nick: me.nick, dept: me.dept },
-    channels: SPEC['ช่องทางชำระ'], nextPaperNo: nextPaper, today: td,
+    channels: SPEC['ช่องทางชำระ'], nextPaperNo: nextPaper, today: td, orderBills: orderBills,
     customers: customers.slice(0, 400),
     recent: live.slice(-80).reverse().map(acctRow_),          // ใหม่สุดบน — ฟีดแบคข้อแรก
     ar: ar, arTotal: ar.reduce(function (s, x) { return s + x.total; }, 0),
@@ -915,6 +919,31 @@ function acctPay(pay, me) {
   });
   if (!paid) return { ok: false, error: 'ไม่มีบิลที่รับชำระได้: ' + skipped.join(', ') };
   return { ok: true, paid: paid, total: total, skipped: skipped, _log: { ref: nos.join(','), detail: 'รับชำระ ' + paid + ' ใบ ' + total + ' บ. (' + chan + ')' } };
+}
+// ผูกบิลกระดาษเข้ากับบิลที่ออฟฟิศออกจากออเดอร์ (ใบเดิม ไม่สร้างซ้ำ) — เงินสด = รับชำระไปในตัว
+// ยอดบนกระดาษไม่ตรงกับที่ออฟฟิศลง → ปฏิเสธพร้อมบอกทั้งสองเลข (งาน "ยอดตรงมั้ย" ของบัญชีพอดี)
+function acctLink(pay, me) {
+  const b = rowsToObjs('Bills').filter(function (x) { return String(x['Bill_No']) === String(pay.no); })[0];
+  if (!b) return { ok: false, error: 'ไม่พบบิล ' + pay.no };
+  if (b['สถานะ'] === 'ยกเลิก') return { ok: false, error: 'บิลนี้ถูกยกเลิกแล้ว' };
+  if (!b['Order_ID']) return { ok: false, error: 'บิลนี้ไม่ได้มาจากออเดอร์ — ลงเป็นบิลใหม่แทน' };
+  const paper = String(pay.paperNo || '').trim();
+  const amt = num(pay.amount), have = num(b['ยอดรวม']);
+  if (amt > 0 && Math.abs(amt - have) >= 0.5) return { ok: false, error: 'ยอดไม่ตรง — บนบิลกระดาษ ' + amt + ' แต่ออฟฟิศลงไว้ ' + have + ' บ. (ออเดอร์ ' + b['Order_ID'] + ') ให้ออฟฟิศเช็คก่อน' };
+  if (paper) {
+    const dup = rowsToObjs('Bills').filter(function (x) { return String(x['เลขบิลกระดาษ']) === paper && String(x['วันที่']) === String(pay.date || b['วันที่']) && x['สถานะ'] !== 'ยกเลิก' && x['Bill_No'] !== b['Bill_No']; })[0];
+    if (dup) return { ok: false, error: 'บิล #' + paper + ' ลงไปแล้ว (' + dup['ลูกค้า'] + ' ' + dup['ยอดรวม'] + ' บ.)' };
+  }
+  const patch = { 'เลขบิลกระดาษ': paper, 'ผู้ทำ': me.name };
+  if (pay.note) patch['หมายเหตุ'] = (b['หมายเหตุ'] ? b['หมายเหตุ'] + ' | ' : '') + pay.note;
+  const payNow = pay.type === 'เงินสด' && b['สถานะ'] !== 'ชำระแล้ว';
+  if (payNow) {
+    const chan = String(pay.channel || '').trim();
+    if (!chan) return { ok: false, error: 'เลือกว่าเงินเข้าทางไหน' };
+    patch['สถานะ'] = 'ชำระแล้ว'; patch['ชำระเมื่อ'] = isoDate_(pay.date); patch['ช่องทางชำระ'] = chan;
+  }
+  updateWhere('Bills', 'Bill_No', b['Bill_No'], patch);
+  return { ok: true, no: b['Bill_No'], paid: payNow, _log: { ref: b['Bill_No'], detail: 'ผูกบิลกระดาษ #' + paper + ' กับ ' + b['Order_ID'] + (payNow ? ' + รับชำระ ' + have + ' บ. (' + patch['ช่องทางชำระ'] + ')' : '') } };
 }
 function acctEdit(pay, me) {   // แก้ได้เฉพาะบิลที่ลงจากแอปบัญชีเอง
   const b = rowsToObjs('Bills').filter(function (x) { return String(x['Bill_No']) === String(pay.no); })[0];
@@ -1131,7 +1160,7 @@ const ACT_LABEL = {
   pkBillCreate: 'ออกบิล', pkBillPay: 'รับชำระ', pkBillCancel: 'ยกเลิกบิล', pkStmtCreate: 'สร้างใบวางบิล', pkStmtDone: 'ปิดใบวางบิล',
   pkCustSave: 'บันทึกลูกค้า', pkStockIn: 'รับของเข้า', pkStockCount: 'นับ/ปรับสต๊อก', pkOrderFlags: 'อัปเดตสถานะออเดอร์', pkScreenAssign: 'จ่ายงานสกรีน',
   pkPriceSet: 'ปรับราคา', pkStaffSave: 'บันทึกพนักงาน',
-  pkAcctBill: 'ลงบิล (บัญชี)', pkAcctPay: 'รับชำระ (บัญชี)', pkAcctEdit: 'แก้บิล (บัญชี)',
+  pkAcctBill: 'ลงบิล (บัญชี)', pkAcctPay: 'รับชำระ (บัญชี)', pkAcctEdit: 'แก้บิล (บัญชี)', pkAcctLink: 'ผูกบิลกระดาษกับออเดอร์',
 };
 function ACTIONS() {
   return {
@@ -1154,6 +1183,7 @@ function ACTIONS() {
     pkAcctBill: { auth: 'team', mut: true, depts: ACCT_DEPTS, fn: acctBill },
     pkAcctPay:  { auth: 'team', mut: true, depts: ACCT_DEPTS, fn: acctPay },
     pkAcctEdit: { auth: 'team', mut: true, depts: ACCT_DEPTS, fn: acctEdit },
+    pkAcctLink: { auth: 'team', mut: true, depts: ACCT_DEPTS, fn: acctLink },
     pkStmtCreate: { auth: 'team', mut: true, depts: ['ออฟฟิศ', 'บริหาร'], fn: stmtCreate },
     pkStmtDone: { auth: 'team', mut: true, depts: ['ออฟฟิศ', 'บริหาร'], fn: stmtDone },
     pkCustSave: { auth: 'team', mut: true, fn: custSave },
