@@ -17,6 +17,17 @@
 | `docs/products/` | ทะเบียนสินค้ามาตรฐาน 29 รายการ (SKU 6 หมวด) + รายงานสภาพข้อมูล | ทุกแชท |
 
 URL จริงหลังเปิด GitHub Pages ของ repo นี้ (Settings → Pages → branch `main`):
+## 🗺️ ของอยู่ไหน — เปิดบอร์ดบริหารการ์ด "🗂️ ที่เก็บของ" มีครบทุกลิงก์
+
+| ที่ | ลิงก์ | ใช้ทำอะไร |
+|---|---|---|
+| 📱 แอปทีมงาน | `https://palmsil2026.github.io/pk-hq/` + `?app=office/prod/screen/deliver` | พนักงานทำงานประจำวัน |
+| 👔 บอร์ดบริหาร | `…/pk-hq/exec/?key=รหัสผู้บริหาร` | ดูยอด · พนักงาน · ราคา · **ลิงก์ทุกอย่าง** |
+| ⚙️ Apps Script **P&K System** (GAS ตัวเดียวของ P&K) | `script.google.com/home/projects/1ARJwDhIahovJ7rxCNyY93Ey7LH2LbQEXK5NZGLLARujLhkzup_ON61yr/edit` | รันฟังก์ชัน sync/seed · Script Properties |
+| 📊 ชีท `PKSystem` | ลิงก์อยู่ในบอร์ดบริหาร (หรือ `PK_SHEET_ID` ใน Script Properties) | ฐานข้อมูลแอป — ปกติไม่ต้องเปิด |
+| 💰 ชีท "ระบบบัญชี" | `docs.google.com/spreadsheets/d/1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE` | ของฝ่ายบัญชี · ระบบอ่านอย่างเดียว |
+| 💵 P&K HR เงินเดือน | GAS อีกตัว — โค้ดอยู่ repo `origin-hq` | คนละโปรเจกต์ |
+
 แอปทีมงาน **แจกคนละลิงก์ตามทีม** (โค้ดชุดเดียว แยกด้วย `?app=` · ปุ่มคัดลอกอยู่ในบอร์ดบริหาร):
 `…/pk-hq/?app=office` ออฟฟิศ · `?app=prod` งานผลิต · `?app=screen` ทีมสกรีนสี · `?app=deliver` ส่งของ
 `https://palmsil2026.github.io/pk-hq/` (แอปรวม) · `…/pk-hq/exec/?key=รหัส` (บอร์ดบริหาร) · `…/pk-hq/finance/?key=รหัส` (การเงิน — ยังไม่เปิด)

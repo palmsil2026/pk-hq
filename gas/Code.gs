@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30n';
+const CODE_VERSION = '2026-09-02a';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -963,6 +963,13 @@ function execData() {
   return {
     ok: true, version: CODE_VERSION, month: month,
     kpi: { monthTotal: mCash + mCredit, monthCash: mCash, monthCredit: mCredit, todaySales: tSales, arTotal: arTotal, overdueSum: overdueSum, overdueCount: overdueCount },
+    // "ของอยู่ไหน" — คุณปาล์มถามบ่อย ให้บอร์ดโชว์ลิงก์ทุกที่ไว้ที่เดียว (ส่งเฉพาะ exec ที่ผ่านรหัสแล้ว)
+    links: {
+      sheet: book().getUrl(),
+      editor: 'https://script.google.com/home/projects/' + ScriptApp.getScriptId() + '/edit',
+      accounting: 'https://docs.google.com/spreadsheets/d/' + ACCOUNTING_SHEET_ID,
+      repo: 'https://github.com/palmsil2026/pk-hq',
+    },
     arTop: top(arByCust), custTop: top(custMonth), orderCounts: orderCounts,
     chanMonth: top(chanMonth), chanToday: top(chanToday),
     queues: {

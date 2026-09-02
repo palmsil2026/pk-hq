@@ -184,7 +184,7 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-08-30n';
+const WEB_VERSION = '2026-09-02a';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -352,7 +352,20 @@ function renderAppLinks(){
       '<button class="mini ghost" data-copy="' + esc(u) + '">คัดลอก</button></div>';
   }).join('') +
     '<div class="lnk"><div><b>🏭 แอปรวม</b> <span class="meta">เห็นทุกงานที่แผนกตัวเองมีสิทธิ์ — สำหรับออฟฟิศ/ผู้บริหาร</span><br>' +
-    '<code>' + esc(teamUrl) + '</code></div><button class="mini ghost" data-copy="' + esc(teamUrl) + '">คัดลอก</button></div>';
+    '<code>' + esc(teamUrl) + '</code></div><button class="mini ghost" data-copy="' + esc(teamUrl) + '">คัดลอก</button></div>' +
+    // ── ที่เก็บของ (ไม่ใช่ลิงก์แจกทีม — ของคุณปาล์มคนเดียว) ──
+    (function(){
+      const L = (DATA && DATA.links) || {};
+      const row = (icon, name, what, url) => url
+        ? '<div class="lnk"><div><b>' + icon + ' ' + esc(name) + '</b> <span class="meta">' + esc(what) + '</span><br><code>' + esc(url) + '</code></div>' +
+          '<a class="mini ghost" href="' + esc(url) + '" target="_blank" rel="noopener" style="text-decoration:none">เปิด</a></div>' : '';
+      return '<h2 style="margin:18px 0 6px">🗂️ ที่เก็บของ <span class="meta">(ของคุณปาล์ม — ไม่ต้องแจกใคร)</span></h2>' +
+        row('⚙️', 'Apps Script "P&K System"', 'ที่รันฟังก์ชัน syncAccounting / installAccountingSync / seed* · Script Properties', L.editor) +
+        row('📊', 'ชีท PKSystem', 'ฐานข้อมูลของแอป — แอปเขียนให้เอง ปกติไม่ต้องเปิด', L.sheet) +
+        row('💰', 'ชีท "ระบบบัญชี"', 'ของฝ่ายบัญชี — ระบบเราอ่านอย่างเดียว ซิงก์ทุกวัน 20:00', L.accounting) +
+        row('🐙', 'GitHub pk-hq', 'โค้ดทั้งหมด · Actions = ดูผล deploy อัตโนมัติ', L.repo) +
+        row('💵', 'P&K HR (เงินเดือน)', 'GAS อีกตัว คนละโปรเจกต์ — โค้ดอยู่ repo origin-hq', 'https://script.google.com/macros/s/AKfycbwosxTyYyw8oE_xBC3jhZjk3ZOe7WpEpXDxbYr0Qmo8UoA-Khb_bPTiVsBqr4dYxWF4/exec');
+    })();
 }
 $('appLinks').addEventListener('click', async e => {
   const b = e.target.closest('button[data-copy]'); if (!b) return;
