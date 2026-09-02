@@ -26,8 +26,10 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-08-30m';
-const LEGACY_SNAPSHOT_ID = '13BkMrh9sckRf3lCVW_Kze61zpcLNhGB2ERy1AFSJVhU'; // PK_ระบบบัญชี_snapshot_2026-08-30
+const CODE_VERSION = '2026-08-30n';
+// ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
+// (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
+const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
 const TZ = 'Asia/Bangkok';
 const TOKEN_DAYS = 7;          // อายุ token หลังล็อกอิน
 const WASTE_REASONS = ['ก้นบาง', 'ปากเบี้ยว', 'สีเพี้ยน', 'แตก/รั่ว', 'สกรีนเพี้ยน', 'อื่นๆ'];
@@ -895,6 +897,7 @@ function execData() {
 
   let mCash = 0, mCredit = 0, tSales = 0, arTotal = 0, overdueSum = 0, overdueCount = 0;
   const arByCust = {}, daily = {}, custMonth = {}, cashToday = {};
+  const chanMonth = {}, chanToday = {};   // "เงินเข้าบัญชีไหน" — สิ่งที่ฝ่ายบัญชีเช็คจริง (เงินสด / โอน KBank / โอน KTB / โอน BBL / เช็ค)
   bills.forEach(function (b) {
     const d = String(b['วันที่']);
     const amt = num(b['ยอดรวม']);
@@ -911,6 +914,13 @@ function execData() {
     }
     const chan = String(b['ช่องทางชำระ'] || '').trim();
     if (String(b['ชำระเมื่อ']) === td && (chan === 'เงินสด' || (!chan && b['ประเภท'] === 'เงินสด'))) cashToday[b['ผู้ทำ'] || '(ไม่ระบุ)'] = (cashToday[b['ผู้ทำ'] || '(ไม่ระบุ)'] || 0) + amt;
+    // นับตาม "วันที่ชำระ" ไม่ใช่วันที่บิล — เครดิตที่เพิ่งจ่ายเดือนนี้ต้องนับเดือนนี้
+    const paidAt = String(b['ชำระเมื่อ'] || '');
+    if (b['สถานะ'] === 'ชำระแล้ว' && paidAt.length >= 7) {
+      const ck = chan || (b['ประเภท'] === 'เงินสด' ? 'เงินสด' : '(ไม่ระบุช่องทาง)');
+      if (paidAt.slice(0, 7) === month) chanMonth[ck] = (chanMonth[ck] || 0) + amt;
+      if (paidAt === td) chanToday[ck] = (chanToday[ck] || 0) + amt;
+    }
     if (d.length >= 10 && d >= d30) daily[d.slice(0, 10)] = (daily[d.slice(0, 10)] || 0) + amt;
   });
   const top = function (m2) { return Object.keys(m2).map(function (k) { return { name: k, amt: m2[k] }; }).sort(function (a, b) { return b.amt - a.amt; }).slice(0, 10); };
@@ -954,6 +964,7 @@ function execData() {
     ok: true, version: CODE_VERSION, month: month,
     kpi: { monthTotal: mCash + mCredit, monthCash: mCash, monthCredit: mCredit, todaySales: tSales, arTotal: arTotal, overdueSum: overdueSum, overdueCount: overdueCount },
     arTop: top(arByCust), custTop: top(custMonth), orderCounts: orderCounts,
+    chanMonth: top(chanMonth), chanToday: top(chanToday),
     queues: {
       prodWait: prod.filter(function (j) { return j['สถานะ'] === 'รอผลิต'; }).length,
       prodDoing: prod.filter(function (j) { return j['สถานะ'] === 'กำลังผลิต'; }).length,
@@ -1091,15 +1102,36 @@ function doGet(e) {
 // ─────────────────────────────────────────────
 function importLegacyAccounting(srcId) {
   setupPkSystem();   // เผื่อโค้ดรุ่นใหม่มีแท็บ/คอลัมน์ที่ชีตยังไม่มี — รันซ้ำปลอดภัย
-  srcId = srcId || LEGACY_SNAPSHOT_ID;
+  srcId = srcId || ACCOUNTING_SHEET_ID;
   const src = SpreadsheetApp.openById(srcId);
   let bills = 0, ar = 0, customers = 0;
   const outBills = [], outCust = [];   // สะสมไว้เขียนทีเดียวตอนจบ (ดู appendObjs)
   const seenCust = {};
   rowsToObjs('Customers').forEach(function (c) { seenCust[String(c['ชื่อลูกค้า']).trim()] = true; });
   let custCount = Object.keys(seenCust).length;
-  const seenBill = {};
-  rowsToObjs('Bills').forEach(function (b) { seenBill[String(b['Bill_No'])] = true; });   // รันซ้ำได้ ไม่เบิ้ล
+  // ⚠️ จุดที่เคยพลาด: เดิมเจอบิลที่มีแล้ว = ข้ามทิ้ง → ฝ่ายบัญชีแก้ "ค้างจ่าย → จ่ายแล้ว" ในชีต
+  //    ยอดลูกหนี้ฝั่งเราก็ค้างเป็น "ค้างชำระ" ตลอดกาล · ตอนนี้ซิงก์ทับให้ตรงกับชีตบัญชี
+  //    (เฉพาะแถวที่ import มา — บิลที่ระบบเราออกเองจากออเดอร์ ไม่แตะเด็ดขาด)
+  const existing = {};
+  rowsToObjs('Bills').forEach(function (b) { existing[String(b['Bill_No'])] = b; });
+  const patches = {};   // Bill_No → ช่องที่ต้องแก้
+  const SYNC_FIELDS = ['วันที่', 'ลูกค้า', 'ยอดรวม', 'ประเภท', 'สถานะ', 'ช่องทางชำระ', 'ชำระเมื่อ', 'หมายเหตุ'];
+  let updated = 0;
+  // แถวใหม่ = ต่อท้าย · แถวเดิมที่ค่าเปลี่ยน = จดไว้แก้ทีเดียวตอนจบ
+  const emit = function (o) {
+    const prev = existing[o['Bill_No']];
+    if (!prev) { existing[o['Bill_No']] = o; outBills.push(o); return true; }
+    if (String(prev['ที่มา'] || '').indexOf('นำเข้า:') !== 0) return false;   // บิลของระบบเรา — ห้ามทับ
+    const diff = {};
+    SYNC_FIELDS.forEach(function (f) {
+      if (o[f] === undefined) return;
+      const a = String(prev[f] === undefined ? '' : prev[f]).trim();
+      const b2 = String(o[f] === undefined ? '' : o[f]).trim();
+      if (a !== b2 && !(a === '' && b2 === '')) diff[f] = o[f];
+    });
+    if (Object.keys(diff).length) { patches[o['Bill_No']] = diff; updated++; }
+    return false;
+  };
   src.getSheets().forEach(function (sh) {
     const v = sh.getDataRange().getValues();
     if (v.length < 2) return;
@@ -1130,30 +1162,27 @@ function importLegacyAccounting(srcId) {
       const name = String(r[iName] || '').trim();
       const no = String(r[iNo] || '').trim();
       if (!name || !no || no === 'เลขที่บิล') continue;
-      if (seenBill['เก่า-' + tabName + '-' + no]) continue;
-      seenBill['เก่า-' + tabName + '-' + no] = true;
       const rawDate = r[iDate] instanceof Date ? Utilities.formatDate(r[iDate], TZ, 'yyyy-MM-dd') : String(r[iDate] || '').trim();
       if (isAR) {
         const owe = num(r[head.indexOf('ยอดค้าง')]);
         const status = String(r[head.indexOf('สถานะ')] || '').trim();
         if (!owe) continue;
-        outBills.push({
+        emit({
           'Bill_No': 'เก่า-' + tabName + '-' + no, 'วันที่': rawDate, 'ลูกค้า': name, 'ยอดรวม': owe, 'ประเภท': 'เครดิต',
-          'สถานะ': (status.indexOf('จ่าย') >= 0 || status.indexOf('ชำระ') >= 0 || status.indexOf('เก็บ') >= 0) ? 'ชำระแล้ว' : 'ค้างชำระ',
+          // ⚠️ "ค้างจ่าย" ก็มีคำว่า "จ่าย" — ต้องเช็ค "ค้าง" ก่อน ไม่งั้นลูกหนี้ค้างทุกใบกลายเป็นชำระแล้ว (เจอจากเทสต์ 31 ส.ค.)
+          'สถานะ': (status.indexOf('ค้าง') < 0 && (status.indexOf('จ่าย') >= 0 || status.indexOf('ชำระ') >= 0 || status.indexOf('เก็บ') >= 0)) ? 'ชำระแล้ว' : 'ค้างชำระ',
           'ช่องทางชำระ': String(r[head.indexOf('ช่องทางชำระ')] || ''), 'หมายเหตุ': String(r[head.indexOf('หมายเหตุ')] || ''), 'ที่มา': 'นำเข้า:' + tabName,
-        });
-        ar++;
+        }) && ar++;
       } else {
         const cash = num(r[head.indexOf('เงินสด')]);
         const credit = num(r[head.indexOf('เครดิต')]);
         if (!cash && !credit) continue;
-        outBills.push({
+        emit({
           'Bill_No': 'เก่า-' + tabName + '-' + no, 'วันที่': rawDate, 'ลูกค้า': name, 'ยอดรวม': cash + credit,
           'ประเภท': credit ? 'เครดิต' : 'เงินสด', 'ช่องทางชำระ': String(r[head.indexOf('ช่องทางชำระ')] || ''),
           'สถานะ': credit ? 'ค้างชำระ' : 'ชำระแล้ว', 'ชำระเมื่อ': credit ? '' : rawDate,
           'หมายเหตุ': String(r[head.indexOf('หมายเหตุ')] || ''), 'ที่มา': 'นำเข้า:' + tabName,
-        });
-        bills++;
+        }) && bills++;
         if (name !== 'สด' && name !== 'สดเซล' && !seenCust[name]) {
           seenCust[name] = true; custCount++;
           outCust.push({ 'Customer_ID': 'C' + ('000' + custCount).slice(-4), 'ชื่อลูกค้า': name, 'สร้างเมื่อ': now() });
@@ -1162,7 +1191,22 @@ function importLegacyAccounting(srcId) {
       }
     }
   });
-  // เขียนลงชีตทีเดียวจบ (2 เรียก API แทนหลักพัน) — ตายกลางทางแล้วรันซ้ำได้ ไม่เบิ้ล เพราะ seenBill/seenCust กรองของเดิมไว้แล้ว
+  // แก้แถวเดิมทีเดียวทั้งช่วง (1 เรียก API) — แก้ทีละแถวหลายร้อยแถวจะชน 6 นาทีเหมือนที่เคยเจอ
+  if (Object.keys(patches).length) {
+    const bsh = tab('Bills');
+    const bv = bsh.getDataRange().getValues();
+    const bh = bv[0].map(String);
+    const iNo2 = bh.indexOf('Bill_No');
+    let touched = 0;
+    for (let i = 1; i < bv.length; i++) {
+      const pt = patches[String(bv[i][iNo2])];
+      if (!pt) continue;
+      Object.keys(pt).forEach(function (f) { const c = bh.indexOf(f); if (c >= 0) bv[i][c] = pt[f]; });
+      touched++;
+    }
+    if (touched) bsh.getRange(1, 1, bv.length, bh.length).setValues(bv);
+  }
+  // เขียนลงชีตทีเดียวจบ (2 เรียก API แทนหลักพัน) — ตายกลางทางแล้วรันซ้ำได้ ไม่เบิ้ล
   appendObjs('Customers', outCust);
   appendObjs('Bills', outBills);
 
@@ -1174,8 +1218,26 @@ function importLegacyAccounting(srcId) {
     if (String(sv[i][0]) === 'CUST_NEXT') { stg.getRange(i + 1, 2).setValue(Math.max(Number(sv[i][1]) || 1, custCount + 1)); seeded = true; break; }
   }
   if (!seeded) stg.appendRow(['CUST_NEXT', custCount + 1]);
-  Logger.log('นำเข้าเสร็จ: บิล ' + bills + ' · ลูกหนี้เครดิต ' + ar + ' · ลูกค้าใหม่ ' + customers);
+  Logger.log('ซิงก์บัญชีเสร็จ: บิลใหม่ ' + bills + ' · ลูกหนี้เครดิตใหม่ ' + ar + ' · อัปเดตของเดิม ' + updated + ' · ลูกค้าใหม่ ' + customers);
   Logger.log('⚠️ แท็บเครดิตกับแท็บบิลรายวันอาจมีบิลซ้ำกัน — เช็คก่อนใช้ยอดย้อนหลังจริงจัง');
+  return { bills: bills, ar: ar, updated: updated, customers: customers };
+}
+
+// ─────────────────────────────────────────────
+// ซิงก์ยอดจากชีต "ระบบบัญชี" อัตโนมัติ — ฝ่ายบัญชีทำงานในชีตเดิมต่อได้ ไม่ต้องย้ายไปไหน
+// รัน installAccountingSync() ครั้งเดียวใน editor แล้วมันจะซิงก์ให้เองทุกวัน
+// ─────────────────────────────────────────────
+function syncAccounting() {
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(60000)) { Logger.log('ซิงก์บัญชี: คิวไม่ว่าง ข้ามรอบนี้'); return; }
+  try { return importLegacyAccounting(); } finally { lock.releaseLock(); }
+}
+function installAccountingSync() {
+  ScriptApp.getProjectTriggers().forEach(function (t) {
+    if (t.getHandlerFunction() === 'syncAccounting') ScriptApp.deleteTrigger(t);   // รันซ้ำได้ ไม่เบิ้ล trigger
+  });
+  ScriptApp.newTrigger('syncAccounting').timeBased().everyDays(1).atHour(20).create();
+  Logger.log('ตั้งซิงก์บัญชีอัตโนมัติแล้ว — ทุกวันประมาณ 20:00 น. (อ่านชีตบัญชีอย่างเดียว ไม่เขียนกลับ)');
 }
 
 // ─────────────────────────────────────────────
