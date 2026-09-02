@@ -1,0 +1,464 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+<title>P&K ลงบัญชี</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap">
+<style>
+/* ── โทนเดียวกับแอปทีมงาน/บอร์ดบริหาร ── */
+:root{
+  --ground:#F4F7F6; --surface:#FFFFFF; --ink:#1B2A26; --muted:#5E6F6A;
+  --green:#175A4C; --green-soft:#E1EFE9; --gold:#B8912F; --gold-soft:#F6EED9;
+  --ok:#2E7D4F; --warn:#B3541E; --warn-soft:#F7E8DE; --danger:#A63A3A;
+  --line:#DCE5E1; --text:#1B2A26;
+}
+*{box-sizing:border-box;}
+body{margin:0; background:var(--ground); color:var(--text); font:15px/1.55 "Sarabun",sans-serif;}
+header{background:var(--green); color:#fff; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;}
+header h1{font:700 18px "Anuphan",sans-serif; margin:0;}
+header .u{font-size:12.5px; opacity:.9; text-align:right;} header .u a{color:#fff; cursor:pointer; text-decoration:underline;}
+nav{display:flex; background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5;}
+nav button{flex:1; border:0; background:none; color:var(--muted); font:600 14px "Anuphan",sans-serif; padding:12px 8px; cursor:pointer; border-bottom:3px solid transparent;}
+nav button.on{color:var(--green); border-bottom-color:var(--gold);}
+main{max-width:640px; margin:0 auto; padding:14px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:12px; padding:16px; margin-bottom:14px;}
+h2{font-family:"Anuphan",sans-serif; font-size:16px; margin:0 0 10px;}
+label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 4px;}
+input{width:100%; padding:11px 12px; border:1px solid var(--line); border-radius:10px; background:var(--ground); color:var(--ink); font:inherit; min-height:46px;}
+input:focus{outline:2px solid var(--green); outline-offset:1px;}
+input.big{font:700 26px "Anuphan",sans-serif; text-align:right; min-height:58px;}
+.row{display:flex; gap:8px;} .row>*{flex:1;}
+button.btn{background:var(--green); color:#fff; border:0; border-radius:10px; padding:14px 18px; font:700 16px "Anuphan",sans-serif; cursor:pointer; margin-top:12px; width:100%; min-height:52px;}
+button.btn.gold{background:var(--gold);}
+button.btn:disabled{opacity:.45; cursor:default;}
+button.mini{background:var(--green-soft); color:var(--green); border:0; border-radius:8px; padding:7px 12px; font:600 12.5px "Anuphan",sans-serif; cursor:pointer; min-height:34px;}
+button.mini.warn{background:var(--warn-soft); color:var(--warn);}
+button.mini.ghost{background:none; border:1px solid var(--line); color:var(--muted);}
+/* ปุ่มเลือก — หัวใจของแอปนี้: กดแทนพิมพ์ */
+.seg{display:flex; gap:6px; flex-wrap:wrap; margin-top:4px;}
+.seg button{flex:1 0 auto; min-width:72px; padding:12px 8px; border:1px solid var(--line); background:var(--surface); color:var(--text); border-radius:10px; font:600 15px "Anuphan",sans-serif; cursor:pointer; min-height:48px;}
+.seg button.on{background:var(--green); color:#fff; border-color:var(--green);}
+.seg.gold button.on{background:var(--gold); border-color:var(--gold);}
+.chips{display:flex; gap:6px; flex-wrap:wrap; margin-top:6px;}
+.chips button{padding:9px 13px; border:1px solid var(--line); background:var(--surface); border-radius:99px; font:500 14px "Sarabun",sans-serif; cursor:pointer; min-height:40px; color:var(--text);}
+.chips button.on{background:var(--green); color:#fff; border-color:var(--green);}
+.chips button.pin{border-color:var(--gold); color:var(--gold); font-weight:600;}
+.list{margin:0; padding:0; list-style:none;}
+.list li{padding:11px 0; border-bottom:1px dashed var(--line);}
+.list li:last-child{border-bottom:none;}
+.li-top{display:flex; justify-content:space-between; gap:8px; align-items:center;}
+.li-top>div:first-child{flex:1 1 auto; min-width:0;}
+.amt{font:700 16px "Anuphan",sans-serif; white-space:nowrap; font-variant-numeric:tabular-nums;}
+.amt.in{color:var(--ok);} .amt.owe{color:var(--warn);}
+.chip{font:600 11.5px "Anuphan",sans-serif; padding:2px 10px; border-radius:99px; white-space:nowrap; display:inline-block;}
+.c-in{background:var(--green-soft); color:var(--ok);} .c-owe{background:var(--warn-soft); color:var(--warn);}
+.c-mute{background:var(--line); color:var(--muted);} .c-gold{background:var(--gold-soft); color:var(--gold);}
+.meta{font-size:12.5px; color:var(--muted);}
+.kpi{display:grid; grid-template-columns:repeat(auto-fit,minmax(140px,1fr)); gap:8px;}
+.kpi div{background:var(--ground); border-radius:10px; padding:10px 12px;}
+.kpi b{display:block; font:700 20px "Anuphan",sans-serif; color:var(--green);}
+.kpi.owe b{color:var(--warn);}
+table.st{width:100%; border-collapse:collapse; font-size:14px;}
+table.st th{font:600 11.5px "Anuphan",sans-serif; color:var(--muted); text-align:left; padding:5px 6px; border-bottom:1px solid var(--line);}
+table.st td{padding:7px 6px; border-bottom:1px dashed var(--line); font-variant-numeric:tabular-nums;}
+table.st td.r,table.st th.r{text-align:right;}
+.ar-cust{cursor:pointer;} .ar-cust .bills{display:none; margin:8px 0 0 4px;} .ar-cust.open .bills{display:block;}
+.ar-cust .bills label{display:flex; align-items:center; gap:10px; margin:0; padding:9px 6px; border-radius:8px; font-size:14px; color:var(--text); cursor:pointer;}
+.ar-cust .bills label:has(input:checked){background:var(--green-soft);}
+.ar-cust .bills input[type=checkbox]{width:20px; height:20px; margin:0;}
+.msg{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:#fff; padding:10px 22px; border-radius:99px; font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:99; max-width:88vw; text-align:center;}
+.msg.show{opacity:1;}
+.pane{display:none;} .pane.on{display:block;}
+.banner{background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn); border-radius:8px; padding:10px 14px; font-size:13.5px; margin-bottom:12px;}
+.modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:flex-end; justify-content:center; z-index:50;}
+.modal-bg.on{display:flex;}
+.modal{background:var(--surface); border-radius:14px 14px 0 0; padding:18px; width:100%; max-width:560px; max-height:88vh; overflow-y:auto;}
+.verline{text-align:center; font-size:11.5px; color:var(--muted); padding:14px 8px 24px; line-height:1.8;}
+.verline b{color:var(--text); font-weight:600;} .verline .old{color:var(--warn); font-weight:600;}
+#login{max-width:360px; margin:10vh auto; padding:0 20px;}
+#login .logo{font:700 26px "Anuphan",sans-serif; text-align:center; margin-bottom:4px;}
+#login .sub2{text-align:center; color:var(--muted); font-size:13.5px; margin-bottom:24px;}
+.sticky-sum{position:sticky; bottom:0; background:var(--surface); border-top:1px solid var(--line); padding:10px 14px; margin:0 -14px -14px; display:flex; justify-content:space-between; align-items:center; gap:10px;}
+</style>
+</head>
+<body>
+
+<div id="login" hidden>
+  <div class="logo">💰 P&K ลงบัญชี</div>
+  <div class="sub2">ฝ่ายบัญชี — เข้าระบบด้วยชื่อเล่น + PIN ของคุณ</div>
+  <div class="card">
+    <label>ชื่อเล่น</label><input id="lgNick" autocomplete="username">
+    <label>PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password">
+    <button class="btn" id="lgBtn">เข้าสู่ระบบ</button>
+    <div class="meta" style="margin-top:10px">ลืม PIN → แจ้งผู้บริหารตั้งใหม่ให้จากบอร์ดบริหาร</div>
+    <div class="verline" id="lgVer" style="padding-bottom:0"></div>
+  </div>
+</div>
+
+<div id="app" hidden>
+<header>
+  <h1>💰 P&K ลงบัญชี</h1>
+  <div class="u"><span id="uName"></span><br><a id="logout">ออกจากระบบ</a></div>
+</header>
+<nav id="nav">
+  <button data-t="entry" class="on">ลงบิล</button>
+  <button data-t="ar">ลูกหนี้ <span id="arBadge" class="chip c-owe" hidden></span></button>
+  <button data-t="sum">สรุป</button>
+</nav>
+<main>
+<div class="banner" id="verBanner" hidden><span id="verText"></span></div>
+
+<!-- ═══ ลงบิล — ฟอร์มอยู่บนสุดเสมอ ไม่ต้องเลื่อน ═══ -->
+<section class="pane on" id="t-entry">
+  <div class="card">
+    <div class="row">
+      <div><label>เลขที่บิล <span class="meta" id="paperHint"></span></label><input id="ePaper" inputmode="numeric" placeholder="เลขบนบิล"></div>
+      <div><label>วันที่</label><input id="eDate" type="date"></div>
+    </div>
+    <label>ลูกค้า <span class="meta">— แตะชื่อ หรือพิมพ์ค้น</span></label>
+    <input id="eCust" placeholder="พิมพ์ 2-3 ตัวอักษรก็เจอ" autocomplete="off">
+    <div class="chips" id="custChips"></div>
+    <label>ยอดเงิน (บาท)</label>
+    <input id="eAmt" class="big" inputmode="decimal" placeholder="0">
+    <label>ประเภท</label>
+    <div class="seg" id="eType"><button type="button" data-v="เงินสด" class="on">เงินสด</button><button type="button" data-v="เครดิต">เครดิต</button></div>
+    <div id="chanBox">
+      <label>เงินเข้าทางไหน</label>
+      <div class="seg gold" id="eChan"></div>
+    </div>
+    <button class="btn" id="eSave">บันทึกบิล</button>
+    <div class="meta" style="margin-top:8px; text-align:center" id="eHint"></div>
+  </div>
+
+  <div class="card">
+    <div class="li-top"><h2 style="margin:0">วันนี้</h2><span class="amt in" id="todayTot">0</span></div>
+    <div class="chips" id="todayChan" style="margin-top:8px"></div>
+  </div>
+
+  <div class="card">
+    <h2>รายการล่าสุด <span class="meta">(ใหม่สุดอยู่บน)</span></h2>
+    <ul class="list" id="recentList"></ul>
+  </div>
+</section>
+
+<!-- ═══ ลูกหนี้ — เลือกบิลที่ลูกค้าจ่าย → กดช่องทาง → จบ ═══ -->
+<section class="pane" id="t-ar">
+  <div class="card">
+    <div class="li-top"><h2 style="margin:0">ลูกหนี้ค้างชำระ</h2><span class="amt owe" id="arTot">0</span></div>
+    <input id="arSearch" placeholder="ค้นชื่อลูกค้า / เลขบิล" style="margin-top:10px" autocomplete="off">
+    <ul class="list" id="arList" style="margin-top:6px"></ul>
+    <div class="sticky-sum" id="paySum" hidden>
+      <div><b id="paySel">เลือก 0 ใบ</b><br><span class="meta" id="payAmt"></span></div>
+      <button class="mini" id="payGo" style="min-height:44px; padding:0 18px; font-size:14px">รับชำระ →</button>
+    </div>
+  </div>
+</section>
+
+<!-- ═══ สรุป ═══ -->
+<section class="pane" id="t-sum">
+  <div class="card">
+    <h2>เดือนนี้ <span class="meta" id="sumMonth"></span></h2>
+    <div class="kpi">
+      <div>เงินรับ<b id="sMonth">0</b></div>
+      <div>วันนี้<b id="sToday">0</b></div>
+    </div>
+    <div class="kpi owe" style="margin-top:8px"><div>ลูกหนี้ค้างทั้งหมด<b id="sAr">0</b></div></div>
+  </div>
+  <div class="card">
+    <h2>🏦 เงินเข้าบัญชีไหน</h2>
+    <table class="st" id="chanTable"></table>
+    <p class="meta" style="margin:8px 0 0">นับตามวันที่ชำระ · เครดิตที่เพิ่งจ่ายเดือนนี้นับเดือนนี้</p>
+  </div>
+</section>
+
+<div class="verline" id="verLine"></div>
+</main>
+</div>
+
+<!-- รับชำระ -->
+<div class="modal-bg" id="payModal"><div class="modal">
+  <h2 id="payTitle">รับชำระ</h2>
+  <ul class="list" id="payList"></ul>
+  <label>วันที่รับเงิน</label><input id="payDate" type="date">
+  <label>เงินเข้าทางไหน</label>
+  <div class="seg gold" id="payChan"></div>
+  <button class="btn" id="payOk">ยืนยันรับชำระ</button>
+  <button class="btn ghost" id="payCancel" style="background:none; color:var(--muted); border:1px solid var(--line)">ปิด</button>
+</div></div>
+
+<!-- แก้บิล -->
+<div class="modal-bg" id="edModal"><div class="modal">
+  <h2 id="edTitle">แก้บิล</h2>
+  <div class="row">
+    <div><label>เลขที่บิล</label><input id="edPaper" inputmode="numeric"></div>
+    <div><label>วันที่</label><input id="edDate" type="date"></div>
+  </div>
+  <label>ลูกค้า</label><input id="edCust">
+  <label>ยอดเงิน</label><input id="edAmt" class="big" inputmode="decimal">
+  <div id="edChanBox"><label>เงินเข้าทางไหน</label><div class="seg gold" id="edChan"></div></div>
+  <label>หมายเหตุ</label><input id="edNote">
+  <button class="btn" id="edOk">บันทึกการแก้</button>
+  <div class="row" style="margin-top:8px">
+    <button class="mini warn" id="edVoid" style="min-height:44px">ยกเลิกบิลนี้</button>
+    <button class="mini ghost" id="edClose" style="min-height:44px">ปิด</button>
+  </div>
+</div></div>
+
+<div class="msg" id="msg"></div>
+
+<script>
+// ═══ ตั้งค่า: GAS "P&K System" ตัวเดียวกับแอปทีมงาน/บอร์ดบริหาร — ไม่มี GAS แยกของบัญชี ═══
+const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
+// เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (เดินเลขพร้อม index.html / exec / gas)
+const WEB_VERSION = '2026-09-02b';
+
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
+function toast(t){ const m=$('msg'); m.textContent=t; m.classList.add('show'); setTimeout(()=>m.classList.remove('show'),3000); }
+
+let TOKEN = localStorage.getItem('pk_token') || '';
+let ME = null; try { ME = JSON.parse(localStorage.getItem('pk_me') || 'null'); } catch(e){ localStorage.removeItem('pk_me'); }
+let DATA = null, INFLIGHT = false;
+const MUT = /^pk(AcctBill|AcctPay|AcctEdit|BillCancel|Login)$/;
+
+async function api(action, payload=null, params={}, opts={}){
+  const isMut = MUT.test(action);
+  if (isMut && payload && !payload._rid) payload._rid = Date.now().toString(36) + '-' + Math.random().toString(36).slice(2, 8);   // กดซ้ำ = ไม่ลงซ้ำ
+  if (isMut && !opts._noGuard){ if (INFLIGHT){ toast('กำลังบันทึกอยู่ — รอสักครู่'); throw Object.assign(new Error('busy'),{busy:true}); } INFLIGHT = true; }
+  try {
+    const q = new URLSearchParams({ action, ...params });
+    if (TOKEN) q.set('token', TOKEN);
+    if (payload) q.set('payload', JSON.stringify(payload));
+    let j;
+    try { j = await (await fetch(GAS_URL + '?' + q.toString())).json(); }
+    catch(netErr){ toast('เน็ตมีปัญหา — ลองใหม่'); throw netErr; }
+    if (!j.ok){
+      if (j.needLogin){ doLogout(false); toast('เข้าสู่ระบบใหม่อีกครั้ง'); throw Object.assign(new Error('need login'),{needLogin:true}); }
+      if (j.retry && !opts.noRetry){ toast('ระบบคิวแน่น — กำลังลองใหม่…'); await new Promise(r=>setTimeout(r,1500)); return await api(action, payload, params, {...opts, noRetry:true, _noGuard:true}); }
+      toast('❌ ' + (j.error || 'ผิดพลาด')); throw Object.assign(new Error(j.error || 'ผิดพลาด'),{isBiz:true});
+    }
+    return j;
+  } finally { if (isMut && !opts._noGuard) INFLIGHT = false; }
+}
+function doLogout(clear=true){
+  if (clear){ TOKEN=''; ME=null; localStorage.removeItem('pk_token'); localStorage.removeItem('pk_me'); }
+  $('app').hidden = true; $('login').hidden = false;
+}
+$('lgBtn').addEventListener('click', async () => {
+  const nick = $('lgNick').value.trim(), pin = $('lgPin').value.trim();
+  if (!nick || !pin) return toast('ใส่ชื่อเล่นและ PIN');
+  try { const j = await api('pkLogin', { nick, pin }); TOKEN = j.token; ME = j.me;
+    localStorage.setItem('pk_token', TOKEN); localStorage.setItem('pk_me', JSON.stringify(ME)); enterApp(); } catch(e){}
+});
+$('lgPin').addEventListener('keydown', e => { if (e.key === 'Enter') $('lgBtn').click(); });
+$('logout').addEventListener('click', () => doLogout());
+
+// ─── เวอร์ชัน (เตือนเฉพาะตอนหลังบ้านเก่ากว่าหน้าเว็บ) ───
+function showVersion(gas){
+  const ok = !gas || gas >= WEB_VERSION;
+  $('verLine').innerHTML = 'เวอร์ชัน · หน้าเว็บ <b>' + esc(WEB_VERSION) + '</b>' + (gas ? ' · ระบบหลังบ้าน <b class="' + (ok?'':'old') + '">' + esc(gas) + '</b>' : '');
+  $('lgVer').innerHTML = 'เวอร์ชันหน้าเว็บ <b>' + esc(WEB_VERSION) + '</b>';
+  $('verBanner').hidden = ok;
+  if (!ok) $('verText').textContent = 'หน้าเว็บอัปเดตเป็น ' + WEB_VERSION + ' แล้ว แต่ระบบหลังบ้านยังเป็น ' + gas + ' — แจ้งคุณปาล์ม';
+}
+showVersion('');
+
+// ─── แท็บ ───
+$('nav').addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  document.querySelectorAll('#nav button').forEach(x => x.classList.remove('on'));
+  document.querySelectorAll('.pane').forEach(x => x.classList.remove('on'));
+  b.classList.add('on'); $('t-' + b.dataset.t).classList.add('on');
+});
+
+// ─── ปุ่มเลือก (seg) — ตัวช่วยกลาง ───
+function seg(id, list, sel){
+  const box = $(id);
+  box.innerHTML = (list||[]).map(x => '<button type="button" data-v="' + esc(x) + '"' + (x===sel?' class="on"':'') + '>' + esc(x.replace(/^โอน /,'')) + '</button>').join('');
+}
+function segPick(box, btn){ [...box.children].forEach(x => x.classList.remove('on')); btn.classList.add('on'); }
+function segVal(id){ const b = $(id).querySelector('button.on'); return b ? b.dataset.v : ''; }
+document.querySelectorAll('.seg').forEach(box => box.addEventListener('click', e => {
+  const b = e.target.closest('button'); if (!b) return;
+  segPick(box, b);
+  if (box.id === 'eType') applyType();
+}));
+function applyType(){ $('chanBox').hidden = segVal('eType') !== 'เงินสด'; }
+
+// ─── โหลดข้อมูล ───
+async function enterApp(){
+  $('login').hidden = true; $('app').hidden = false;
+  $('uName').innerHTML = esc(ME.name) + ' · ' + esc(ME.dept || '-');
+  if (!$('eDate').value) $('eDate').value = new Date().toISOString().slice(0,10);
+  await loadData();
+}
+async function loadData(){
+  try { DATA = await api('pkAcctData'); } catch(e){ return; }
+  showVersion(DATA.version || '');
+  if (!$('eChan').children.length) { seg('eChan', DATA.channels, ''); seg('payChan', DATA.channels, ''); seg('edChan', DATA.channels, ''); }
+  if (!$('ePaper').value && DATA.nextPaperNo) $('ePaper').value = DATA.nextPaperNo;
+  $('paperHint').textContent = DATA.nextPaperNo ? '(ถัดไป ' + DATA.nextPaperNo + ')' : '';
+  renderChips(); renderToday(); renderRecent(); renderAr(); renderSum();
+}
+
+// ─── ลูกค้า: ชิปกดเลือก + พิมพ์ค้น ───
+let CUST = '';
+function renderChips(){
+  const q = $('eCust').value.trim().toLowerCase();
+  const all = DATA.customers || [];
+  const hit = q ? all.filter(c => c.name.toLowerCase().includes(q)) : all;
+  const top = hit.slice(0, q ? 20 : 12);
+  const pin = !q && !top.some(c => c.name === 'สด') ? [{name:'สด', pin:true}] : [];
+  $('custChips').innerHTML = pin.concat(top).map(c =>
+    '<button type="button" data-c="' + esc(c.name) + '"' + (c.name===CUST?' class="on"':'') + (c.pin?' class="pin"':'') + '>' + esc(c.name) + '</button>').join('')
+    + (q && !hit.length ? '<button type="button" data-c="' + esc($('eCust').value.trim()) + '" class="pin">+ ใช้ชื่อ "' + esc($('eCust').value.trim()) + '"</button>' : '');
+}
+$('eCust').addEventListener('input', () => { CUST = ''; renderChips(); });
+$('eCust').addEventListener('keydown', e => { if (e.key === 'Enter') { const b = $('custChips').querySelector('button'); if (b) b.click(); } });
+$('custChips').addEventListener('click', e => {
+  const b = e.target.closest('button[data-c]'); if (!b) return;
+  CUST = b.dataset.c; $('eCust').value = CUST; renderChips();
+  $('eAmt').focus();   // เลือกชื่อแล้วกระโดดไปช่องยอดเลย
+});
+
+// ─── บันทึกบิล ───
+$('eAmt').addEventListener('keydown', e => { if (e.key === 'Enter') $('eSave').click(); });
+$('eSave').addEventListener('click', async () => {
+  const customer = CUST || $('eCust').value.trim();
+  const amount = Number(String($('eAmt').value).replace(/,/g,'')) || 0;
+  const type = segVal('eType'), channel = type === 'เงินสด' ? segVal('eChan') : '';
+  if (!customer) return toast('เลือกลูกค้าก่อน');
+  if (!(amount > 0)) return toast('ใส่ยอดเงิน');
+  if (type === 'เงินสด' && !channel) return toast('แตะเลือกว่าเงินเข้าทางไหน');
+  try {
+    const j = await api('pkAcctBill', { paperNo: $('ePaper').value.trim(), customer, amount, type, channel, date: $('eDate').value });
+    toast('✅ ' + customer + ' ' + baht(amount) + ' บ.' + (type==='เงินสด' ? ' · ' + channel : ' · เครดิต'));
+    // เคลียร์เฉพาะที่เปลี่ยนทุกใบ — วันที่/ประเภท/ช่องทางคงไว้ (ลงติดกันหลายใบเร็วขึ้น)
+    CUST = ''; $('eCust').value = ''; $('eAmt').value = '';
+    const pn = Number($('ePaper').value); $('ePaper').value = pn ? String(pn + 1) : '';
+    $('eHint').textContent = 'บันทึกแล้ว ' + j.no;
+    $('eCust').focus();
+    loadData();
+  } catch(e){}
+});
+
+// ─── วันนี้ ───
+function renderToday(){
+  const t = DATA.todayIn || { total:0, byChan:[] };
+  $('todayTot').textContent = baht(t.total) + ' บ.';
+  $('todayChan').innerHTML = t.byChan.map(c => '<span class="chip c-in">' + esc(c.name) + ' ' + baht(c.amt) + '</span>').join('') || '<span class="meta">ยังไม่มีเงินเข้าวันนี้</span>';
+}
+
+// ─── รายการล่าสุด (ใหม่สุดบน) ───
+function rowHtml(r){
+  const st = r.status === 'ชำระแล้ว' ? '<span class="chip c-in">' + esc(r.chan || 'ชำระแล้ว') + '</span>'
+           : r.status === 'ยกเลิก' ? '<span class="chip c-mute">ยกเลิก</span>'
+           : '<span class="chip c-owe">เครดิต ค้าง</span>';
+  const src = r.src === 'บัญชี' ? '' : r.src.indexOf('นำเข้า') === 0 ? ' <span class="chip c-mute">ชีทเดิม</span>' : r.order ? ' <span class="chip c-gold">จากออเดอร์</span>' : '';
+  return '<li data-no="' + esc(r.no) + '"><div class="li-top"><div>' +
+    '<b>' + (r.paper ? '#' + esc(r.paper) + ' ' : '') + esc(r.customer) + '</b>' + src + '<br>' +
+    '<span class="meta">' + esc(r.date) + (r.by ? ' · ' + esc(r.by) : '') + (r.note ? ' · ' + esc(r.note) : '') + '</span></div>' +
+    '<div style="text-align:right"><span class="amt ' + (r.status==='ชำระแล้ว'?'in':r.status==='ยกเลิก'?'':'owe') + '">' + baht(r.amt) + '</span><br>' + st + '</div></div>' +
+    '<div style="margin-top:6px; display:flex; gap:6px; justify-content:flex-end">' +
+    (r.status !== 'ชำระแล้ว' && r.status !== 'ยกเลิก' ? '<button class="mini" data-pay="' + esc(r.no) + '">รับชำระ</button>' : '') +
+    (r.src === 'บัญชี' && r.status !== 'ยกเลิก' ? '<button class="mini ghost" data-edit="' + esc(r.no) + '">แก้</button>' : '') +
+    '</div></li>';
+}
+function renderRecent(){ $('recentList').innerHTML = (DATA.recent||[]).map(rowHtml).join('') || '<li class="meta">ยังไม่มีรายการ</li>'; }
+$('recentList').addEventListener('click', e => {
+  const p = e.target.closest('button[data-pay]'); if (p) return openPay([p.dataset.pay]);
+  const ed = e.target.closest('button[data-edit]'); if (ed) return openEdit(ed.dataset.edit);
+});
+
+// ─── ลูกหนี้ ───
+const SEL = new Set();
+function renderAr(){
+  const q = $('arSearch').value.trim().toLowerCase();
+  const ar = (DATA.ar||[]).filter(g => !q || g.customer.toLowerCase().includes(q) || g.bills.some(b => String(b.paper).includes(q) || String(b.no).toLowerCase().includes(q)));
+  $('arTot').textContent = baht(DATA.arTotal) + ' บ.';
+  const badge = $('arBadge'); badge.hidden = !(DATA.ar||[]).length; badge.textContent = (DATA.ar||[]).length;
+  $('arList').innerHTML = ar.map(g =>
+    '<li class="ar-cust' + (q?' open':'') + '" data-cust="' + esc(g.customer) + '"><div class="li-top"><div><b>' + esc(g.customer) + '</b> <span class="meta">' + g.bills.length + ' ใบ · แตะเพื่อกาง</span></div><span class="amt owe">' + baht(g.total) + '</span></div>' +
+    '<div class="bills">' + g.bills.map(b =>
+      '<label><input type="checkbox" data-sel="' + esc(b.no) + '"' + (SEL.has(b.no)?' checked':'') + '><span style="flex:1">' + (b.paper?'#'+esc(b.paper)+' ':'') + esc(b.date) + (b.stmt?' <span class="chip c-gold">วางบิล '+esc(b.stmt)+'</span>':'') + '</span><span class="amt owe">' + baht(b.amt) + '</span></label>').join('') +
+    '</div></li>').join('') || '<li class="meta">' + (q ? 'ไม่พบ' : 'ไม่มีลูกหนี้ค้าง 🎉') + '</li>';
+  renderPaySum();
+}
+$('arSearch').addEventListener('input', renderAr);
+$('arList').addEventListener('click', e => {
+  const cb = e.target.closest('input[data-sel]');
+  if (cb) { cb.checked ? SEL.add(cb.dataset.sel) : SEL.delete(cb.dataset.sel); renderPaySum(); return; }
+  if (e.target.closest('label')) return;
+  const li = e.target.closest('li.ar-cust'); if (li) li.classList.toggle('open');
+});
+function selAmt(){ let s=0; (DATA.ar||[]).forEach(g => g.bills.forEach(b => { if (SEL.has(b.no)) s += b.amt; })); return s; }
+function renderPaySum(){
+  $('paySum').hidden = !SEL.size;
+  $('paySel').textContent = 'เลือก ' + SEL.size + ' ใบ'; $('payAmt').textContent = baht(selAmt()) + ' บาท';
+}
+$('payGo').addEventListener('click', () => openPay([...SEL]));
+
+// ─── รับชำระ (modal) ───
+let PAY_NOS = [];
+function openPay(nos){
+  PAY_NOS = nos; const rows = [];
+  (DATA.ar||[]).forEach(g => g.bills.forEach(b => { if (nos.includes(b.no)) rows.push(b); }));
+  (DATA.recent||[]).forEach(b => { if (nos.includes(b.no) && !rows.some(x=>x.no===b.no)) rows.push(b); });
+  const total = rows.reduce((s,b)=>s+b.amt,0);
+  $('payTitle').textContent = 'รับชำระ ' + rows.length + ' ใบ · ' + baht(total) + ' บาท';
+  $('payList').innerHTML = rows.map(b => '<li class="li-top"><span>' + (b.paper?'#'+esc(b.paper)+' ':'') + esc(b.customer) + ' <span class="meta">' + esc(b.date) + '</span></span><span class="amt owe">' + baht(b.amt) + '</span></li>').join('');
+  $('payDate').value = new Date().toISOString().slice(0,10);
+  [...$('payChan').children].forEach(x => x.classList.remove('on'));
+  $('payModal').classList.add('on');
+}
+$('payCancel').addEventListener('click', () => $('payModal').classList.remove('on'));
+$('payOk').addEventListener('click', async () => {
+  const channel = segVal('payChan'); if (!channel) return toast('แตะเลือกว่าเงินเข้าทางไหน');
+  try {
+    const j = await api('pkAcctPay', { nos: PAY_NOS, channel, date: $('payDate').value });
+    toast('✅ รับชำระ ' + j.paid + ' ใบ · ' + baht(j.total) + ' บ. · ' + channel + (j.skipped.length ? ' (ข้าม ' + j.skipped.length + ')' : ''));
+    SEL.clear(); $('payModal').classList.remove('on'); loadData();
+  } catch(e){}
+});
+
+// ─── แก้บิล (เฉพาะที่ลงจากแอปนี้) ───
+let ED = null;
+function openEdit(no){
+  ED = (DATA.recent||[]).find(r => r.no === no); if (!ED) return;
+  $('edTitle').textContent = 'แก้บิล ' + (ED.paper ? '#' + ED.paper : ED.no);
+  $('edPaper').value = ED.paper; $('edDate').value = ED.date; $('edCust').value = ED.customer; $('edAmt').value = ED.amt; $('edNote').value = ED.note;
+  $('edChanBox').hidden = ED.status !== 'ชำระแล้ว';
+  [...$('edChan').children].forEach(x => x.classList.toggle('on', x.dataset.v === ED.chan));
+  $('edModal').classList.add('on');
+}
+$('edClose').addEventListener('click', () => $('edModal').classList.remove('on'));
+$('edOk').addEventListener('click', async () => {
+  try {
+    await api('pkAcctEdit', { no: ED.no, paperNo: $('edPaper').value.trim(), date: $('edDate').value, customer: $('edCust').value.trim(),
+      amount: Number(String($('edAmt').value).replace(/,/g,'')) || 0, note: $('edNote').value, channel: ED.status === 'ชำระแล้ว' ? segVal('edChan') : undefined });
+    toast('✅ แก้แล้ว'); $('edModal').classList.remove('on'); loadData();
+  } catch(e){}
+});
+$('edVoid').addEventListener('click', async () => {
+  const why = prompt('เหตุผลที่ยกเลิกบิล ' + (ED.paper ? '#' + ED.paper : ED.no) + ':'); if (why === null) return;
+  if (!why.trim()) return toast('ต้องใส่เหตุผล');
+  try { await api('pkBillCancel', { no: ED.no, note: why.trim() }); toast('ยกเลิกแล้ว'); $('edModal').classList.remove('on'); loadData(); } catch(e){}
+});
+
+// ─── สรุป ───
+function renderSum(){
+  const m = DATA.monthIn || { total:0, byChan:[], key:'' }, t = DATA.todayIn || { total:0, byChan:[] };
+  $('sumMonth').textContent = m.key ? '(' + m.key + ')' : '';
+  $('sMonth').textContent = baht(m.total); $('sToday').textContent = baht(t.total); $('sAr').textContent = baht(DATA.arTotal);
+  const tb = {}; t.byChan.forEach(c => tb[c.name] = c.amt);
+  $('chanTable').innerHTML = '<tr><th>ช่องทาง / บัญชี</th><th class="r">วันนี้</th><th class="r">เดือนนี้</th></tr>' +
+    (m.byChan.map(c => '<tr><td>' + esc(c.name) + '</td><td class="r">' + baht(tb[c.name]||0) + '</td><td class="r"><b>' + baht(c.amt) + '</b></td></tr>').join('') || '<tr><td colspan="3" class="meta">ยังไม่มีเงินรับเดือนนี้</td></tr>');
+}
+
+// ─── เริ่ม ───
+if (TOKEN && ME) enterApp(); else $('login').hidden = false;
+</script>
+</body>
+</html>

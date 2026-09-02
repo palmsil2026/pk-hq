@@ -22,6 +22,7 @@ URL จริงหลังเปิด GitHub Pages ของ repo นี้ (
 | ที่ | ลิงก์ | ใช้ทำอะไร |
 |---|---|---|
 | 📱 แอปทีมงาน | `https://palmsil2026.github.io/pk-hq/` + `?app=office/prod/screen/deliver` | พนักงานทำงานประจำวัน |
+| 💰 แอปลงบัญชี | `https://palmsil2026.github.io/pk-hq/account/` | ฝ่ายบัญชี — ลงบิล · รับชำระเครดิต · เงินเข้าบัญชีไหน (แผนก "บัญชี") |
 | 👔 บอร์ดบริหาร | `…/pk-hq/exec/?key=รหัสผู้บริหาร` | ดูยอด · พนักงาน · ราคา · **ลิงก์ทุกอย่าง** |
 | ⚙️ Apps Script **P&K System** (GAS ตัวเดียวของ P&K) | `script.google.com/home/projects/1ARJwDhIahovJ7rxCNyY93Ey7LH2LbQEXK5NZGLLARujLhkzup_ON61yr/edit` | รันฟังก์ชัน sync/seed · Script Properties |
 | 📊 ชีท `PKSystem` | ลิงก์อยู่ในบอร์ดบริหาร (หรือ `PK_SHEET_ID` ใน Script Properties) | ฐานข้อมูลแอป — ปกติไม่ต้องเปิด |
