@@ -319,6 +319,11 @@ li.flash{animation:flash 1.6s ease-out both;}
 .pad button{min-height:60px; border-radius:14px; border:1px solid var(--line); background:var(--surface); font:600 24px "Anuphan",sans-serif; color:var(--ink); cursor:pointer;}
 .pad button.ok{background:var(--green); color:#fff; border-color:var(--green); font-size:22px;} .pad button.ok:disabled{opacity:.35;}
 .pad button.soft{color:var(--muted); font-size:20px;}
+.lg-wait{display:flex; align-items:center; justify-content:center; gap:10px; margin:-6px 0 12px; font:600 14px "Anuphan",sans-serif; color:var(--green); animation:rise .2s ease both;}
+.lg-wait[hidden]{display:none;}
+.spin{width:18px; height:18px; border-radius:50%; border:3px solid var(--green-soft); border-top-color:var(--green); animation:spin .8s linear infinite;}
+@keyframes spin{to{transform:rotate(360deg)}}
+.pad.busy{opacity:.45; pointer-events:none;}
 .lg-alt{text-align:center; margin-top:12px;} .lg-alt a{font-size:12.5px; color:var(--muted); text-decoration:underline; cursor:pointer;}
 .lg-typed[hidden]{display:none;}
 
@@ -372,6 +377,7 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
     <div class="lg-step" id="lgStep2" hidden>
       <div class="pin-who"><div class="av" id="pinAv"></div><div><b id="pinName"></b><small id="pinDept"></small></div><a id="pinBack">ไม่ใช่คุณ?</a></div>
       <div class="dots" id="pinDots"></div>
+      <div class="lg-wait" id="pinWait" hidden><span class="spin"></span><span id="pinWaitText">กำลังเข้าสู่ระบบ…</span></div>
       <div class="pad" id="pinPad"></div>
     </div>
     <!-- แบบพิมพ์ (สำรอง / คนไม่มีในรายชื่อ) — ตัวเดิม ยังเป็นเครื่องยนต์ของการล็อกอิน -->
@@ -701,7 +707,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-12g';
+const WEB_VERSION = '2026-09-12h';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -802,12 +808,14 @@ function doLogout(clear=true){
 async function doLogin(){
   const nick = $('lgNick').value.trim(), pin = $('lgPin').value.trim();
   if (!nick || !pin) { toast('ใส่ชื่อเล่นและ PIN'); return false; }
+  const lb = $('lgBtn'), lbTxt = lb.textContent; lb.disabled = true; lb.textContent = '⏳ กำลังเข้าสู่ระบบ…';
   try {
     const j = await api('pkLogin', { nick, pin });
     TOKEN = j.token; ME = j.me; PRE_DATA = j.data || null;   // หลังบ้านรุ่นใหม่ส่งข้อมูลหน้าแรกมาพร้อมกัน
     localStorage.setItem('pk_token', TOKEN); localStorage.setItem('pk_me', JSON.stringify(ME)); localStorage.setItem('pk_last_nick', nick);
     enterApp(); return true;
   } catch(e){ return false; }
+  finally { lb.disabled = false; lb.textContent = lbTxt; }
 }
 $('lgBtn').addEventListener('click', doLogin);
 // ─── ล็อกอินแบบแตะการ์ด: โหลดรายชื่อ (ไม่มี PIN) → แตะชื่อ → แป้น PIN · จำคนล่าสุดของเครื่องนี้ ───
@@ -847,10 +855,15 @@ function paintDots(){
   $('pinDots').innerHTML = Array.from({ length: n }, (_, i) => '<i class="' + (i < LG_PIN.length ? 'on' : '') + '"></i>').join('');
   $('pinPad').querySelector('.ok').disabled = LG_PIN.length < 4;
 }
+let LG_BUSY = false;
 async function submitPin(){
-  if (!LG_PICK || LG_PIN.length < 4) return;
+  if (!LG_PICK || LG_PIN.length < 4 || LG_BUSY) return;
   $('lgNick').value = LG_PICK.nick; $('lgPin').value = LG_PIN;   // ส่งผ่านเครื่องยนต์เดิม
+  // บอกให้รู้ว่ากำลังเข้า (หลังบ้านใช้ 3-6 วิ เพราะดึงข้อมูลหน้าแรกมาพร้อมกัน) — เดิมเงียบจนคนกดซ้ำ
+  LG_BUSY = true; $('pinWait').hidden = false; $('pinWaitText').textContent = 'กำลังเข้าสู่ระบบ ' + LG_PICK.nick + '… รอสักครู่'; $('pinPad').classList.add('busy');
+  const slow = setTimeout(() => { $('pinWaitText').textContent = 'หลังบ้านตอบช้ากว่าปกติ — ยังรออยู่ ไม่ต้องกดซ้ำ'; }, 6000);
   const ok = await doLogin();
+  clearTimeout(slow); LG_BUSY = false; $('pinWait').hidden = true; $('pinPad').classList.remove('busy');
   if (ok) localStorage.setItem('pk_last_nick', LG_PICK.nick);
   else { $('pinDots').classList.add('shake'); setTimeout(() => { $('pinDots').classList.remove('shake'); LG_PIN = ''; paintDots(); }, 420); }
 }
