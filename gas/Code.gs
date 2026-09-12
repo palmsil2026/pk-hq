@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-12c';
+const CODE_VERSION = '2026-09-12d';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -66,6 +66,7 @@ const SPEC = {
   ราคา: ['มาตรฐาน', 'พิเศษ'],                       // ปุ่มในฟอร์มเดิม — 'มาตรฐาน' 148/174 ออเดอร์
   สถานะสกรีน: ['รอดำเนินการ', 'เตรียมการสกรีน', 'เสร็จแล้ว'],   // ตามแอปทีมสกรีนสีของเดิม
   ทีมสกรีน: ['ทีม 2', 'ทีม 1', 'ทีม 3'],
+  รถส่งของ: ['04', '05', '06', '07', '08', '09'],   // เลขคันรถ — หน้าส่งของ "จัดของขึ้นรถ" (12 ก.ย.)
   สถานะเงิน: ['รอโอนเงิน', 'โอนแล้ว', 'ทำได้เลย', 'เก็บปลายทาง'],
   ช่องทางชำระ: ['เงินสด', 'โอน KBank', 'โอน KTB', 'โอน BBL', 'เช็ค'],   // จากชีตบัญชีจริง 678 ใบ — คือคำตอบ "เงินเข้าบัญชีไหน"
 
@@ -145,7 +146,7 @@ const TABS = {
                'แบรนด์', 'ราคา'],
   Production: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'งาน', 'จำนวนรวม', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง', 'เกรดBสะสม'],
   ScreenJobs: ['Job_ID', 'Order_ID', 'วันที่เข้าคิว', 'ลาย/สี', 'จำนวน', 'สถานะ', 'เริ่มเมื่อ', 'เสร็จเมื่อ', 'ผู้ทำ', 'หมายเหตุ', 'Product_ID', 'สินค้า', 'จำนวนสั่ง', 'ดีสะสม', 'เสียสะสม', 'สาเหตุค้าง', 'เกรดBสะสม', 'ทีม'],
-  Deliveries: ['Delivery_ID', 'เมื่อ', 'Order_ID', 'ลูกค้า', 'รายการ', 'ผู้ส่ง', 'หมายเหตุ'],
+  Deliveries: ['Delivery_ID', 'เมื่อ', 'Order_ID', 'ลูกค้า', 'รายการ', 'ผู้ส่ง', 'หมายเหตุ', 'รถ'],   // รถ: เลขคันที่ขึ้นของ (ต่อท้าย 2026-09-12d)
   Bills:      ['Bill_No', 'วันที่', 'ลูกค้า', 'Order_ID', 'ยอดรวม', 'ประเภท', 'ช่องทางชำระ', 'สถานะ', 'กำหนดชำระ', 'ชำระเมื่อ', 'Stmt_No', 'รายการ', 'หมายเหตุ', 'ที่มา', 'ผู้ทำ', 'เลขบิลกระดาษ'],   // เลขบิลกระดาษ: แอปบัญชี — เลขที่เขียนบนบิลจริง (ต่อท้ายคอลัมน์ ของเดิมไม่ขยับ)
   Statements: ['Stmt_No', 'วันที่วาง', 'ลูกค้า', 'จำนวนบิล', 'ยอดรวม', 'กำหนดเก็บเงิน', 'สถานะ', 'บิลที่รวม', 'หมายเหตุ'],
   Staff:      ['Staff_ID', 'ชื่อ', 'ชื่อเล่น', 'แผนก', 'PIN', 'สถานะ', 'เริ่มงาน', 'Token', 'TokenExp', 'หมายเหตุ'],
@@ -707,7 +708,7 @@ function deliver(pay, me) { // {orderId, items:[{pid?, name, qty}], note}
     if (sendByKey[k] > remain) return { ok: false, error: '"' + nameOf + '" เหลือให้ส่งแค่ ' + remain + ' (สั่ง ' + orderedByKey[k] + ')' };
   }
   const id = seq('DLV_NEXT', 'DL' + yy_() + '-', 4);
-  appendObj('Deliveries', { 'Delivery_ID': id, 'เมื่อ': now(), 'Order_ID': pay.orderId, 'ลูกค้า': ord['ลูกค้า'], 'รายการ': JSON.stringify(sending), 'ผู้ส่ง': me.name, 'หมายเหตุ': pay.note || '' });
+  appendObj('Deliveries', { 'Delivery_ID': id, 'เมื่อ': now(), 'Order_ID': pay.orderId, 'ลูกค้า': ord['ลูกค้า'], 'รายการ': JSON.stringify(sending), 'ผู้ส่ง': me.name, 'หมายเหตุ': pay.note || '', 'รถ': String(pay.truck || '').trim() });
   const unmapped = [], negatives = [];
   sending.forEach(function (it) {
     if (it.pid) {
@@ -716,7 +717,7 @@ function deliver(pay, me) { // {orderId, items:[{pid?, name, qty}], note}
     } else unmapped.push(it.name);
   });
   const st = recomputeOrder_(pay.orderId);
-  return { ok: true, id: id, status: st, unmapped: unmapped, negatives: negatives, _log: { ref: pay.orderId, detail: ord['ลูกค้า'] + ' ส่ง ' + sending.map(function (i) { return i.name + '×' + i.qty; }).join(', ') + (unmapped.length ? ' (ไม่หักสต๊อก: ' + unmapped.join(',') + ')' : '') } };
+  return { ok: true, id: id, status: st, unmapped: unmapped, negatives: negatives, when: now(), _log: { ref: pay.orderId, detail: ord['ลูกค้า'] + (pay.truck ? ' ขึ้นรถ ' + pay.truck : '') + ' ส่ง ' + sending.map(function (i) { return i.name + '×' + i.qty; }).join(', ') + (unmapped.length ? ' (ไม่หักสต๊อก: ' + unmapped.join(',') + ')' : '') } };
 }
 
 // ─────────────────────────────────────────────
@@ -738,6 +739,12 @@ function billCreate(pay, me) {
     if (ord['Bill_No']) return { ok: false, error: 'ออเดอร์นี้ออกบิลแล้ว: ' + ord['Bill_No'] };
     try { items = JSON.parse(ord['รายการ'] || '[]'); } catch (e) {}
     customer = ord['ลูกค้า'];
+    // หน้าส่งของส่งรายการที่แก้แล้วมาได้ (จำนวนที่ส่งจริง/ราคาที่ตกลง) — ยังผูกออเดอร์เดิม ไม่หักสต๊อกซ้ำ (หักตอนส่งแล้ว)
+    if (pay.items && pay.items.length) {
+      items = pay.items.map(function (it) { return { pid: it.pid || '', name: String(it.name || '').trim(), qty: Number(it.qty) || 0, price: Number(it.price) || 0, screen: !!it.screen }; })
+        .filter(function (it) { return it.name && it.qty > 0; });
+      if (!items.length) return { ok: false, error: 'ต้องมีรายการอย่างน้อย 1 รายการ' };
+    }
   } else {
     const rs = resolveItems_(pay.items);
     items = rs.items;
@@ -1023,16 +1030,23 @@ function teamData(p, me) {
     const pool = {};
     items.forEach(function (it) {
       const k = it.pid || it.name;
-      pool[k] = pool[k] || { pid: it.pid, name: it.name, ordered: 0 };
+      pool[k] = pool[k] || { pid: it.pid, name: it.name, ordered: 0, price: Number(it.price) || 0, screen: !!it.screen };
       pool[k].ordered += it.qty;
     });
     const remain = Object.keys(pool).map(function (k) {
       const sent = d[k] || 0;
-      return { pid: pool[k].pid, name: pool[k].name, ordered: pool[k].ordered, sent: sent, remain: pool[k].ordered - sent };
+      return { pid: pool[k].pid, name: pool[k].name, ordered: pool[k].ordered, sent: sent, remain: pool[k].ordered - sent, price: pool[k].price, screen: pool[k].screen };
     }).filter(function (r) { return r.remain > 0; });
     const c = custBy[String(o['ลูกค้า']).trim()] || {};
-    return remain.length ? { id: o['Order_ID'], customer: o['ลูกค้า'], tel: c['เบอร์โทร'] || '', addr: c['ที่อยู่'] || '', due: o['กำหนดส่ง'], status: o['สถานะ'], remain: remain } : null;
+    return remain.length ? { id: o['Order_ID'], customer: o['ลูกค้า'], tel: c['เบอร์โทร'] || '', addr: c['ที่อยู่'] || '', route: c['เส้นทาง'] || '', district: c['อำเภอ'] || '',
+      due: o['กำหนดส่ง'], date: o['วันที่รับ'], status: o['สถานะ'], urgent: o['ด่วน'] || '', billNo: o['Bill_No'] || '', note: o['หมายเหตุ'] || '', remain: remain } : null;
   }).filter(Boolean).sort(function (a, b) { return String(a.due || '9999').localeCompare(String(b.due || '9999')); });
+  // ของที่ขึ้นรถวันนี้ (ต่อคัน) — โชว์ท้ายรถในหน้าส่งของ
+  const td = today();
+  const loadsToday = rowsToObjs('Deliveries').filter(function (x) { return String(x['เมื่อ'] || '').indexOf(td) === 0; }).map(function (x) {
+    let its = []; try { its = JSON.parse(x['รายการ'] || '[]'); } catch (e) {}
+    return { id: x['Delivery_ID'], orderId: x['Order_ID'], customer: x['ลูกค้า'], truck: String(x['รถ'] || ''), by: x['ผู้ส่ง'] || '', when: x['เมื่อ'], note: x['หมายเหตุ'] || '', items: its.map(function (i) { return { name: i.name, qty: Number(i.qty) || 0 }; }) };
+  });
   // ── "กดแทนพิมพ์" สำหรับหน้าลงออเดอร์ — ถอดจากออเดอร์จริงทั้งหมด (รวมที่นำเข้าจาก AppSheet เดิม) ──
   // สเปกที่สั่งบ่อย: 12 แบบแรกคลุม ~68% ของออเดอร์ (ข้อมูล 136 ใบ) → แตะทีเดียวได้ทั้งไลน์
   // ออเดอร์ล่าสุดของลูกค้าแต่ละราย: 35% สั่งสเปกเดิมซ้ำ → เสนอ "สั่งเหมือนครั้งก่อน"
@@ -1075,7 +1089,7 @@ function teamData(p, me) {
     production: rowsToObjs('Production').filter(notJob).reverse(),
     screens: rowsToObjs('ScreenJobs').filter(notJob).reverse(),
     billable: billable.map(function (o) { return { id: o['Order_ID'], customer: o['ลูกค้า'], total: o['ยอดรวม'] }; }),
-    deliverQueue: deliverQueue,
+    deliverQueue: deliverQueue, loadsToday: loadsToday,
     bills: activeBills_().reverse().slice(0, 25),
     stmts: rowsToObjs('Statements').filter(function (s) { return s['สถานะ'] === 'รอเก็บ'; }).reverse(),
     materials: rowsToObjs('Materials'),

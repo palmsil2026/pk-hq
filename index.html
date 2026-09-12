@@ -7,17 +7,19 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap">
 <style>
 :root{
-  --ground:#F4F7F6; --surface:#FFFFFF; --ink:#1B2A26; --muted:#5E6F6A;
+  --ground:#EAF0ED; --surface:#FFFFFF; --ink:#1B2A26; --muted:#5E6F6A;
   --green:#175A4C; --green-soft:#E1EFE9; --gold:#B8912F; --gold-soft:#F6EED9;
   --ok:#2E7D4F; --warn:#B3541E; --warn-soft:#F7E8DE; --danger:#A63A3A;
-  --line:#D8E2DE;
+  --line:#D3DDD8; --well:#F3F7F5;   /* well = สีพื้นของแถวย่อยในการ์ด (ไลน์สินค้า/รายการ) ให้แยกจากการ์ดขาว */
+  --shadow:0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(23,90,76,.07);
 }
 @media (prefers-color-scheme: dark){
   :root{
     --ground:#0E1815; --surface:#16241F; --ink:#E7F0EC; --muted:#93A8A0;
     --green:#7FC7B2; --green-soft:#16352C; --gold:#D9B65C; --gold-soft:#332A14;
     --ok:#6FBE92; --warn:#E0925F; --warn-soft:#3A2313; --danger:#E08585;
-    --line:#26382F;
+    --line:#2A3D34; --well:#1C2B25;
+    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
   }
 }
 *{box-sizing:border-box}
@@ -30,10 +32,10 @@ nav{display:flex; background:var(--surface); border-bottom:1px solid var(--line)
 nav button{flex:1 0 auto; min-width:72px; border:0; background:none; color:var(--muted); font:600 13.5px "Anuphan",sans-serif; padding:12px 8px; cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;}
 nav button.on{color:var(--green); border-bottom-color:var(--gold);}
 main{max-width:720px; margin:0 auto; padding:14px;}
-.card{background:var(--surface); border:1px solid var(--line); border-radius:10px; padding:16px; margin-bottom:14px;}
+.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:var(--shadow);}
 h2{font-family:"Anuphan",sans-serif; font-size:16px; margin:0 0 10px;}
 label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
-input,select,textarea{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--ground); color:var(--ink); font:inherit;}
+input,select,textarea{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--well); color:var(--ink); font:inherit;}
 input:focus,select:focus{outline:2px solid var(--green); outline-offset:1px;}
 .row{display:flex; gap:8px;} .row>*{flex:1;}
 button.btn{background:var(--green); color:var(--ground); border:0; border-radius:8px; padding:11px 18px; font:600 14.5px "Anuphan",sans-serif; cursor:pointer; margin-top:12px; width:100%;}
@@ -64,6 +66,8 @@ button.mini.gold{background:var(--gold-soft); color:var(--gold);}
 .list{margin:0; padding:0; list-style:none;}
 .list li{padding:11px 0; border-bottom:1px dashed var(--line);}
 .list li:last-child{border-bottom:none;}
+#orderList li{padding:11px 12px; border:1px solid var(--line); border-bottom:1px solid var(--line); border-radius:12px; background:var(--well); margin-bottom:8px;}
+#orderList li:hover{border-color:var(--green);}
 .li-top{display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;}
 .chip{font:600 11.5px "Anuphan",sans-serif; padding:2px 10px; border-radius:99px; white-space:nowrap; display:inline-block;}
 .c-wait{background:var(--gold-soft); color:var(--gold);} .c-doing{background:var(--green-soft); color:var(--green);}
@@ -112,7 +116,7 @@ li.flash{animation:flash 1.6s ease-out both;}
 @media (prefers-reduced-motion: reduce){ *,*::before,*::after{animation:none !important; transition:none !important;} }
 
 /* ── หน้าลงออเดอร์ v2: กดแทนพิมพ์ · โล่ง · มืออาชีพ ── */
-.card.hero{border:0; box-shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(23,90,76,.08); border-radius:14px; padding:18px 16px 12px;}
+.card.hero{border-radius:16px; padding:18px 16px 12px;}
 .sec{font:600 11.5px "Anuphan",sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:16px 0 6px;}
 .sec:first-child{margin-top:0;}
 .sugg-wrap{position:relative;}
@@ -130,13 +134,15 @@ li.flash{animation:flash 1.6s ease-out both;}
 .repeat{display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--gold-soft); border:1px solid var(--gold); border-radius:12px; padding:10px 12px; margin-top:8px; font-size:13.5px; animation:rise .25s ease both;}
 .repeat b{color:var(--gold);} .repeat[hidden]{display:none;}
 /* ไลน์สินค้า: ชิปค่าต่อแกน แตะเพื่อเลือกจากแผ่นด้านล่าง — ไม่มี dropdown 7 อัน */
-.spec-row{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; background:var(--surface); animation:rise .25s ease both;}
+.spec-row{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; background:var(--well); animation:rise .25s ease both;}
+.spec-row .sg input{background:var(--surface);}
+.axes .cb{background:var(--surface);}
 .spec-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;}
 .spec-top b{font:600 14.5px "Anuphan",sans-serif;}
 .axes{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
 .axes .ax[hidden]{display:none;}
 .axes .ax select{display:none;}
-.axes .cb{display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border-radius:99px; border:1px solid var(--line); background:var(--ground); font:500 13.5px "Sarabun",sans-serif; color:var(--ink); cursor:pointer; min-height:38px;}
+.axes .cb{display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border-radius:99px; border:1px solid var(--line); background:var(--surface); font:500 13.5px "Sarabun",sans-serif; color:var(--ink); cursor:pointer; min-height:38px;}
 .axes .cb small{font-size:11px; color:var(--muted);}
 .axes .cb.empty{border-style:dashed; color:var(--muted);}
 .axes .cb.set{background:var(--green-soft); border-color:transparent; color:var(--green); font-weight:600;}
@@ -173,19 +179,53 @@ li.flash{animation:flash 1.6s ease-out both;}
 .savebar[data-state="done"] .tot{color:var(--ok);}
 .savebar[data-state="done"] #oSave{background:none; color:var(--muted); border:1px solid var(--line);}
 .savebar .slip{margin:10px 0 0; max-height:34vh;}
+/* ── หน้าส่งของ: รถส่งของ (ซ้าย) + คิวการ์ด (ขวา) ── */
+.dlv-wrap{display:grid; grid-template-columns:1fr; gap:14px;}
+@media (min-width:1000px){ .dlv-wrap{grid-template-columns:370px 1fr; align-items:start;} .truck-card{position:sticky; top:60px;} }
+.truck{position:relative; display:flex; align-items:stretch; margin:12px 0 0; padding-bottom:34px;}
+.cargo{flex:1; min-height:176px; border:3px solid var(--green); border-right:0; border-radius:14px 0 0 14px; background:var(--ground); padding:10px; display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-content:start;}
+.cab{width:92px; flex:0 0 92px; display:block; align-self:flex-end; height:auto; margin-bottom:-4px;}
+.plate{position:absolute; right:10px; bottom:38px; background:#fff; border:2px solid #2C3E3A; border-radius:5px; font:700 12.5px "Anuphan",sans-serif; padding:0 7px; color:#2C3E3A; line-height:1.5;}
+.wheel{position:absolute; bottom:2px; width:38px; height:38px; border-radius:50%; background:#2C3E3A; border:7px solid #97A5A0; box-sizing:border-box;}
+.wheel::after{content:""; position:absolute; inset:5px; border-radius:50%; background:#DDE5E1;}
+.road{position:absolute; left:-16px; right:-16px; bottom:8px; height:3px; background:var(--line); border-radius:99px;}
+.slot{border-radius:10px; min-height:66px; padding:8px 10px; text-align:left; animation:rise .3s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*40ms); overflow:hidden;}
+.slot.on{background:var(--surface); border:1px solid var(--line); box-shadow:0 2px 6px rgba(0,0,0,.06);}
+.slot.on b{font:600 13px "Anuphan",sans-serif; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
+.slot.on small{display:block; font-size:11px; color:var(--muted); line-height:1.35;}
+.slot.pop{animation:pop .45s cubic-bezier(.2,.8,.2,1);}
+.slot.add{border:2px dashed var(--line); background:none; color:var(--muted); font:700 26px "Anuphan",sans-serif; cursor:pointer; display:grid; place-items:center;}
+.slot.add:hover{border-color:var(--green); color:var(--green);}
+.dlv-list{display:flex; flex-direction:column; gap:10px;}
+.dcard{border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:var(--well); animation:rise .28s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*30ms); transition:box-shadow .25s ease, border-color .25s ease, opacity .2s ease;}
+.dcard.open{border-color:var(--green); box-shadow:0 12px 32px rgba(23,90,76,.12);}
+.dcard.ghost{pointer-events:none; box-shadow:0 18px 40px rgba(0,0,0,.25);}
+.dc-head{display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;} .dc-head b{font:700 15.5px "Anuphan",sans-serif;}
+.dc-items{list-style:none; margin:8px 0 0; padding:0;} .dc-items li{display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px dashed var(--line);} .dc-items li:last-child{border-bottom:none;}
+.dc-items b{font:700 14px "Anuphan",sans-serif; color:var(--green); white-space:nowrap;}
+.dc-foot{display:flex; justify-content:space-between; align-items:flex-end; gap:8px; margin-top:10px; flex-wrap:wrap;}
+.dc-btns{display:flex; gap:6px; flex-wrap:wrap;} .dc-btns .mini{min-height:38px;}
+.dc-dates{text-align:right; font-size:12.5px; line-height:1.45; margin-left:auto;} .dc-dates b{font-family:"Anuphan",sans-serif;}
+.dc-load{display:grid; grid-template-rows:0fr; transition:grid-template-rows .3s cubic-bezier(.2,.8,.2,1);} .dc-load>div{overflow:hidden; min-height:0;}
+.dcard.open .dc-load{grid-template-rows:1fr;}
+.dc-load .sec{margin-top:12px;}
+.dc-part[hidden]{display:none;} .dc-part .row{align-items:center; margin-top:6px;} .dc-part input{max-width:130px; text-align:center; font:700 16px "Anuphan",sans-serif; background:var(--surface);}
+.dc-load .btn{margin-top:12px;}
+.pr-row{display:grid; grid-template-columns:1fr 84px 96px; gap:8px; align-items:center; margin-top:6px;} .pr-row.h{font-size:11px; color:var(--muted); margin-top:10px;}
+.pr-row input{margin:0; text-align:right; font:600 14px "Anuphan",sans-serif;}
 /* การ์ด "เคยสั่ง" — มือถือ: แทรกใต้ช่องลูกค้า · จอกว้าง (≥1300px): ลอยขวาฟอร์ม */
 .side{margin-top:10px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--surface); animation:rise .25s ease both;}
 .side.empty{display:none;}
 .side-h{font:600 11.5px "Anuphan",sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;}
 .side-list{display:flex; flex-direction:column; gap:6px;}
-.side-list button{text-align:left; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:var(--ground); color:var(--ink); font:500 13.5px "Sarabun",sans-serif; cursor:pointer; min-height:46px; animation:rise .25s ease both; animation-delay:calc(var(--i,0)*30ms);}
+.side-list button{text-align:left; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:var(--well); color:var(--ink); font:500 13.5px "Sarabun",sans-serif; cursor:pointer; min-height:46px; animation:rise .25s ease both; animation-delay:calc(var(--i,0)*30ms);}
 .side-list button b{font:600 13.5px "Anuphan",sans-serif; display:block;} .side-list button small{color:var(--muted); font-size:11.5px; display:block;}
 .side-list button .n{flex:0 0 auto; font:700 12.5px "Anuphan",sans-serif; color:var(--green); background:var(--green-soft); border-radius:99px; padding:3px 9px;}
 .side-list button:hover{border-color:var(--green);} .side-list button.on{background:var(--green); color:var(--ground); border-color:var(--green);}
 .side-list button.on small,.side-list button.on .n{color:inherit; background:none;}
 .side .hint{font-size:12.5px; color:var(--muted);}
 @media (min-width:1300px){
-  .side{position:fixed; left:calc(50% + 376px); top:112px; width:290px; max-height:calc(100vh - 130px); overflow-y:auto; margin:0; border:0; border-radius:14px; z-index:3; box-shadow:0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(23,90,76,.10);}
+  .side{position:fixed; left:calc(50% + 376px); top:112px; width:290px; max-height:calc(100vh - 130px); overflow-y:auto; margin:0; border:0; border-radius:14px; z-index:55; box-shadow:var(--shadow);}   /* z 55 > ฉากหลังมืด (50) → แผ่นเลือกเปิดอยู่ก็ยังแตะการ์ดได้ ไม่โดนเบลอ */
   .side.empty{display:block;}
   #t-order.on{animation-name:fade;}   /* แท็บนี้ไม่ใช้ transform ตอนเลื่อนเข้า — ไม่งั้นการ์ดลอย (fixed) กระโดด */
 }
@@ -404,7 +444,32 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 <section class="tabpane" id="t-screen"><div class="card"><h2>คิวงานสกรีน</h2><ul class="list" id="screenList"></ul></div></section>
 
 <section class="tabpane" id="t-deliver">
-  <div class="card"><h2>คิวส่งของ <span class="meta">(เรียงตามกำหนดส่ง)</span></h2><ul class="list" id="dlvList"></ul></div>
+  <div class="dlv-wrap">
+    <!-- 🚚 รถส่งของ: ท้ายรถ = การ์ดของที่ขึ้นแล้ววันนี้ (ต่อคัน) + ช่อง "+" หยิบออเดอร์จากคิวขึ้นรถ -->
+    <aside class="card truck-card" id="truckCard">
+      <div class="li-top"><h2 style="margin:0">🚚 รถส่งของ</h2><span class="meta" id="truckDate"></span></div>
+      <div class="chips scroll" id="truckPick"></div>
+      <div class="truck">
+        <div class="cargo" id="cargo"></div>
+        <svg class="cab" viewBox="0 0 100 150" aria-hidden="true">
+          <path d="M0 30 h50 q11 0 18 9 l24 34 q8 10 8 23 v40 q0 8 -8 8 H0 Z" fill="var(--green)"/>
+          <path d="M14 42 h33 q6 0 10 5 l17 24 H14 Z" fill="#DCEBF3"/>
+          <path d="M22 48 h20 l14 19 H22 Z" fill="#F4FAFD" opacity=".7"/>
+          <rect x="84" y="102" width="12" height="18" rx="4" fill="#F6D96B"/>
+          <rect x="0" y="136" width="100" height="9" rx="4" fill="#2C3E3A"/>
+          <rect x="64" y="122" width="24" height="5" rx="2" fill="#2C3E3A" opacity=".5"/>
+        </svg>
+        <div class="plate" id="plate">04</div>
+        <i class="wheel" style="left:11%"></i><i class="wheel" style="left:40%"></i><i class="wheel" style="right:14px"></i>
+        <i class="road"></i>
+      </div>
+      <p class="meta" id="truckSum" style="margin:8px 0 0"></p>
+    </aside>
+    <div class="card">
+      <div class="li-top"><h2 style="margin:0">คิวส่งของ</h2><span class="meta">เรียงตามกำหนดส่ง</span></div>
+      <div class="dlv-list" id="dlvList"></div>
+    </div>
+  </div>
 </section>
 
 <section class="tabpane" id="t-stock">
@@ -546,6 +611,28 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
     <button class="btn ghost2" id="ncCancel">ยกเลิก</button>
   </div>
 </div></div>
+<!-- หยิบออเดอร์จากคิวขึ้นรถ (จากช่อง + ท้ายรถ) -->
+<div class="modal-bg" id="pickModal"><div class="modal sheet">
+  <div class="sh-top"><h2 style="margin:0">หยิบขึ้นรถ <span id="pickTruck"></span></h2><span class="meta">เรียงตามกำหนดส่ง</span></div>
+  <div class="side-list" id="pickList" style="margin-top:10px"></div>
+  <button class="btn ghost2" id="pickClose" style="margin-top:12px">ปิด</button>
+</div></div>
+<!-- พิมพ์บิล/ใบส่งของ — ตั้งค่า/แก้รายการก่อนพิมพ์ -->
+<div class="modal-bg" id="prModal"><div class="modal sheet">
+  <div class="sh-top"><h2 style="margin:0">🖨️ พิมพ์เอกสาร</h2><span class="meta" id="prSub"></span></div>
+  <div class="seg" id="prType" style="margin-top:10px">
+    <button type="button" data-t="ใบส่งของ" class="on">ใบส่งของ</button><button type="button" data-t="เงินสด">บิลเงินสด</button><button type="button" data-t="เครดิต">บิลเครดิต</button>
+  </div>
+  <p class="meta" id="prBillNote" hidden style="margin:8px 0 0"></p>
+  <div id="prRows"></div>
+  <div class="row">
+    <div><label>วันที่ในเอกสาร</label><input type="date" id="prDate"></div>
+    <div id="prDueWrap" hidden><label>เครดิต (วัน)</label><input type="number" id="prDue" value="30" inputmode="numeric"></div>
+  </div>
+  <label>หมายเหตุในเอกสาร</label><input id="prNote" placeholder="เช่น ส่งช่วงบ่าย / วางหน้าร้าน">
+  <div class="total" id="prTotal"></div>
+  <div class="row"><button class="btn" id="prGo">🖨️ พิมพ์</button><button class="btn ghost2" id="prClose">ปิด</button></div>
+</div></div>
 <datalist id="dlCust"></datalist>
 <datalist id="dlProd"></datalist>
 <datalist id="dlMat"></datalist>
@@ -564,7 +651,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-12c';
+const WEB_VERSION = '2026-09-12d';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -1187,6 +1274,8 @@ function renderCustCard(){
 $('custSpecs').addEventListener('click', e => {
   const b = e.target.closest('button[data-cs]'); if (!b) return;
   const t = CS_LIST[Number(b.dataset.cs)]; if (!t) return;
+  $('axModal').classList.remove('on');   // แผ่นเลือกแกนที่เปิดค้างอยู่ชี้ไลน์เปล่าที่กำลังจะถูกแทน
+  if (SB_STATE === 'confirm') sbSet('');
   const blank = [...$('oItems').querySelectorAll('.spec-row')].find(r => !r.querySelector('.i-type').value);
   if (blank) blank.remove();                           // ไลน์เปล่าที่ยังไม่ได้แตะ → แทนที่เลย
   addSpecRow({ type: t.type, size: t.size, shape: t.shape, neck: t.neck, color: t.color, screenColor: t.screenColor, capColor: t.capColor,
@@ -1407,6 +1496,9 @@ $('sbActions').addEventListener('click', e => {
   else if (a === 'detail') { sbSet(''); if (OK_ID) openOrderDetail(OK_ID); }
 });
 document.addEventListener('keydown', e => { if (e.key === 'Escape' && SB_STATE === 'confirm') sbSet(''); });
+document.addEventListener('click', e => {   // กดนอกการ์ดยืนยัน = ย้อนกลับ (ไม่ใช่ล้างฟอร์ม) · การ์ด ✓ ก็ปิดได้แบบเดียวกัน
+  if ((SB_STATE === 'confirm' || SB_STATE === 'done') && !e.target.closest('#saveBar') && !e.target.closest('.modal-bg')) sbSet('');
+}, true);
 let FLASH_ID = '';
 const CHIP = s => ({'รอผลิต':'c-wait','กำลังผลิต':'c-doing','รอสกรีน':'c-wait','กำลังสกรีน':'c-doing','พร้อมส่ง':'c-ready','ส่งบางส่วน':'c-doing','ส่งแล้ว':'c-done','ยกเลิก':'c-done','เสร็จ':'c-done','ค้างชำระ':'c-owe','วางบิลแล้ว':'c-wait','ชำระแล้ว':'c-done','รอเก็บ':'c-owe'}[s] || 'c-wait');
 // ป้ายสถานะที่เดิมต้องอ่านเอาจากหมายเหตุ — ให้เห็นตั้งแต่ในลิสต์
@@ -1746,29 +1838,184 @@ $('plSave').addEventListener('click', async () => {
 });
 
 // ─── ส่งของ ───
+// ─── 🚚 หน้าส่งของ v2 (12 ก.ย.): รถส่งของ + คิวเป็นการ์ด · "จัดของขึ้นรถ" (เต็ม/บางส่วน · เลือกคัน) · การ์ดโดนโยนเข้าท้ายรถ · พิมพ์บิล/ใบส่งของ ───
+// "ขึ้นรถ" = บันทึกส่ง (Deliveries) พร้อมเลขคัน → ท้ายรถโชว์ของที่ขึ้นแล้ววันนี้ต่อคัน · หักสต๊อก/ปรับสถานะออเดอร์เหมือนเดิม
+let DLV_TRUCK = localStorage.getItem('pk_truck') || '', DLV_POP_ID = '';   // DLV_POP_ID: ของที่เพิ่งโยนขึ้นรถ ให้เด้งแม้โหลดข้อมูลใหม่ทับ
+const todayIso = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate()); };
+function trucks(){ return ((DATA && DATA.spec) || {})['รถส่งของ'] || ['04','05','06','07','08','09']; }
 function renderDeliver(){
-  $('dlvList').innerHTML = DATA.deliverQueue.map((q,qi) =>
-    '<li data-qi="' + qi + '"><div class="li-top"><div><b>' + esc(q.customer) + '</b> <span class="meta">' + esc(q.id) + (q.due?' · ส่ง '+esc(q.due):'') + '</span></div>' +
-    '<span class="chip ' + CHIP(q.status) + '">' + esc(q.status) + '</span></div>' +
-    '<div class="meta">' + (q.tel ? '📞 <a href="tel:' + esc(q.tel) + '">' + esc(q.tel) + '</a> · ' : '') + esc(q.addr || '') + '</div>' +
-    q.remain.map((r,ri) =>
-      '<div class="row" style="align-items:center;margin-top:6px"><span style="flex:2">' + esc(r.name) + ' <span class="meta">(ค้าง ' + baht(r.remain) + ')</span></span>' +
-      '<input type="number" style="flex:1" value="' + r.remain + '" max="' + r.remain + '" data-ri="' + ri + '"></div>').join('') +
-    '<button class="mini" style="margin-top:8px" data-send="' + qi + '">🚚 ส่งรอบนี้</button></li>').join('')
-    || '<li class="meta">ไม่มีของค้างส่ง 🎉</li>';
+  if (!trucks().includes(DLV_TRUCK)) DLV_TRUCK = trucks()[0];
+  renderTruck(); renderDlvQueue();
+}
+function slotHtml(l, i){
+  return '<div class="slot on' + (l.id && l.id === DLV_POP_ID ? ' pop' : '') + '" style="--i:' + i + '"><b>' + esc(l.customer) + '</b><small>' + esc((l.items || []).map(x => x.name + ' ×' + baht(x.qty)).join(' · ')) + '</small>' +
+    '<small class="meta">' + esc(String(l.when || '').slice(11, 16)) + (l.by ? ' · ' + esc(l.by) : '') + '</small></div>';
+}
+function renderTruck(){
+  const loads = (DATA && DATA.loadsToday) || [], cnt = {};
+  loads.forEach(l => { cnt[l.truck] = (cnt[l.truck] || 0) + 1; });
+  $('truckPick').innerHTML = trucks().map((t, i) => '<button type="button" data-t="' + esc(t) + '" class="' + (t === DLV_TRUCK ? 'on' : '') + '" style="--i:' + i + '">คัน ' + esc(t) + (cnt[t] ? ' <small>' + cnt[t] + '</small>' : '') + '</button>').join('');
+  $('plate').textContent = DLV_TRUCK;
+  const mine = loads.filter(l => l.truck === DLV_TRUCK);
+  const empties = Math.max(2, 4 - mine.length);
+  $('cargo').innerHTML = mine.map((l, i) => slotHtml(l, i)).join('') +
+    Array.from({ length: empties }, (_, i) => '<button type="button" class="slot add" data-add style="--i:' + (mine.length + i) + '" title="หยิบออเดอร์ขึ้นรถ">+</button>').join('');
+  $('truckDate').textContent = 'วันนี้ ' + thDate(todayIso());
+  const pcs = mine.reduce((s, l) => s + (l.items || []).reduce((a, b) => a + (Number(b.qty) || 0), 0), 0);
+  $('truckSum').textContent = mine.length ? 'คัน ' + DLV_TRUCK + ' · ' + mine.length + ' ออเดอร์ · ' + baht(pcs) + ' ใบ' : 'คัน ' + DLV_TRUCK + ' ยังว่าง — แตะ + หรือ "จัดของขึ้นรถ" ในคิว';
+}
+$('truckPick').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (!b) return; DLV_TRUCK = b.dataset.t; localStorage.setItem('pk_truck', DLV_TRUCK); renderTruck(); });
+function renderDlvQueue(){
+  const Q = (DATA && DATA.deliverQueue) || [];
+  $('dlvList').innerHTML = Q.map((q, qi) => {
+    const where = [q.tel ? '📞 ' + q.tel : '', q.route ? 'สาย ' + q.route : '', q.district ? 'อ.' + q.district : '', q.addr || ''].filter(Boolean).join(' · ');
+    return '<div class="dcard" data-qi="' + qi + '" style="--i:' + Math.min(qi, 12) + '">' +
+      '<div class="dc-head"><div><b>' + esc(q.customer) + '</b> <span class="meta">' + esc(q.id) + '</span>' + (q.urgent ? ' <span class="chip c-owe">⚡ ด่วน</span>' : '') + '</div><span class="chip ' + CHIP(q.status) + '">' + esc(q.status) + '</span></div>' +
+      (where ? '<div class="meta">' + esc(where) + '</div>' : '') +
+      '<ul class="dc-items">' + q.remain.map(r => '<li><span>' + esc(r.name) + (r.sent ? ' <span class="meta">(ส่งแล้ว ' + baht(r.sent) + '/' + baht(r.ordered) + ')</span>' : '') + '</span><b>' + baht(r.remain) + '</b></li>').join('') + '</ul>' +
+      (q.note ? '<div class="meta" style="margin-top:6px">📝 ' + esc(q.note) + '</div>' : '') +
+      '<div class="dc-foot"><div class="dc-btns"><button type="button" class="mini" data-load>🚚 จัดของขึ้นรถ</button><button type="button" class="mini gold" data-print>🖨️ พิมพ์บิล/ใบส่งของ</button></div>' +
+      '<div class="dc-dates"><span>ส่ง <b>' + (q.due ? esc(thDate(q.due)) : 'ยังไม่กำหนด') + '</b></span><br><span class="meta">ลงออเดอร์ ' + esc(q.date ? thDate(q.date) : '-') + '</span></div></div>' +
+      // แผงจัดของขึ้นรถ (ยืดออกเมื่อกด)
+      '<div class="dc-load"><div>' +
+        '<div class="sec">ขึ้นรถเท่าไหร่</div><div class="seg dc-mode"><button type="button" data-mode="full" class="on">ทั้งออเดอร์ · ' + baht(q.remain.reduce((s, r) => s + r.remain, 0)) + ' ใบ</button><button type="button" data-mode="part">บางส่วน</button></div>' +
+        '<div class="dc-part" hidden>' + q.remain.map((r, ri) => '<div class="row"><span style="flex:2">' + esc(r.name) + ' <span class="meta">ค้าง ' + baht(r.remain) + '</span></span><input type="number" inputmode="numeric" value="' + r.remain + '" max="' + r.remain + '" data-ri="' + ri + '"></div>').join('') + '</div>' +
+        '<div class="sec">ขึ้นรถคันไหน</div><div class="chips dc-trucks">' + trucks().map(t => '<button type="button" data-tr="' + esc(t) + '" class="' + (t === DLV_TRUCK ? 'on' : '') + '">คัน ' + esc(t) + '</button>').join('') + '</div>' +
+        '<div class="row"><button type="button" class="btn" data-go>✓ ยืนยันขึ้นรถ คัน ' + esc(DLV_TRUCK) + '</button><button type="button" class="btn ghost2" data-close>ยกเลิก</button></div>' +
+      '</div></div>' +
+    '</div>';
+  }).join('') || '<div class="meta" style="padding:8px 0">ไม่มีของค้างส่ง 🎉</div>';
+}
+function openLoad(card, truck){
+  document.querySelectorAll('.dcard.open').forEach(c => { if (c !== card) c.classList.remove('open'); });
+  card.classList.add('open');
+  if (truck) { [...card.querySelectorAll('.dc-trucks button')].forEach(b => b.classList.toggle('on', b.dataset.tr === truck)); card.querySelector('[data-go]').textContent = '✓ ยืนยันขึ้นรถ คัน ' + truck; }
+}
+function flyToTruck(card, done){
+  const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  const target = $('cargo').querySelector('.slot.add') || $('cargo');
+  if (reduce) { card.style.opacity = '0'; return done(); }
+  const a = card.getBoundingClientRect(), b = target.getBoundingClientRect();
+  const ghost = card.cloneNode(true); ghost.classList.add('ghost'); ghost.classList.remove('open');
+  ghost.style.cssText = 'position:fixed;left:' + a.left + 'px;top:' + a.top + 'px;width:' + a.width + 'px;height:' + a.height + 'px;margin:0;z-index:60;transform-origin:top left;animation:none;';
+  document.body.appendChild(ghost);
+  card.style.opacity = '0';
+  requestAnimationFrame(() => requestAnimationFrame(() => {
+    ghost.style.transition = 'transform .6s cubic-bezier(.3,.7,.2,1), opacity .6s ease, border-radius .6s ease';
+    ghost.style.transform = 'translate(' + (b.left - a.left) + 'px,' + (b.top - a.top) + 'px) scale(' + (b.width / a.width) + ',' + (b.height / a.height) + ')';
+    ghost.style.opacity = '.3'; ghost.style.borderRadius = '40px';
+  }));
+  setTimeout(() => { ghost.remove(); done(); }, 620);
 }
 $('dlvList').addEventListener('click', async e => {
-  const qi = e.target.dataset && e.target.dataset.send;
-  if (qi === undefined) return;
-  const q = DATA.deliverQueue[qi];
-  const li = e.target.closest('li');
-  const items = q.remain.map((r,ri) => ({ pid: r.pid, name: r.name, qty: Number(li.querySelector('input[data-ri="' + ri + '"]').value) || 0 })).filter(it => it.qty > 0);
-  if (!items.length) return toast('ใส่จำนวนที่ส่ง');
-  if (!confirm('ยืนยันส่ง ' + q.customer + ': ' + items.map(i => i.name + '×' + i.qty).join(', '))) return;
-  const r = await api('pkDeliver', { orderId: q.id, items });
-  toast('🚚 บันทึกส่งแล้ว → ' + r.status + (r.unmapped.length ? ' ⚠️ ไม่หักสต๊อก: ' + r.unmapped.join(',') : '') + (r.negatives && r.negatives.length ? ' ⚠️ สต๊อกติดลบ: ' + r.negatives.join(', ') : ''));
+  const card = e.target.closest('.dcard'); if (!card) return;
+  const q = DATA.deliverQueue[Number(card.dataset.qi)]; if (!q) return;
+  if (e.target.closest('[data-load]')) { card.classList.contains('open') ? card.classList.remove('open') : openLoad(card, DLV_TRUCK); return; }
+  if (e.target.closest('[data-close]')) { card.classList.remove('open'); return; }
+  if (e.target.closest('[data-print]')) { openPrint(q); return; }
+  const mb = e.target.closest('.dc-mode button[data-mode]');
+  if (mb) { [...mb.parentNode.children].forEach(x => x.classList.toggle('on', x === mb)); card.querySelector('.dc-part').hidden = mb.dataset.mode !== 'part'; if (mb.dataset.mode === 'part') setTimeout(() => { const i = card.querySelector('.dc-part input'); if (i) i.focus(); }, 60); return; }
+  const tb = e.target.closest('.dc-trucks button[data-tr]');
+  if (tb) { [...tb.parentNode.children].forEach(x => x.classList.toggle('on', x === tb)); card.querySelector('[data-go]').textContent = '✓ ยืนยันขึ้นรถ คัน ' + tb.dataset.tr; return; }
+  if (e.target.closest('[data-go]')) {
+    const full = card.querySelector('.dc-mode button.on').dataset.mode === 'full';
+    const items = q.remain.map((r, ri) => ({ pid: r.pid, name: r.name, qty: full ? r.remain : Math.min(r.remain, Number(card.querySelector('.dc-part input[data-ri="' + ri + '"]').value) || 0) })).filter(it => it.qty > 0);
+    if (!items.length) return toast('ใส่จำนวนที่จะขึ้นรถ');
+    const tOn = card.querySelector('.dc-trucks button.on'); const truck = tOn ? tOn.dataset.tr : DLV_TRUCK;
+    let r; try { r = await api('pkDeliver', { orderId: q.id, items, truck }); } catch(e2){ return; }
+    DLV_TRUCK = truck; localStorage.setItem('pk_truck', truck);
+    const load = { id: r.id, orderId: q.id, customer: q.customer, truck, by: ME ? ME.name : '', when: r.when || (todayIso() + ' ' + new Date().toTimeString().slice(0, 5)), items };
+    (DATA.loadsToday = DATA.loadsToday || []).push(load);
+    // ปรับคิวในเครื่องทันที (ไม่รอโหลดใหม่): ส่งครบ = หายจากคิว · บางส่วน = ค้างลดลง
+    items.forEach(it => { const rr = q.remain.find(x => (x.pid || x.name) === (it.pid || it.name)); if (rr) { rr.sent += it.qty; rr.remain -= it.qty; } });
+    q.remain = q.remain.filter(x => x.remain > 0); q.status = r.status || q.status;
+    if (!q.remain.length) DATA.deliverQueue.splice(DATA.deliverQueue.indexOf(q), 1);
+    renderTruck();   // ท้ายรถมีช่องว่างพร้อมรับ
+    flyToTruck(card, () => {
+      DLV_POP_ID = load.id || ''; setTimeout(() => { DLV_POP_ID = ''; }, 1500);
+      renderTruck(); renderDlvQueue();
+      toast('🚚 ขึ้นรถคัน ' + truck + ' แล้ว → ' + (r.status || '') + (r.unmapped && r.unmapped.length ? ' ⚠️ ไม่หักสต๊อก: ' + r.unmapped.join(',') : '') + (r.negatives && r.negatives.length ? ' ⚠️ สต๊อกติดลบ: ' + r.negatives.join(', ') : ''));
+      loadData();
+    });
+  }
+});
+// ช่อง + ท้ายรถ → หยิบออเดอร์จากคิว
+$('cargo').addEventListener('click', e => {
+  if (!e.target.closest('[data-add]')) return;
+  const Q = (DATA && DATA.deliverQueue) || [];
+  $('pickTruck').textContent = 'คัน ' + DLV_TRUCK;
+  $('pickList').innerHTML = Q.map((q, qi) => '<button type="button" data-qi="' + qi + '" style="--i:' + Math.min(qi, 10) + '"><span><b>' + esc(q.customer) + (q.urgent ? ' ⚡' : '') + '</b><small>' + esc(q.id + ' · ส่ง ' + (q.due ? thDate(q.due) : '-') + ' · ' + q.remain.map(r => r.name + ' ×' + baht(r.remain)).join(' · ')) + '</small></span><span class="n">' + baht(q.remain.reduce((s, r) => s + r.remain, 0)) + '</span></button>').join('')
+    || '<div class="hint">คิวว่าง — ไม่มีของค้างส่ง</div>';
+  $('pickModal').classList.add('on');
+});
+$('pickList').addEventListener('click', e => {
+  const b = e.target.closest('button[data-qi]'); if (!b) return;
+  $('pickModal').classList.remove('on');
+  const card = $('dlvList').querySelector('.dcard[data-qi="' + b.dataset.qi + '"]'); if (!card) return;
+  openLoad(card, DLV_TRUCK);
+  card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+});
+$('pickClose').addEventListener('click', () => $('pickModal').classList.remove('on'));
+$('pickModal').addEventListener('click', e => { if (e.target.id === 'pickModal') $('pickModal').classList.remove('on'); });
+// ─── พิมพ์บิล/ใบส่งของ จากคิว — แก้จำนวน/ราคา/วันที่/หมายเหตุ ก่อนพิมพ์ ───
+let PR_Q = null;
+function prType(){ const b = $('prType').querySelector('button.on'); return b ? b.dataset.t : 'ใบส่งของ'; }
+function prRows(){ return [...$('prRows').querySelectorAll('.pr-row[data-ri]')].map(r => { const i = Number(r.dataset.ri), src = PR_Q.remain[i];
+  return { pid: src.pid, name: src.name, qty: Number(r.querySelector('.pr-qty').value) || 0, price: Number(r.querySelector('.pr-price').value) || 0, screen: !!src.screen }; }).filter(x => x.qty > 0); }
+function prPaint(){
+  const t = prType(), rows = prRows(), isBill = t !== 'ใบส่งของ';
+  $('prDueWrap').hidden = t !== 'เครดิต';
+  $('prRows').querySelectorAll('.pr-price').forEach(i => { i.disabled = !isBill; });
+  const pcs = rows.reduce((s, r) => s + r.qty, 0), amt = rows.reduce((s, r) => s + r.qty * r.price, 0);
+  $('prTotal').textContent = 'รวม ' + baht(pcs) + ' ใบ' + (isBill ? ' · ' + baht(amt) + ' บาท' : '');
+  $('prGo').textContent = isBill ? (PR_Q.billNo ? '🖨️ พิมพ์บิล ' + PR_Q.billNo + ' ซ้ำ' : '🖨️ ออกบิล' + t + ' + พิมพ์') : '🖨️ พิมพ์ใบส่งของ';
+}
+function openPrint(q){
+  PR_Q = q;
+  $('prSub').textContent = q.customer + ' · ' + q.id;
+  [...$('prType').children].forEach((b, i) => b.classList.toggle('on', i === 0));
+  $('prBillNote').hidden = !q.billNo;
+  if (q.billNo) $('prBillNote').textContent = 'ออเดอร์นี้ออกบิลแล้ว (' + q.billNo + ') — เลือก "บิล" จะพิมพ์ใบเดิมซ้ำ ไม่ออกใหม่';
+  $('prRows').innerHTML = '<div class="pr-row h"><span>รายการ</span><span style="text-align:right">จำนวน</span><span style="text-align:right">ราคา/หน่วย</span></div>' +
+    q.remain.map((r, ri) => '<div class="pr-row" data-ri="' + ri + '"><span>' + esc(r.name) + '<br><span class="meta">สั่ง ' + baht(r.ordered) + (r.sent ? ' · ส่งแล้ว ' + baht(r.sent) : '') + '</span></span>' +
+      '<input class="pr-qty" type="number" inputmode="numeric" value="' + r.remain + '"><input class="pr-price" type="number" step="0.01" inputmode="decimal" value="' + (r.price || '') + '" placeholder="—"></div>').join('');
+  $('prDate').value = todayIso(); $('prNote').value = ''; $('prDue').value = '30';
+  prPaint();
+  $('prModal').classList.add('on');
+}
+$('prType').addEventListener('click', e => { const b = e.target.closest('button[data-t]'); if (!b) return; [...$('prType').children].forEach(x => x.classList.toggle('on', x === b)); prPaint(); });
+$('prRows').addEventListener('input', prPaint);
+$('prClose').addEventListener('click', () => $('prModal').classList.remove('on'));
+$('prModal').addEventListener('click', e => { if (e.target.id === 'prModal') $('prModal').classList.remove('on'); });
+$('prGo').addEventListener('click', async () => {
+  const t = prType(), rows = prRows(), q = PR_Q, note = $('prNote').value.trim(), date = $('prDate').value || todayIso();
+  if (!rows.length) return toast('ใส่จำนวนอย่างน้อย 1 รายการ');
+  if (t === 'ใบส่งของ') { printDeliveryDoc(q, date, rows, note, DATA.settings, DLV_TRUCK); $('prModal').classList.remove('on'); return; }
+  if (q.billNo) {   // มีบิลแล้ว → พิมพ์ใบเดิมซ้ำ (ไม่ออกใหม่ กันยอดอยู่ 2 ที่)
+    let j; try { j = await api('pkBills', null, { customer: q.customer, limit: 200 }); } catch(e){ return; }
+    const b = (j.bills || []).find(x => String(x['Bill_No']) === String(q.billNo)); if (!b) return toast('ไม่พบบิล ' + q.billNo + ' ในระบบ');
+    let its = []; try { its = JSON.parse(b['รายการ'] || '[]'); } catch(e){}
+    printBillDoc(b['Bill_No'], b['วันที่'], b['ลูกค้า'], its, b['ยอดรวม'], b['ประเภท'], b['กำหนดชำระ'], DATA.settings);
+    $('prModal').classList.remove('on'); return;
+  }
+  let j; try { j = await api('pkBillCreate', { orderId: q.id, type: t, channel: t === 'เงินสด' ? 'เงินสด' : '', dueDays: $('prDue').value, items: rows, note }); } catch(e){ return; }
+  toast('🧾 ออกบิล ' + j.no);
+  printBillDoc(j.no, j.date, j.customer, j.items, j.total, t, j.due, j.settings);
+  $('prModal').classList.remove('on');
   loadData();
 });
+function printDeliveryDoc(q, date, items, note, st, truck){
+  $('paper').innerHTML =
+    docHead(st || {}, 'ใบส่งของ') +
+    '<table style="border:none"><tr><td style="border:none;padding:2px 0"><b>อ้างอิงออเดอร์:</b> ' + esc(q.id) + ' &nbsp; <b>วันที่:</b> ' + esc(thDate(date)) + (truck ? ' &nbsp; <b>รถ:</b> คัน ' + esc(truck) : '') + '</td></tr>' +
+    '<tr><td style="border:none;padding:2px 0"><b>ลูกค้า:</b> ' + esc(q.customer) + (q.addr ? ' &nbsp; ' + esc(q.addr) : '') + (q.tel ? ' &nbsp; โทร ' + esc(q.tel) : '') + (q.route ? ' &nbsp; สาย ' + esc(q.route) : '') + '</td></tr></table>' +
+    '<table><tr><th style="width:36px">#</th><th>รายการ</th><th style="width:100px">จำนวน</th><th style="width:140px">หมายเหตุ</th></tr>' +
+    items.map((it, i) => '<tr><td>' + (i + 1) + '</td><td>' + esc(it.name) + '</td><td style="text-align:right">' + baht(it.qty) + '</td><td></td></tr>').join('') +
+    '<tr><th colspan="2" style="text-align:right">รวม</th><th style="text-align:right">' + baht(items.reduce((s, i) => s + i.qty, 0)) + '</th><th></th></tr></table>' +
+    (note ? '<p><b>หมายเหตุ:</b> ' + esc(note) + '</p>' : '') +
+    '<div class="sign"><div>ผู้รับสินค้า</div><div>ผู้ส่งสินค้า</div></div>';
+  window.print();
+}
 
 // ─── สต๊อก ───
 function renderStock(){
