@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-02c';
+const CODE_VERSION = '2026-09-12a';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -991,10 +991,29 @@ function teamData(p, me) {
     const c = custBy[String(o['ลูกค้า']).trim()] || {};
     return remain.length ? { id: o['Order_ID'], customer: o['ลูกค้า'], tel: c['เบอร์โทร'] || '', addr: c['ที่อยู่'] || '', due: o['กำหนดส่ง'], status: o['สถานะ'], remain: remain } : null;
   }).filter(Boolean).sort(function (a, b) { return String(a.due || '9999').localeCompare(String(b.due || '9999')); });
+  // ── "กดแทนพิมพ์" สำหรับหน้าลงออเดอร์ — ถอดจากออเดอร์จริงทั้งหมด (รวมที่นำเข้าจาก AppSheet เดิม) ──
+  // สเปกที่สั่งบ่อย: 12 แบบแรกคลุม ~68% ของออเดอร์ (ข้อมูล 136 ใบ) → แตะทีเดียวได้ทั้งไลน์
+  // ออเดอร์ล่าสุดของลูกค้าแต่ละราย: 35% สั่งสเปกเดิมซ้ำ → เสนอ "สั่งเหมือนครั้งก่อน"
+  const specCount = {}, specSample = {}, lastOrder = {};
+  orders.forEach(function (o) {
+    if (o['สถานะ'] === 'ยกเลิก') return;
+    let its = []; try { its = JSON.parse(o['รายการ'] || '[]'); } catch (e) {}
+    const cu = String(o['ลูกค้า']).trim();
+    if (cu && its.length) lastOrder[cu] = { id: o['Order_ID'], date: o['วันที่รับ'], due: o['กำหนดส่ง'], buyType: o['ประเภทการซื้อ'] || '', priceMode: o['ราคา'] || '', brand: o['แบรนด์'] || '',
+      items: its.map(function (it) { return { type: it.type, size: it.size, shape: it.shape, neck: it.neck, color: it.color, screenColor: it.screenColor || '', capColor: it.capColor || '', bags: it.bags || 0, extra: it.extra || 0, qty: it.qty, price: it.price || 0, name: it.name }; }) };
+    its.forEach(function (it) {
+      if (!it.type) return;
+      const k = [it.type, it.size, it.shape, it.neck, it.color, it.screenColor || '', it.capColor || ''].join('|');
+      specCount[k] = (specCount[k] || 0) + 1;
+      if (!specSample[k]) specSample[k] = { type: it.type, size: it.size, shape: it.shape || '', neck: it.neck || '', color: it.color || '', screenColor: it.screenColor || '', capColor: it.capColor || '', name: it.name, perBag: it.perBag || perBag_(it.type, it.size) || 0 };
+    });
+  });
+  const topSpecs = Object.keys(specCount).sort(function (a, b) { return specCount[b] - specCount[a]; }).slice(0, 12)
+    .map(function (k) { const x = specSample[k]; x.count = specCount[k]; return x; });
   return {
     ok: true, version: CODE_VERSION, me: { id: me.id, name: me.name, nick: me.nick, dept: me.dept, via: me.via },
     customers: custs, products: rowsToObjs('Products').filter(function (p2) { return (p2['สถานะ'] || 'ใช้งาน') !== 'เลิกขาย'; }),
-    spec: SPEC, perBag: PER_BAG, minOrder: MIN_ORDER,
+    spec: SPEC, perBag: PER_BAG, minOrder: MIN_ORDER, topSpecs: topSpecs, lastOrder: lastOrder,
     machines: rowsToObjs('Machines').filter(function (m) { return (m['สถานะ'] || 'ใช้งาน') === 'ใช้งาน'; }).map(function (m) { return m['ชื่อเครื่อง']; }),
     settings: settingsMap(),
     orders: active.reverse().concat(recentDone),

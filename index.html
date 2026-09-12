@@ -89,7 +89,79 @@ button.mini.gold{background:var(--gold-soft); color:var(--gold);}
 .tree .ord>div:first-child .meta{display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .msg{position:fixed; left:50%; bottom:20px; transform:translateX(-50%); background:var(--ink); color:var(--ground); padding:10px 22px; border-radius:99px; font-size:14px; opacity:0; transition:opacity .3s; pointer-events:none; z-index:99; max-width:88vw; text-align:center;}
 .msg.show{opacity:1;}
-.tabpane{display:none;} .tabpane.on{display:block;}
+.tabpane{display:none;} .tabpane.on{display:block; animation:pane-in .18s cubic-bezier(.2,.8,.2,1) both;}
+/* ── motion system: สั้น นุ่ม ไม่รบกวน · ปิดหมดเมื่อผู้ใช้ตั้ง reduce motion ── */
+@keyframes pane-in{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+@keyframes rise{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+@keyframes sheet-up{from{transform:translateY(100%)} to{transform:none}}
+@keyframes fade{from{opacity:0} to{opacity:1}}
+@keyframes pop{0%{transform:scale(.96)} 60%{transform:scale(1.02)} 100%{transform:scale(1)}}
+@keyframes shimmer{from{background-position:200% 0} to{background-position:-200% 0}}
+@keyframes flash{0%{background:var(--gold-soft)} 100%{background:transparent}}
+.list li,.chips>*,.tree li{animation:rise .28s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*22ms);}
+button{transition:transform .08s ease, background-color .15s ease, color .15s ease, border-color .15s ease, box-shadow .15s ease;}
+button:active{transform:scale(.97);}
+.seg button.on,.chips button.on{animation:pop .22s ease;}
+input,select{transition:border-color .15s ease, box-shadow .15s ease;}
+input:focus{box-shadow:0 0 0 3px var(--green-soft);}
+.msg{transform:translate(-50%,12px); transition:opacity .22s ease, transform .22s cubic-bezier(.2,.8,.2,1);}
+.msg.show{transform:translate(-50%,0);}
+.modal-bg.on{animation:fade .16s ease both;} .modal-bg.on .modal{animation:sheet-up .24s cubic-bezier(.2,.8,.2,1) both;}
+li.flash{animation:flash 1.6s ease-out both;}
+.skel{height:14px; border-radius:6px; background:linear-gradient(90deg,var(--line) 25%,var(--surface) 50%,var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s linear infinite; margin:10px 0;}
+@media (prefers-reduced-motion: reduce){ *,*::before,*::after{animation:none !important; transition:none !important;} }
+
+/* ── หน้าลงออเดอร์ v2: กดแทนพิมพ์ · โล่ง · มืออาชีพ ── */
+.card.hero{border:0; box-shadow:0 1px 2px rgba(0,0,0,.04), 0 8px 24px rgba(23,90,76,.08); border-radius:14px; padding:18px 16px 12px;}
+.sec{font:600 11.5px "Anuphan",sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:16px 0 6px;}
+.sec:first-child{margin-top:0;}
+.sugg-wrap{position:relative;}
+.sugg{position:absolute; left:0; right:0; top:100%; z-index:20; background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.14); max-height:50vh; overflow-y:auto; margin-top:4px; transform-origin:top; animation:pane-in .14s ease both;}
+.sugg[hidden]{display:none;}
+.sugg button{display:flex; width:100%; justify-content:space-between; align-items:center; gap:10px; text-align:left; padding:11px 12px; border:0; border-bottom:1px solid var(--line); background:none; font:500 14.5px "Sarabun",sans-serif; color:var(--ink); cursor:pointer; min-height:46px;}
+.sugg button:last-child{border-bottom:none;} .sugg button:hover,.sugg button.hi{background:var(--green-soft);}
+.sugg .sub{font-size:12px; color:var(--muted);}
+.chips{display:flex; gap:6px; flex-wrap:wrap;}
+.chips button{padding:9px 13px; border:1px solid var(--line); background:var(--surface); border-radius:99px; font:500 13.5px "Sarabun",sans-serif; cursor:pointer; min-height:40px; color:var(--ink); white-space:nowrap;}
+.chips button.on{background:var(--green); color:var(--ground); border-color:var(--green);}
+.chips button.gold{border-color:var(--gold); color:var(--gold); font-weight:600; background:var(--gold-soft);}
+.chips.scroll{flex-wrap:nowrap; overflow-x:auto; padding-bottom:4px; margin:0 -16px; padding-left:16px; padding-right:16px; scrollbar-width:none;}
+.chips.scroll::-webkit-scrollbar{display:none;}
+.repeat{display:flex; justify-content:space-between; align-items:center; gap:10px; background:var(--gold-soft); border:1px solid var(--gold); border-radius:12px; padding:10px 12px; margin-top:8px; font-size:13.5px; animation:rise .25s ease both;}
+.repeat b{color:var(--gold);} .repeat[hidden]{display:none;}
+/* ไลน์สินค้า: ชิปค่าต่อแกน แตะเพื่อเลือกจากแผ่นด้านล่าง — ไม่มี dropdown 7 อัน */
+.spec-row{border:1px solid var(--line); border-radius:12px; padding:12px; margin-bottom:10px; background:var(--surface); animation:rise .25s ease both;}
+.spec-top{display:flex; justify-content:space-between; align-items:center; margin-bottom:8px; gap:8px;}
+.spec-top b{font:600 14.5px "Anuphan",sans-serif;}
+.axes{display:flex; gap:6px; flex-wrap:wrap; margin-bottom:10px;}
+.axes .ax[hidden]{display:none;}
+.axes .ax select{display:none;}
+.axes .cb{display:inline-flex; align-items:center; gap:5px; padding:8px 12px; border-radius:99px; border:1px solid var(--line); background:var(--ground); font:500 13.5px "Sarabun",sans-serif; color:var(--ink); cursor:pointer; min-height:38px;}
+.axes .cb small{font-size:11px; color:var(--muted);}
+.axes .cb.empty{border-style:dashed; color:var(--muted);}
+.axes .cb.set{background:var(--green-soft); border-color:transparent; color:var(--green); font-weight:600;}
+.spec-row .sg{display:grid; grid-template-columns:1.2fr 1fr 1fr; gap:8px;}
+.spec-row .sg>div[hidden]{display:none;}
+.spec-row .sg label{font-size:11px; color:var(--muted); margin:0 0 3px;}
+.spec-row .sg input{margin:0; min-height:46px;}
+.spec-row .sg .i-bags{font:700 20px "Anuphan",sans-serif; text-align:center;}
+.qty-note{font-size:12.5px; color:var(--muted); margin-top:8px;}
+.datechips{display:flex; gap:8px; align-items:center;} .datechips input{flex:1 1 150px;}
+.more-btn{width:100%; background:none; border:1px dashed var(--line); border-radius:10px; padding:10px; color:var(--muted); font:600 13px "Anuphan",sans-serif; cursor:pointer; display:flex; justify-content:space-between; align-items:center; margin-top:14px;}
+.more-btn .sum{font-weight:500; color:var(--gold); font-family:"Sarabun",sans-serif;}
+.more{display:grid; grid-template-rows:0fr; transition:grid-template-rows .26s cubic-bezier(.2,.8,.2,1);}
+.more>div{overflow:hidden;} .more.open{grid-template-rows:1fr;}
+.savebar{position:sticky; bottom:10px; z-index:4; display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:10px 10px 10px 16px; margin-top:16px; box-shadow:0 10px 28px rgba(0,0,0,.12);}
+.savebar .tot{flex:1; font:700 16px "Anuphan",sans-serif; color:var(--green); line-height:1.25;} .savebar .tot small{display:block; font:500 12px "Sarabun",sans-serif; color:var(--muted);}
+.savebar .btn{margin:0; width:auto; padding:12px 22px; border-radius:10px; min-height:48px;}
+.savebar .btn.ok{background:var(--ok);}
+/* แผ่นเลือกค่า (bottom sheet) */
+.sheet .opts{display:grid; grid-template-columns:repeat(auto-fill,minmax(120px,1fr)); gap:8px; margin-top:10px;}
+.sheet .opts button{padding:14px 10px; border:1px solid var(--line); background:var(--surface); border-radius:12px; font:600 15px "Anuphan",sans-serif; color:var(--ink); cursor:pointer; min-height:54px;}
+.sheet .opts button.on{background:var(--green); color:var(--ground); border-color:var(--green);}
+.sheet .opts button.soft{color:var(--muted); font-weight:500;}
+.sheet .sh-top{display:flex; justify-content:space-between; align-items:center;}
+.sheet .sh-top .meta{font-size:12.5px;}
 .verline{text-align:center; font-size:11.5px; color:var(--muted); padding:14px 8px 24px; line-height:1.8;}
 .verline b{color:var(--text); font-weight:600;}
 .verline .old{color:var(--warn); font-weight:600;}
@@ -147,36 +219,55 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 </section>
 
 <section class="tabpane" id="t-order">
-  <div class="card">
-    <h2>ลงออเดอร์ใหม่</h2>
-    <label>ลูกค้า</label>
-    <input id="oCust" list="dlCust" placeholder="พิมพ์ชื่อลูกค้า">
-    <label>แบรนด์ / ชื่องาน <span class="meta">(เดิมพิมพ์ต่อท้ายชื่อลูกค้า — ใส่ตรงนี้แทน)</span></label>
-    <input id="oBrand" placeholder="เช่น งานสวมฉลากกฟผ. / ศูนย์อนุรักษ์ช้างฯ">
-    <label>ประเภทการซื้อ</label>
-    <div class="seg" id="oBuyType"></div>
-    <label>ราคา</label>
-    <div class="seg" id="oPriceMode"></div>
-    <label>กำหนดส่ง</label><input type="date" id="oDue">
-    <label>รายการสินค้า <span class="meta">(เลือกสเปกแบบเดียวกับที่จดในแอปเดิม — ใส่จำนวนถุง ระบบคูณเป็นใบให้เอง)</span></label>
-    <div id="oItems"></div>
-    <button class="mini" id="oAdd">+ เพิ่มรายการ</button>
+  <div class="card hero">
+    <div class="sec">ลูกค้า</div>
+    <div class="sugg-wrap">
+      <input id="oCust" placeholder="พิมพ์ 2-3 ตัวอักษร แล้วเลือก" autocomplete="off">
+      <div class="sugg" id="oSugg" hidden></div>
+    </div>
+    <div class="repeat" id="oRepeat" hidden>
+      <div><b>🔁 สั่งเหมือนครั้งก่อน</b><br><span class="meta" id="oRepeatSub"></span></div>
+      <button class="mini" id="oRepeatGo" type="button" style="min-height:40px">ใช้เลย</button>
+    </div>
 
-    <h2 style="margin-top:16px">สถานะงาน <span class="meta">(เดิมเขียนมือในหมายเหตุ)</span></h2>
-    <div class="row">
-      <div><label>เรื่องเงิน</label><select id="oPay"></select></div>
-      <div><label>แบบสกรีน</label><select id="oArt"></select></div>
+    <div class="sec">สินค้า <span class="meta" style="text-transform:none; letter-spacing:0">— แตะที่สั่งบ่อย ได้ทั้งไลน์</span></div>
+    <div class="chips scroll" id="oQuick"></div>
+    <div id="oItems" style="margin-top:10px"></div>
+    <button class="mini ghost" id="oAdd" type="button" style="background:none; border:1px dashed var(--line); color:var(--muted); width:100%; min-height:40px">+ เพิ่มไลน์สินค้า</button>
+
+    <div class="sec">กำหนดส่ง</div>
+    <div class="datechips">
+      <div class="chips" id="oDueChips"></div>
+      <input type="date" id="oDue">
     </div>
-    <div class="row">
-      <div><label>ค่าบล็อก (บาท)</label><input type="number" id="oBlock" placeholder="0"></div>
-      <div><label>ทีมสกรีน</label><select id="oTeam"></select></div>
+
+    <div class="row" style="margin-top:14px">
+      <div><div class="sec">ประเภทการซื้อ</div><div class="seg" id="oBuyType"></div></div>
+      <div><div class="sec">ราคา</div><div class="seg" id="oPriceMode"></div></div>
     </div>
-    <label style="display:flex;align-items:center;gap:8px;margin-top:8px">
-      <input type="checkbox" id="oUrgent" style="width:18px;height:18px"> <span>งานด่วน</span>
-    </label>
-    <label>หมายเหตุอื่น ๆ</label><input id="oNote" placeholder="เรื่องที่ไม่มีช่องข้างบน เช่น นัดรับของ / หน่วยพิเศษ">
-    <div class="total" id="oTotal">รวม 0 บาท</div>
-    <button class="btn" id="oSave">บันทึกออเดอร์</button>
+
+    <button class="more-btn" id="oMoreBtn" type="button"><span>เพิ่มเติม — แบรนด์ · เรื่องเงิน · แบบ · ค่าบล็อก · ทีมสกรีน · ด่วน · หมายเหตุ</span><span class="sum" id="oMoreSum"></span></button>
+    <div class="more" id="oMore"><div>
+      <label>แบรนด์ / ชื่องาน <span class="meta">(เดิมพิมพ์ต่อท้ายชื่อลูกค้า)</span></label>
+      <input id="oBrand" placeholder="เช่น งานสวมฉลากกฟผ.">
+      <div class="row">
+        <div><label>เรื่องเงิน</label><select id="oPay"></select></div>
+        <div><label>แบบสกรีน</label><select id="oArt"></select></div>
+      </div>
+      <div class="row">
+        <div><label>ค่าบล็อก (บาท)</label><input type="number" id="oBlock" placeholder="0"></div>
+        <div><label>ทีมสกรีน</label><select id="oTeam"></select></div>
+      </div>
+      <label style="display:flex;align-items:center;gap:8px;margin-top:10px">
+        <input type="checkbox" id="oUrgent" style="width:20px;height:20px"> <span>งานด่วน</span>
+      </label>
+      <label>หมายเหตุอื่น ๆ</label><input id="oNote" placeholder="นัดรับของ / หน่วยพิเศษ / อื่น ๆ">
+    </div></div>
+
+    <div class="savebar">
+      <div class="tot" id="oTotal">รวม 0 ใบ<small>ยังไม่มีรายการ</small></div>
+      <button class="btn" id="oSave">บันทึกออเดอร์</button>
+    </div>
   </div>
   <div class="card">
     <div class="li-top"><h2 style="margin:0">ออเดอร์</h2>
@@ -317,6 +408,11 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
   </div>
 </div>
 
+<div class="modal-bg" id="axModal"><div class="modal sheet">
+  <div class="sh-top"><h2 id="axTitle" style="margin:0">เลือก</h2><span class="meta" id="axStep"></span></div>
+  <div class="opts" id="axOpts"></div>
+  <button class="btn" id="axClose" style="background:none; color:var(--muted); border:1px solid var(--line); margin-top:14px">ปิด</button>
+</div></div>
 <datalist id="dlCust"></datalist>
 <datalist id="dlProd"></datalist>
 <datalist id="dlMat"></datalist>
@@ -335,7 +431,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-02c';
+const WEB_VERSION = '2026-09-12a';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -533,7 +629,9 @@ async function loadData(){
     $('oArt').innerHTML  = opts(S['สถานะแบบ'], '', 'ยังไม่ระบุ');
     $('oTeam').innerHTML = opts(S['ทีมสกรีน'], '', 'ยังไม่จ่ายทีม');
     $('oItems').innerHTML = ''; addSpecRow();
+    renderDueChips();
   }
+  renderQuick();
   // ทะเบียนเครื่องฉีด — มาจากแท็บ Machines (แก้เพิ่ม/ปิดเครื่องได้ในชีต ไม่ต้องแก้โค้ด)
   $('plMachine').innerHTML = opts(DATA.machines || [], '', 'ไม่ระบุเครื่อง');
   $('dlMat').innerHTML = DATA.materials.map(m => '<option value="' + esc(m['ชื่อวัตถุดิบ']) + '">').join('');
@@ -604,27 +702,52 @@ function opts(list, sel, blank){
   return (blank !== false ? '<option value="">' + (blank || '—') + '</option>' : '') +
     (list||[]).map(x => '<option' + (x===sel?' selected':'') + '>' + esc(x) + '</option>').join('');
 }
-function addSpecRow(it={}){
+// ไลน์สินค้า v2 — ตัว select ยังอยู่ (ซ่อน) เป็น "เครื่องยนต์" เดิม · หน้าตาเป็นชิปค่าต่อแกน แตะแล้วเลือกจากแผ่นด้านล่าง
+// ลำดับแกนตามที่หน้างานจด: ประเภท → ขนาด → คอขวด → รูปทรง → สี → สีสกรีน → ฝา
+const AXES = [
+  ['type','ประเภท','.i-type',null], ['size','ขนาด','.i-size','ขนาด'], ['neck','คอขวด','.i-neck','คอขวด'],
+  ['shape','รูปทรง','.i-shape','รูปทรง'], ['color','สี','.i-color','สี'], ['scr','สีสกรีน','.i-scrcolor','สีสกรีน'], ['cap','พร้อมฝาสี','.i-cap','พร้อมฝาสี']];
+function addSpecRow(it={}, opt={}){
   const S = (DATA && DATA.spec) || {};
   const d = document.createElement('div');
   d.className = 'spec-row';
+  const ax = (key, label, cls, sel, blank) => '<div class="ax"' + (AXES.find(a=>a[0]===key)[3] ? ' data-axis="' + AXES.find(a=>a[0]===key)[3] + '"' : '') + '>' +
+    '<button type="button" class="cb empty" data-ax="' + key + '"><small>' + label + '</small><span>เลือก</span></button>' +
+    '<select class="' + cls + '">' + sel + '</select></div>';
   d.innerHTML =
     '<div class="spec-top"><b class="s-title">รายการใหม่</b>' +
-    '<button class="mini warn i-del" type="button">ลบ</button></div>' +
+    '<button class="mini warn i-del" type="button">✕</button></div>' +
+    '<div class="axes">' +
+      ax('type','ประเภท','i-type', opts(S['ประเภทสินค้า'], it.type)) +
+      ax('size','ขนาด','i-size', '') +
+      ax('neck','คอขวด','i-neck', opts(S['คอขวด'], it.neck)) +
+      ax('shape','รูปทรง','i-shape', opts(S['รูปทรง'], it.shape)) +
+      ax('color','สี','i-color', opts(S['สี'], it.color)) +
+      ax('scr','สีสกรีน','i-scrcolor', opts(S['สีสกรีน'], it.screenColor, 'ไม่สกรีน')) +
+      ax('cap','พร้อมฝาสี','i-cap', opts(S['พร้อมฝาสี'], it.capColor, 'ไม่มีฝา')) +
+    '</div>' +
     '<div class="sg">' +
-      '<div><label>ประเภท</label><select class="i-type">' + opts(S['ประเภทสินค้า'], it.type) + '</select></div>' +
-      '<div data-axis="ขนาด"><label>ขนาด</label><select class="i-size"></select></div>' +
-      '<div data-axis="คอขวด"><label>คอขวด</label><select class="i-neck">' + opts(S['คอขวด'], it.neck) + '</select></div>' +
-      '<div data-axis="รูปทรง"><label>รูปทรง</label><select class="i-shape">' + opts(S['รูปทรง'], it.shape) + '</select></div>' +
-      '<div data-axis="สี"><label>สี</label><select class="i-color">' + opts(S['สี'], it.color) + '</select></div>' +
-      '<div data-axis="สีสกรีน"><label>สีสกรีน</label><select class="i-scrcolor">' + opts(S['สีสกรีน'], it.screenColor, 'ไม่สกรีน') + '</select></div>' +
-      '<div data-axis="พร้อมฝาสี"><label>พร้อมฝาสี</label><select class="i-cap">' + opts(S['พร้อมฝาสี'], it.capColor, 'ไม่มีฝา') + '</select></div>' +
-      '<div data-qty="bags"><label>จำนวน (ถุง)</label><input class="i-bags" type="number" inputmode="numeric" value="' + esc(it.bags||'') + '"></div>' +
-      '<div data-qty="extra"><label>เศษ (ใบ)</label><input class="i-extra" type="number" inputmode="numeric" value="' + esc(it.extra||'') + '"></div>' +
-      '<div data-qty="price"><label>ราคา/ใบ</label><input class="i-price" type="number" step="0.01" value="' + esc(it.price||'') + '"></div>' +
+      '<div data-qty="bags"><label>จำนวน (ถุง)</label><input class="i-bags" type="number" inputmode="numeric" placeholder="0" value="' + esc(it.bags||'') + '"></div>' +
+      '<div data-qty="extra"><label>เศษ (ใบ)</label><input class="i-extra" type="number" inputmode="numeric" placeholder="0" value="' + esc(it.extra||'') + '"></div>' +
+      '<div data-qty="price"><label>ราคา/ใบ</label><input class="i-price" type="number" step="0.01" placeholder="—" value="' + esc(it.price||'') + '"></div>' +
     '</div><div class="qty-note"></div>';
 
   const q = s => d.querySelector(s);
+  // ชิปโชว์ค่าปัจจุบันของแต่ละแกน
+  function paintChips(){
+    AXES.forEach(([key,label,cls]) => {
+      const sel = q(cls), btn = q('.cb[data-ax="' + key + '"]'); if (!sel || !btn) return;
+      const v = sel.value, isSoft = (key==='scr' && !v) || (key==='cap' && !v);
+      const txt = v || (isSoft ? (key==='scr' ? 'ไม่สกรีน' : 'ไม่มีฝา') : 'เลือก');
+      btn.innerHTML = '<small>' + label + '</small><span>' + esc(txt) + '</span>';
+      btn.classList.toggle('set', !!v); btn.classList.toggle('empty', !v && !isSoft);
+    });
+  }
+  // แตะชิป → แผ่นเลือกค่า · เลือกแล้วเดินไปแกนถัดไปที่ยังว่างให้เอง (เฉพาะไลน์ที่เพิ่งสร้าง)
+  d.querySelector('.axes').addEventListener('click', e => {
+    const b = e.target.closest('.cb'); if (!b) return;
+    openAxisSheet(d, b.dataset.ax, false);
+  });
   function fillSizes(){
     const t = q('.i-type').value;
     const sizes = (S['ขนาดตามประเภท'] || {})[t] || [];
@@ -681,12 +804,137 @@ function addSpecRow(it={}){
     calcTotal();
   }
   q('.i-type').addEventListener('change', () => { fillSizes(); refresh(); });
-  d.querySelectorAll('select,input').forEach(el => el.addEventListener('change', refresh));
+  d.querySelectorAll('select,input').forEach(el => el.addEventListener('change', () => { refresh(); paintChips(); }));
   d.querySelectorAll('input').forEach(el => el.addEventListener('input', refresh));
-  q('.i-del').addEventListener('click', () => { d.remove(); calcTotal(); });
+  q('.i-del').addEventListener('click', () => { d.style.opacity = '0'; d.style.transform = 'translateX(12px)'; d.style.transition = 'all .18s ease'; setTimeout(() => { d.remove(); calcTotal(); }, 170); });
+  q('.i-bags').addEventListener('keydown', e => { if (e.key === 'Enter') $('oSave').click(); });
+  d._fillSizes = fillSizes; d._paint = paintChips;
   $('oItems').appendChild(d);
-  fillSizes(); refresh();
+  fillSizes(); refresh(); paintChips();
+  if (opt.guide) openAxisSheet(d, 'type', true);           // ไลน์เปล่า → เริ่มไล่ถามทีละแกนเลย
+  else if (opt.focusQty) setTimeout(() => q('.i-bags').focus(), 60);
+  return d;
 }
+// ─── แผ่นเลือกค่าของแกน (bottom sheet) ───
+let AX_ROW = null, AX_KEY = '', AX_GUIDE = false;
+function nextAxis(row, key){
+  const i = AXES.findIndex(a => a[0] === key);
+  for (let j = i + 1; j < AXES.length; j++) {
+    const [k,,cls,dataAxis] = AXES[j];
+    const box = row.querySelector('.cb[data-ax="' + k + '"]').closest('.ax');
+    if (box.hidden) continue;                         // แกนที่ประเภทนี้ไม่ใช้ ข้าม
+    const sel = row.querySelector(cls);
+    if (!sel.value && sel.options.length > 1) return k;   // ยังไม่เลือกและมีให้เลือก
+  }
+  return '';
+}
+function openAxisSheet(row, key, guide){
+  AX_ROW = row; AX_KEY = key; AX_GUIDE = !!guide;
+  const [, label, cls] = AXES.find(a => a[0] === key);
+  const sel = row.querySelector(cls);
+  const list = [...sel.options].map(o => ({ v: o.value, t: o.textContent })).filter(o => o.v || key === 'scr' || key === 'cap');
+  if (!list.length) { const nk = nextAxis(row, key); if (nk && guide) return openAxisSheet(row, nk, true); return; }
+  $('axTitle').textContent = label;
+  const filled = AXES.filter(a => { const b = row.querySelector('.cb[data-ax="' + a[0] + '"]').closest('.ax'); return !b.hidden; });
+  $('axStep').textContent = guide ? 'ขั้น ' + (filled.findIndex(a => a[0] === key) + 1) + '/' + filled.length : '';
+  $('axOpts').innerHTML = list.map((o, i) => '<button type="button" data-v="' + esc(o.v) + '" class="' + (o.v === sel.value ? 'on' : '') + (o.v ? '' : ' soft') + '" style="--i:' + i + '">' + esc(o.t) + '</button>').join('');
+  $('axModal').classList.add('on');
+}
+$('axOpts').addEventListener('click', e => {
+  const b = e.target.closest('button[data-v]'); if (!b || !AX_ROW) return;
+  const [, , cls] = AXES.find(a => a[0] === AX_KEY);
+  const sel = AX_ROW.querySelector(cls);
+  sel.value = b.dataset.v; sel.dispatchEvent(new Event('change'));
+  const nk = AX_GUIDE ? nextAxis(AX_ROW, AX_KEY) : '';
+  if (nk) { openAxisSheet(AX_ROW, nk, true); return; }
+  $('axModal').classList.remove('on');
+  if (AX_GUIDE) setTimeout(() => AX_ROW.querySelector('.i-bags').focus(), 80);   // เลือกครบแล้วไปช่องจำนวนเลย
+});
+$('axClose').addEventListener('click', () => $('axModal').classList.remove('on'));
+$('axModal').addEventListener('click', e => { if (e.target.id === 'axModal') $('axModal').classList.remove('on'); });
+
+// ─── ลูกค้า: พิมพ์แล้วเด้งแนะนำ (เรียงตามใช้ล่าสุด · โชว์สาย/อำเภอ) + "สั่งเหมือนครั้งก่อน" ───
+let O_CUST = '', O_HI = -1;
+function custItems(){
+  const q = $('oCust').value.trim().toLowerCase();
+  const last = (DATA && DATA.lastOrder) || {};
+  const all = ((DATA && DATA.customers) || []).map(c => ({ name: String(c['ชื่อลูกค้า']).trim(), tag: [c['เส้นทาง'] ? 'สาย ' + c['เส้นทาง'] : '', c['อำเภอ'] || ''].filter(Boolean).join(' · '), recent: last[String(c['ชื่อลูกค้า']).trim()] ? 1 : 0 }));
+  const hit = all.filter(c => !q || c.name.toLowerCase().includes(q));
+  hit.sort((a, b) => b.recent - a.recent);            // เคยสั่งแล้วขึ้นก่อน
+  const items = hit.slice(0, q ? 12 : 8).map(c => ({ name: c.name, sub: [c.tag, last[c.name] ? 'ล่าสุด ' + last[c.name].date : ''].filter(Boolean).join(' · ') || 'ทะเบียน' }));
+  if (q && !items.some(i => i.name.toLowerCase() === q)) items.push({ name: $('oCust').value.trim(), sub: 'ลูกค้าใหม่', isNew: true });
+  return items;
+}
+function renderCustSugg(show){
+  const items = custItems(), box = $('oSugg');
+  if (!show || !items.length) { box.hidden = true; return; }
+  box.innerHTML = items.map((it, i) => '<button type="button" data-i="' + i + '" class="' + (i === O_HI ? 'hi' : '') + '"><span>' + (it.isNew ? '+ ใช้ชื่อ "' + esc(it.name) + '"' : esc(it.name)) + '<br><span class="sub">' + esc(it.sub) + '</span></span></button>').join('');
+  box.hidden = false;
+}
+function pickCust(it){
+  O_CUST = it.name; $('oCust').value = it.name; $('oSugg').hidden = true; O_HI = -1;
+  const lo = ((DATA && DATA.lastOrder) || {})[it.name];
+  $('oRepeat').hidden = !lo;
+  if (lo) $('oRepeatSub').textContent = lo.date + ' · ' + lo.items.map(x => (x.name || [x.type, x.size, x.color].filter(Boolean).join(' ')) + (x.bags ? ' ' + x.bags + ' ถุง' : ' ' + baht(x.qty) + ' ใบ')).join(' · ');
+  const first = $('oItems').querySelector('.spec-row');
+  if (first && !first.querySelector('.i-type').value) openAxisSheet(first, 'type', true);   // ยังไม่มีสินค้า → ไล่ถามต่อเลย
+}
+$('oCust').addEventListener('input', () => { O_CUST = ''; O_HI = -1; $('oRepeat').hidden = true; renderCustSugg(true); });
+$('oCust').addEventListener('focus', () => renderCustSugg(true));
+$('oCust').addEventListener('keydown', e => {
+  const items = custItems();
+  if (e.key === 'ArrowDown') { O_HI = Math.min(O_HI + 1, items.length - 1); renderCustSugg(true); e.preventDefault(); }
+  else if (e.key === 'ArrowUp') { O_HI = Math.max(O_HI - 1, 0); renderCustSugg(true); e.preventDefault(); }
+  else if (e.key === 'Enter') { if (items.length) pickCust(items[O_HI >= 0 ? O_HI : 0]); e.preventDefault(); }
+  else if (e.key === 'Escape') $('oSugg').hidden = true;
+});
+$('oSugg').addEventListener('mousedown', e => e.preventDefault());
+$('oSugg').addEventListener('click', e => { const b = e.target.closest('button[data-i]'); if (b) pickCust(custItems()[Number(b.dataset.i)]); });
+document.addEventListener('click', e => { if (!e.target.closest('.sugg-wrap')) $('oSugg').hidden = true; });
+$('oRepeatGo').addEventListener('click', () => {
+  const lo = ((DATA && DATA.lastOrder) || {})[O_CUST || $('oCust').value.trim()]; if (!lo) return;
+  $('oItems').innerHTML = '';
+  lo.items.forEach((x, i) => addSpecRow(x, { focusQty: i === 0 }));
+  if (lo.buyType) [...$('oBuyType').children].forEach(b => b.classList.toggle('on', b.textContent === lo.buyType));
+  if (lo.priceMode) [...$('oPriceMode').children].forEach(b => b.classList.toggle('on', b.textContent === lo.priceMode));
+  $('oBrand').value = lo.brand || ''; paintMoreSum();
+  $('oRepeat').hidden = true; calcTotal();
+  toast('ใส่รายการเหมือนครั้งก่อนแล้ว — เช็คจำนวนถุงอีกที');
+});
+// ─── ⚡ สเปกที่สั่งบ่อย — แตะทีเดียวได้ทั้งไลน์ ───
+function renderQuick(){
+  const top = (DATA && DATA.topSpecs) || [];
+  $('oQuick').innerHTML = top.slice(0, 10).map((t, i) => {
+    const short = [t.size, t.shape, t.neck, t.color].filter(Boolean).join(' ') + (t.screenColor ? ' · สกรีน' + t.screenColor : '');
+    return '<button type="button" data-q="' + i + '" style="--i:' + i + '"><b>' + esc(t.type) + '</b> ' + esc(short) + '</button>';
+  }).join('') || '<span class="meta">ยังไม่มีประวัติสั่ง — แตะ "เลือก" ในไลน์ด้านล่าง</span>';
+}
+$('oQuick').addEventListener('click', e => {
+  const b = e.target.closest('button[data-q]'); if (!b) return;
+  const t = DATA.topSpecs[Number(b.dataset.q)];
+  const rows = [...$('oItems').querySelectorAll('.spec-row')];
+  const blank = rows.find(r => !r.querySelector('.i-type').value);
+  if (blank) blank.remove();                           // ไลน์เปล่าที่ยังไม่ได้แตะ → แทนที่เลย
+  addSpecRow({ type: t.type, size: t.size, shape: t.shape, neck: t.neck, color: t.color, screenColor: t.screenColor, capColor: t.capColor }, { focusQty: true });
+});
+// ─── กำหนดส่ง: แตะเลือกจำนวนวัน ───
+function renderDueChips(){
+  $('oDueChips').innerHTML = [['พรุ่งนี้',1],['3 วัน',3],['7 วัน',7],['14 วัน',14]].map(([l,n],i) => '<button type="button" data-days="' + n + '" style="--i:' + i + '">' + l + '</button>').join('');
+}
+$('oDueChips').addEventListener('click', e => {
+  const b = e.target.closest('button[data-days]'); if (!b) return;
+  const d = new Date(); d.setDate(d.getDate() + Number(b.dataset.days));
+  $('oDue').value = d.toISOString().slice(0, 10);
+  [...$('oDueChips').children].forEach(x => x.classList.toggle('on', x === b));
+});
+$('oDue').addEventListener('input', () => [...$('oDueChips').children].forEach(x => x.classList.remove('on')));
+// ─── เพิ่มเติม (พับไว้ · โชว์สรุปสิ่งที่ตั้งไว้) ───
+function paintMoreSum(){
+  const bits = [$('oUrgent').checked ? 'ด่วน' : '', $('oPay').value, $('oArt').value, $('oTeam').value, $('oBlock').value ? 'บล็อก ' + $('oBlock').value : '', $('oBrand').value.trim() ? 'แบรนด์ ' + $('oBrand').value.trim() : '', $('oNote').value.trim() ? 'หมายเหตุ' : ''].filter(Boolean);
+  $('oMoreSum').textContent = bits.join(' · ');
+}
+$('oMoreBtn').addEventListener('click', () => $('oMore').classList.toggle('open'));
+['oUrgent','oPay','oArt','oTeam','oBlock','oBrand','oNote'].forEach(id => { $(id).addEventListener('change', paintMoreSum); $(id).addEventListener('input', paintMoreSum); });
 function readSpecItems(){
   return [...$('oItems').querySelectorAll('.spec-row')].map(r => {
     const g = s => r.querySelector(s).value.trim();
@@ -727,9 +975,9 @@ function calcTotal(){
   const items = readSpecItems();
   const t = items.reduce((s,it) => s + it.qty*it.price, 0);
   const pcs = items.reduce((s,it) => s + it.qty, 0);
-  $('oTotal').textContent = 'รวม ' + baht(pcs) + ' ใบ' + (t ? ' · ' + baht(t) + ' บาท' : ' (ยังไม่ใส่ราคา)');
+  $('oTotal').innerHTML = 'รวม ' + baht(pcs) + ' ใบ<small>' + (items.length ? items.length + ' รายการ' + (t ? ' · ' + baht(t) + ' บาท' : ' · ยังไม่ใส่ราคา') : 'ยังไม่มีรายการ') + '</small>';
 }
-$('oAdd').addEventListener('click', () => addSpecRow());
+$('oAdd').addEventListener('click', () => addSpecRow({}, { guide: true }));
 $('oSave').addEventListener('click', async () => {
   const items = readSpecItems();
   const customer = $('oCust').value.trim();
@@ -742,10 +990,14 @@ $('oSave').addEventListener('click', async () => {
     blockFee: $('oBlock').value, screenTeam: $('oTeam').value, urgent: $('oUrgent').checked,
   });
   toast('✅ ' + j.id + ' · ' + baht(j.total) + ' บ.' + (j.unmapped.length ? ' ⚠️ นอกระบบสต๊อก: ' + j.unmapped.join(',') : ''));
-  $('oCust').value=''; $('oNote').value=''; $('oBlock').value=''; $('oUrgent').checked=false; $('oBrand').value='';
-  $('oItems').innerHTML=''; addSpecRow(); calcTotal();
+  const sb = $('oSave'); sb.textContent = '✓ บันทึกแล้ว'; sb.classList.add('ok');
+  setTimeout(() => { sb.textContent = 'บันทึกออเดอร์'; sb.classList.remove('ok'); }, 1400);
+  $('oCust').value=''; O_CUST=''; $('oNote').value=''; $('oBlock').value=''; $('oUrgent').checked=false; $('oBrand').value=''; $('oRepeat').hidden = true;
+  $('oItems').innerHTML=''; addSpecRow(); calcTotal(); paintMoreSum();
+  FLASH_ID = j.id;
   loadData();
 });
+let FLASH_ID = '';
 const CHIP = s => ({'รอผลิต':'c-wait','กำลังผลิต':'c-doing','รอสกรีน':'c-wait','กำลังสกรีน':'c-doing','พร้อมส่ง':'c-ready','ส่งบางส่วน':'c-doing','ส่งแล้ว':'c-done','ยกเลิก':'c-done','เสร็จ':'c-done','ค้างชำระ':'c-owe','วางบิลแล้ว':'c-wait','ชำระแล้ว':'c-done','รอเก็บ':'c-owe'}[s] || 'c-wait');
 // ป้ายสถานะที่เดิมต้องอ่านเอาจากหมายเหตุ — ให้เห็นตั้งแต่ในลิสต์
 function orderBadges(o){
@@ -761,8 +1013,9 @@ function orderBadges(o){
 }
 function renderOrders(){
   renderOrderTree();
-  $('orderList').innerHTML = DATA.orders.slice(0,40).map(o =>
-    '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer"><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + ' · แตะดูรายละเอียด</span></div>' +
+  if (FLASH_ID) setTimeout(() => { FLASH_ID = ''; }, 2000);
+  $('orderList').innerHTML = DATA.orders.slice(0,40).map((o, i) =>
+    '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer; --i:' + Math.min(i, 12) + '"' + (o['Order_ID'] === FLASH_ID ? ' class="flash"' : '') + '><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + ' · แตะดูรายละเอียด</span></div>' +
     '<div>' + orderBadges(o) + '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
     (['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ']) ? '' : '<button class="mini warn" data-cancel="' + esc(o['Order_ID']) + '">ยกเลิก</button>') +
     '</div></div></li>').join('') || '<li class="meta">ยังไม่มีออเดอร์</li>';
