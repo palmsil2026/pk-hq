@@ -7,16 +7,19 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap">
 <style>
 :root{
-  --ground:#EEF3F0; --surface:#FFFFFF; --ink:#1B2A26; --muted:#56675F;
-  --green:#175A4C; --green-2:#1F6E5C; --green-soft:#E1EFE9; --gold:#B8912F; --gold-soft:#F6EED9;
-  --ok:#2E7D4F; --warn:#B3541E; --warn-soft:#F7E8DE; --danger:#A63A3A;
+  /* โทนสี: แดงอิฐนุ่ม ๆ ออกพาสเทล (คุณปาล์ม 12 ก.ย.: ไม่เอาเขียว เอาแดงแบบไม่แสบตา)
+     ชื่อ token ยังเป็น --green เพราะใช้ทั่วไฟล์ — ความหมายคือ "สีแบรนด์" · --ok คือเขียวสำหรับ "สำเร็จ" เท่านั้น */
+  --ground:#F6F1F1; --surface:#FFFFFF; --ink:#2A1E1F; --muted:#6E5C5E;
+  --brand:#B24A4F; --brand-2:#C9636A; --brand-soft:#F7E3E3;
+  --green:var(--brand); --green-2:var(--brand-2); --green-soft:var(--brand-soft); --gold:#B8912F; --gold-soft:#F6EED9;
+  --ok:#3B8A5A; --warn:#A8681C; --warn-soft:#F8EBD6; --danger:#8E2F2F;
   /* ── ผิวกระจก (ชุดเดียวกับแอปโรงน้ำ origin-hq) ── */
   --card:rgba(255,255,255,.72);          /* การ์ดกระจก */
   --glass-strong:rgba(255,255,255,.88);  /* แผ่น/แถบที่ต้องอ่านชัด */
   --edge:rgba(255,255,255,.78);          /* ขอบสว่างของกระจก */
-  --line:rgba(27,42,38,.12);             /* เส้นแบ่งในการ์ด */
+  --line:rgba(60,30,32,.12);             /* เส้นแบ่งในการ์ด */
   --well:rgba(255,255,255,.62);          /* แถวย่อยในการ์ด (ไลน์สินค้า/รายการ) */
-  --shadow:0 6px 20px rgba(23,90,76,.08), 0 1px 2px rgba(23,90,76,.05);
+  --shadow:0 6px 20px rgba(140,58,64,.08), 0 1px 2px rgba(140,58,64,.05);
   --blur:saturate(180%) blur(16px);
 }
 @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
@@ -24,11 +27,11 @@
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --ground:#0E1815; --surface:#16241F; --ink:#E7F0EC; --muted:#93A8A0;
-    --green:#7FC7B2; --green-2:#5FAE9A; --green-soft:#16352C; --gold:#D9B65C; --gold-soft:#332A14;
-    --ok:#6FBE92; --warn:#E0925F; --warn-soft:#3A2313; --danger:#E08585;
-    --card:rgba(22,36,31,.66); --glass-strong:rgba(22,36,31,.92); --edge:rgba(255,255,255,.10);
-    --line:rgba(231,240,236,.13); --well:rgba(255,255,255,.05);
+    --ground:#1B1415; --surface:#261B1C; --ink:#F3E9E9; --muted:#B8A3A5;
+    --brand:#E08A8F; --brand-2:#CC7078; --brand-soft:#3D2426; --gold:#D9B65C; --gold-soft:#332A14;
+    --ok:#7CC29A; --warn:#E0A25F; --warn-soft:#3A2A13; --danger:#E08585;
+    --card:rgba(38,27,28,.66); --glass-strong:rgba(38,27,28,.92); --edge:rgba(255,255,255,.10);
+    --line:rgba(243,233,233,.13); --well:rgba(255,255,255,.05);
     --shadow:0 8px 24px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.3);
   }
 }
@@ -38,20 +41,20 @@ body{margin:0; background:transparent; color:var(--ink); font:15px/1.6 "Sarabun"
 /* พื้นหลังไล่สีนุ่ม ๆ หลังกระจก (เขียว/ทอง ของ P&K) — fixed ไม่เลื่อนตามหน้า */
 body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
   background:
-    radial-gradient(58vmax 58vmax at 4% -12%, rgba(23,90,76,.22), transparent 62%),
-    radial-gradient(46vmax 46vmax at 102% 0%, rgba(184,145,47,.20), transparent 58%),
-    radial-gradient(56vmax 56vmax at 92% 98%, rgba(31,110,92,.18), transparent 62%),
-    radial-gradient(50vmax 50vmax at 0% 88%, rgba(127,199,178,.22), transparent 60%),
+    radial-gradient(58vmax 58vmax at 4% -12%, rgba(178,74,79,.16), transparent 62%),
+    radial-gradient(46vmax 46vmax at 102% 0%, rgba(184,145,47,.14), transparent 58%),
+    radial-gradient(56vmax 56vmax at 92% 98%, rgba(201,99,106,.14), transparent 62%),
+    radial-gradient(50vmax 50vmax at 0% 88%, rgba(232,170,172,.22), transparent 60%),
     var(--ground);}
 @media (prefers-color-scheme: dark){ body::before{background:
-    radial-gradient(58vmax 58vmax at 4% -12%, rgba(23,90,76,.45), transparent 62%),
-    radial-gradient(46vmax 46vmax at 102% 0%, rgba(184,145,47,.18), transparent 58%),
-    radial-gradient(56vmax 56vmax at 92% 98%, rgba(31,110,92,.35), transparent 62%), var(--ground);} }
-header{background:linear-gradient(135deg, rgba(23,90,76,.95), rgba(18,72,61,.97)); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); color:#F4F7F6; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,.22); box-shadow:0 4px 18px rgba(23,90,76,.18);}
+    radial-gradient(58vmax 58vmax at 4% -12%, rgba(178,74,79,.40), transparent 62%),
+    radial-gradient(46vmax 46vmax at 102% 0%, rgba(184,145,47,.16), transparent 58%),
+    radial-gradient(56vmax 56vmax at 92% 98%, rgba(201,99,106,.30), transparent 62%), var(--ground);} }
+header{background:linear-gradient(135deg, rgba(178,74,79,.95), rgba(150,60,66,.97)); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); color:#F4F7F6; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,.22); box-shadow:0 4px 18px rgba(140,58,64,.18);}
 header h1{font-family:"Anuphan",sans-serif; font-size:17px; margin:0; font-weight:700;}
 header .u{font-size:12px; opacity:.9; text-align:right; line-height:1.4;}
 header .u a{color:inherit; text-decoration:underline; cursor:pointer;}
-nav{display:flex; background:var(--glass-strong); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border-bottom:1px solid var(--edge); box-shadow:0 4px 18px rgba(23,90,76,.06); position:sticky; top:0; z-index:5; overflow-x:auto;}
+nav{display:flex; background:var(--glass-strong); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border-bottom:1px solid var(--edge); box-shadow:0 4px 18px rgba(140,58,64,.06); position:sticky; top:0; z-index:5; overflow-x:auto;}
 nav button{flex:1 0 auto; min-width:72px; border:0; background:none; color:var(--muted); font:600 13.5px "Anuphan",sans-serif; padding:12px 8px; cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;}
 nav button.on{color:var(--green); border-bottom-color:var(--gold);}
 main{max-width:720px; margin:0 auto; padding:14px;}
@@ -62,7 +65,7 @@ input,select,textarea{width:100%; padding:9px 10px; border:1px solid var(--line)
 @media (prefers-color-scheme: dark){ input,select,textarea{background:rgba(255,255,255,.06);} }
 input:focus,select:focus{outline:2px solid var(--green); outline-offset:1px; background:var(--surface);}
 .row{display:flex; gap:8px;} .row>*{flex:1;}
-button.btn{background:linear-gradient(135deg, var(--green), var(--green-2)); color:#F4F7F6; border:0; border-radius:10px; padding:11px 18px; font:600 14.5px "Anuphan",sans-serif; cursor:pointer; margin-top:12px; width:100%; box-shadow:0 6px 16px rgba(23,90,76,.22);}
+button.btn{background:linear-gradient(135deg, var(--green), var(--green-2)); color:#F4F7F6; border:0; border-radius:10px; padding:11px 18px; font:600 14.5px "Anuphan",sans-serif; cursor:pointer; margin-top:12px; width:100%; box-shadow:0 6px 16px rgba(140,58,64,.22);}
 button.btn:disabled{opacity:.7; cursor:wait;}
 button.btn.gold{background:var(--gold);}
 button.mini{background:var(--green-soft); color:var(--green); border:0; border-radius:6px; padding:6px 12px; font:600 12.5px "Anuphan",sans-serif; cursor:pointer;}
@@ -223,7 +226,7 @@ li.flash{animation:flash 1.6s ease-out both;}
 .slot.add:hover{border-color:var(--green); color:var(--green);}
 .dlv-list{display:flex; flex-direction:column; gap:10px;}
 .dcard{border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:var(--well); animation:rise .28s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*30ms); transition:box-shadow .25s ease, border-color .25s ease, opacity .2s ease;}
-.dcard.open{border-color:var(--green); box-shadow:0 12px 32px rgba(23,90,76,.12);}
+.dcard.open{border-color:var(--green); box-shadow:0 12px 32px rgba(140,58,64,.12);}
 .dcard.ghost{pointer-events:none; box-shadow:0 18px 40px rgba(0,0,0,.25);}
 .dcard.busy .dc-load{opacity:.6; pointer-events:none;}
 .dc-head{display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;} .dc-head b{font:700 15.5px "Anuphan",sans-serif;}
@@ -303,7 +306,7 @@ li.flash{animation:flash 1.6s ease-out both;}
 .cards button{display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px 12px; border:1px solid var(--line); border-radius:14px; background:var(--surface); cursor:pointer; min-height:104px; animation:rise .3s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*30ms);}
 .cards button:hover{border-color:var(--green);} .cards button.last{border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft);}
 .cards .av{width:44px; height:44px; border-radius:50%; display:grid; place-items:center; font:700 18px "Anuphan",sans-serif; color:#fff; background:var(--green);}
-.cards .av.d1{background:#2F6F8F;} .cards .av.d2{background:#8A5A9E;} .cards .av.d3{background:#B8912F;} .cards .av.d4{background:#B3541E;} .cards .av.d5{background:#2E7D4F;}
+.cards .av.d1{background:#5B7DA8;} .cards .av.d2{background:#8A6AA6;} .cards .av.d3{background:#B8912F;} .cards .av.d4{background:#C27A4A;} .cards .av.d5{background:#5E9A78;}
 .cards b{font:600 14px "Anuphan",sans-serif; color:var(--ink); line-height:1.2; text-align:center;}
 .cards small{font-size:11.5px; color:var(--muted);}
 .cards-h{font:600 11.5px "Anuphan",sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:16px 0 0;}
@@ -336,11 +339,11 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 #paper{display:none;}
 @media print{ body>*{display:none !important;} #paper{display:block !important;} body{background:#fff; padding:0;} }
 #paper{font:14px/1.7 "Sarabun",sans-serif; color:#111; background:#fff; padding:24px;}
-#paper .doc-head{display:flex; justify-content:space-between; border-bottom:2px solid #175A4C; padding-bottom:10px; margin-bottom:14px;}
+#paper .doc-head{display:flex; justify-content:space-between; border-bottom:2px solid #8F3A40; padding-bottom:10px; margin-bottom:14px;}
 #paper h3{font-family:"Anuphan",sans-serif; margin:0; font-size:20px;}
 #paper table{width:100%; border-collapse:collapse; margin:10px 0;}
 #paper th,#paper td{border:1px solid #999; padding:6px 10px; font-size:13.5px;}
-#paper th{background:#EEF4F1;}
+#paper th{background:#F6ECEC;}
 #paper .sign{display:flex; justify-content:space-around; margin-top:48px; text-align:center; font-size:13px;}
 #paper .sign div{border-top:1px dotted #555; padding-top:6px; width:180px;}
 /* ── กฎจอกว้างต้องอยู่ท้ายสุด: ทับกฎพื้นฐานที่ประกาศก่อนหน้า (display/พื้น/ขอบ) ── */
@@ -707,7 +710,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-12h';
+const WEB_VERSION = '2026-09-12i';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');

@@ -7,15 +7,15 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap">
 <style>
 :root{
-  --ground:#F4F7F6; --surface:#FFFFFF; --ink:#1B2A26; --muted:#5E6F6A;
-  --green:#175A4C; --green-soft:#E1EFE9; --gold:#B8912F; --gold-soft:#F6EED9;
-  --ok:#2E7D4F; --warn:#B3541E; --warn-soft:#F7E8DE; --danger:#A63A3A; --line:#D8E2DE;
+  --ground:#F6F1F1; --surface:#FFFFFF; --ink:#2A1E1F; --muted:#6E5C5E;
+  --green:#B24A4F; --green-soft:#F7E3E3;   /* โทนแดงอิฐนุ่ม (12 ก.ย.) — ชื่อ token คงไว้ */ --gold:#B8912F; --gold-soft:#F6EED9;
+  --ok:#3B8A5A; --warn:#A8681C; --warn-soft:#F8EBD6; --danger:#8E2F2F; --line:#E3D6D6;
 }
 @media (prefers-color-scheme: dark){
   :root{
-    --ground:#0E1815; --surface:#16241F; --ink:#E7F0EC; --muted:#93A8A0;
-    --green:#7FC7B2; --green-soft:#16352C; --gold:#D9B65C; --gold-soft:#332A14;
-    --ok:#6FBE92; --warn:#E0925F; --warn-soft:#3A2313; --danger:#E08585; --line:#26382F;
+    --ground:#1B1415; --surface:#261B1C; --ink:#F3E9E9; --muted:#B8A3A5;
+    --green:#E08A8F; --green-soft:#3D2426; --gold:#D9B65C; --gold-soft:#332A14;
+    --ok:#7CC29A; --warn:#E0A25F; --warn-soft:#3A2A13; --danger:#E08585; --line:#3A2A2B;
   }
 }
 *{box-sizing:border-box}
@@ -184,7 +184,7 @@ label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-12h';
+const WEB_VERSION = '2026-09-12i';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
