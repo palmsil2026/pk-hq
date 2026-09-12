@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-12b';
+const CODE_VERSION = '2026-09-12c';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -505,12 +505,12 @@ function resolveItems_(items) {
 function orderSave(pay, me) {
   const rs = resolveItems_(pay.items);
   const items = rs.items;
-  const customer = String(pay.customer || '').trim();
+  const cust = resolveCustomer_(pay, me);
+  const customer = cust.name;
   if (!customer || !items.length) return { ok: false, error: 'ต้องมีลูกค้าและรายการ' };
   const total = items.reduce(function (s, it) { return s + it.qty * it.price; }, 0);
   const hasScreen = items.some(function (it) { return it.screen; });
   const id = seq('ORD_NEXT', 'PO' + yy_() + '-', 4);
-  const cust = custSave({ name: customer }, me);
   appendObj('Orders', {
     'Order_ID': id, 'วันที่รับ': today(), 'ลูกค้า': customer, 'Customer_ID': cust.id || '',
     'กำหนดส่ง': pay.due || '', 'สถานะ': 'รอผลิต', 'มีสกรีน': hasScreen ? 'มี' : '', 'ยอดรวม': total,
@@ -552,26 +552,45 @@ function deliveredMapAll_() { // อ่าน Deliveries รอบเดีย�
   return by;
 }
 function deliveredOf_(orderId) { return deliveredMapAll_()[orderId] || {}; }
+// ทำไมออเดอร์นี้แก้ไม่ได้ — '' = แก้ได้ (หน้าเว็บใช้ตัดสินใจโชว์ปุ่ม "แก้ไข" · orderEdit ใช้กันจริง)
+function orderLock_(ord) {
+  if (ord['สถานะ'] === 'ยกเลิก') return 'ยกเลิกแล้ว — เปิดออเดอร์ใหม่แทน';
+  const j = jobsOf_(ord['Order_ID']);
+  const started = j.prod.concat(j.scr).some(function (x) { return x['สถานะ'] !== 'รอผลิต' && x['สถานะ'] !== 'รอสกรีน' && x['สถานะ'] !== 'ยกเลิก'; });
+  if (started) return 'งานเริ่มผลิต/สกรีนแล้ว';
+  if (ord['Bill_No']) return 'มีบิลแล้ว (' + ord['Bill_No'] + ')';
+  if (Object.keys(deliveredOf_(ord['Order_ID'])).length) return 'ส่งของไปแล้ว';
+  return '';
+}
 function orderEdit(pay, me) { // แก้ได้เฉพาะออเดอร์ที่ยังไม่เริ่มอะไรเลย
   const ord = rowsToObjs('Orders').filter(function (o) { return o['Order_ID'] === pay.id; })[0];
   if (!ord) return { ok: false, error: 'ไม่พบออเดอร์' };
-  if (ord['สถานะ'] === 'ยกเลิก') return { ok: false, error: 'ออเดอร์ถูกยกเลิกแล้ว — เปิดออเดอร์ใหม่แทน' };
+  const lock = orderLock_(ord);
+  if (lock) return { ok: false, error: 'แก้ไม่ได้: ' + lock + ' — ให้ยกเลิกแล้วเปิดใหม่ หรือติดต่อผู้บริหาร' };
   const j = jobsOf_(pay.id);
-  const started = j.prod.concat(j.scr).some(function (x) { return x['สถานะ'] !== 'รอผลิต' && x['สถานะ'] !== 'รอสกรีน' && x['สถานะ'] !== 'ยกเลิก'; });
-  if (started || ord['Bill_No'] || Object.keys(deliveredOf_(pay.id)).length) return { ok: false, error: 'งานเริ่มแล้ว/มีบิลหรือการส่งแล้ว — แก้ไม่ได้ ให้ยกเลิกแล้วเปิดใหม่ หรือติดต่อผู้บริหาร' };
   j.prod.concat(j.scr).forEach(function (x) {
     updateWhere(x['Job_ID'].indexOf('SJ') === 0 ? 'ScreenJobs' : 'Production', 'Job_ID', x['Job_ID'], { 'สถานะ': 'ยกเลิก', 'หมายเหตุ': 'แก้ออเดอร์' });
   });
   const rs = resolveItems_(pay.items);
   if (!rs.items.length) return { ok: false, error: 'ต้องมีรายการอย่างน้อย 1 รายการ' };
   const total = rs.items.reduce(function (s, it) { return s + it.qty * it.price; }, 0);
-  const customer2 = String(pay.customer || ord['ลูกค้า']).trim();
-  const cust2 = custSave({ name: customer2 }, me);
-  updateWhere('Orders', 'Order_ID', pay.id, {
+  const cust2 = (pay.customerId || pay.customer || pay.newCustomer) ? resolveCustomer_(pay, me) : { id: ord['Customer_ID'] || '', name: String(ord['ลูกค้า']).trim() };
+  const customer2 = cust2.name || String(ord['ลูกค้า']).trim();
+  const patch = {
     'ลูกค้า': customer2, 'Customer_ID': cust2.id || '', 'กำหนดส่ง': pay.due || '', 'ยอดรวม': total,
     'มีสกรีน': rs.items.some(function (it) { return it.screen; }) ? 'มี' : '', 'รายการ': JSON.stringify(rs.items),
     'หมายเหตุ': pay.note || '', 'อัปเดตล่าสุด': now(),
-  });
+  };
+  // ช่อง "เพิ่มเติม" — แก้ได้ทุกช่องเหมือนตอนลงใหม่ (หน้าเว็บรุ่นเก่าไม่ส่งมา = ไม่แตะของเดิม)
+  if (pay.payStatus !== undefined) patch['สถานะเงิน'] = pay.payStatus || '';
+  if (pay.artStatus !== undefined) patch['สถานะแบบ'] = pay.artStatus || '';
+  if (pay.blockFee !== undefined) patch['ค่าบล็อก'] = Number(pay.blockFee) || '';
+  if (pay.urgent !== undefined) patch['ด่วน'] = pay.urgent ? 'ด่วน' : '';
+  if (pay.screenTeam !== undefined) patch['ทีมสกรีน'] = pay.screenTeam || '';
+  if (pay.buyType !== undefined) patch['ประเภทการซื้อ'] = pay.buyType || '';
+  if (pay.brand !== undefined) patch['แบรนด์'] = pay.brand || '';
+  if (pay.priceMode !== undefined) patch['ราคา'] = pay.priceMode || '';
+  updateWhere('Orders', 'Order_ID', pay.id, patch);
   rs.items.forEach(function (it) {
     appendObj('Production', { 'Job_ID': seq('JOB_NEXT', 'PJ' + yy_() + '-', 4), 'Order_ID': pay.id, 'วันที่เข้าคิว': today(), 'งาน': it.name + ' ×' + it.qty, 'จำนวนรวม': it.qty, 'Product_ID': it.pid, 'สินค้า': it.name, 'จำนวนสั่ง': it.qty, 'ดีสะสม': 0, 'เสียสะสม': 0, 'สถานะ': 'รอผลิต' });
     if (it.screen) appendObj('ScreenJobs', { 'Job_ID': seq('SJOB_NEXT', 'SJ' + yy_() + '-', 4), 'Order_ID': pay.id, 'วันที่เข้าคิว': today(), 'ลาย/สี': it.name + (it.screenNote ? ' (' + it.screenNote + ')' : ''), 'จำนวน': it.qty, 'Product_ID': it.pid, 'สินค้า': it.name, 'จำนวนสั่ง': it.qty, 'ดีสะสม': 0, 'เสียสะสม': 0, 'สถานะ': 'รอสกรีน' });
@@ -792,18 +811,41 @@ function stmtDone(pay, me) {
 }
 
 // ─── ลูกค้า / ราคา ───
+// ชื่อลูกค้าแบบ "หลวม" ไว้จับคู่ — ของเดิมสะกดไม่นิ่ง ("อุดมทรัพย์ (งาว)" กับ "อุดมทรัพย์(งาว)") จนทะเบียนเบิ้ล
+function normName_(s) { return String(s || '').toLowerCase().replace(/[\s()\-_.,'"]/g, ''); }
 function custSave(pay, me) {
   const name = String(pay.name || '').trim();
   if (!name) return { ok: false, error: 'ไม่มีชื่อ' };
   const all = rowsToObjs('Customers');
-  const exist = all.filter(function (c) { return String(c['ชื่อลูกค้า']).trim() === name; })[0];
+  const key = normName_(name);
+  const exist = all.filter(function (c) { return String(c['ชื่อลูกค้า']).trim() === name; })[0]
+    || all.filter(function (c) { return normName_(c['ชื่อลูกค้า']) === key; })[0];   // สะกดต่างแค่ช่องว่าง/วงเล็บ = คนเดียวกัน
   if (exist) {
-    if (pay.tel || pay.addr || pay.creditDays) updateWhere('Customers', 'Customer_ID', exist['Customer_ID'], { 'เบอร์โทร': pay.tel || exist['เบอร์โทร'], 'ที่อยู่': pay.addr || exist['ที่อยู่'], 'เครดิต(วัน)': pay.creditDays || exist['เครดิต(วัน)'] });
-    return { ok: true, id: exist['Customer_ID'] };
+    const patch = {};
+    if (pay.tel && !exist['เบอร์โทร']) patch['เบอร์โทร'] = pay.tel;
+    if (pay.addr && !exist['ที่อยู่']) patch['ที่อยู่'] = pay.addr;
+    if (pay.creditDays) patch['เครดิต(วัน)'] = pay.creditDays;
+    if (pay.district && !exist['อำเภอ']) patch['อำเภอ'] = pay.district;
+    if (Object.keys(patch).length) updateWhere('Customers', 'Customer_ID', exist['Customer_ID'], patch);
+    return { ok: true, id: exist['Customer_ID'], name: String(exist['ชื่อลูกค้า']).trim(), existed: true };
   }
   const id = seq('CUST_NEXT', 'C', 4);
-  appendObj('Customers', { 'Customer_ID': id, 'ชื่อลูกค้า': name, 'เบอร์โทร': pay.tel || '', 'ที่อยู่': pay.addr || '', 'เครดิต(วัน)': pay.creditDays || '', 'สร้างเมื่อ': now() });
-  return { ok: true, id: id, _log: { ref: id, detail: name } };
+  appendObj('Customers', { 'Customer_ID': id, 'ชื่อลูกค้า': name, 'เบอร์โทร': pay.tel || '', 'ที่อยู่': pay.addr || '', 'เครดิต(วัน)': pay.creditDays || '', 'สร้างเมื่อ': now(), 'อำเภอ': pay.district || '' });
+  return { ok: true, id: id, name: name, _log: { ref: id, detail: name + (pay.district ? ' (' + pay.district + ')' : '') } };
+}
+// ลูกค้าของออเดอร์: ถ้าหน้าเว็บส่ง Customer_ID มา (แตะเลือกจากทะเบียน) ใช้ชื่อตามทะเบียนเป๊ะ
+// ไม่งั้นค่อยจับคู่/สร้างจากชื่อ (+อำเภอ/เบอร์ ที่กรอกตอนเพิ่มลูกค้าใหม่)
+function resolveCustomer_(pay, me) {
+  const id = String(pay.customerId || '').trim();
+  if (id) {
+    const c = rowsToObjs('Customers').filter(function (x) { return String(x['Customer_ID']).trim() === id; })[0];
+    if (c) return { id: c['Customer_ID'], name: String(c['ชื่อลูกค้า']).trim() };
+  }
+  const nc = pay.newCustomer || {};
+  const name = String(pay.customer || nc.name || '').trim();
+  if (!name) return { id: '', name: '' };
+  const r = custSave({ name: name, tel: nc.tel || '', district: nc.district || '' }, me);
+  return { id: r.id || '', name: r.name || name };
 }
 function priceSet(pay, me) {
   const all = rowsToObjs('Products');
@@ -994,11 +1036,19 @@ function teamData(p, me) {
   // ── "กดแทนพิมพ์" สำหรับหน้าลงออเดอร์ — ถอดจากออเดอร์จริงทั้งหมด (รวมที่นำเข้าจาก AppSheet เดิม) ──
   // สเปกที่สั่งบ่อย: 12 แบบแรกคลุม ~68% ของออเดอร์ (ข้อมูล 136 ใบ) → แตะทีเดียวได้ทั้งไลน์
   // ออเดอร์ล่าสุดของลูกค้าแต่ละราย: 35% สั่งสเปกเดิมซ้ำ → เสนอ "สั่งเหมือนครั้งก่อน"
-  const specCount = {}, specSample = {}, lastOrder = {};
+  // สินค้าที่ "ลูกค้าคนนี้" เคยสั่ง เรียงจากบ่อยสุด → การ์ดข้างฟอร์ม แตะทีเดียวได้ทั้งไลน์ (พร้อมถุง/ราคาครั้งล่าสุด)
+  const specCount = {}, specSample = {}, lastOrder = {}, custSpec = {};
   orders.forEach(function (o) {
     if (o['สถานะ'] === 'ยกเลิก') return;
     let its = []; try { its = JSON.parse(o['รายการ'] || '[]'); } catch (e) {}
     const cu = String(o['ลูกค้า']).trim();
+    if (cu) its.forEach(function (it) {
+      if (!it.type) return;
+      const k = [it.type, it.size, it.shape, it.neck, it.color, it.screenColor || '', it.capColor || ''].join('|');
+      const m = custSpec[cu] = custSpec[cu] || {};
+      const e = m[k] = m[k] || { type: it.type, size: it.size, shape: it.shape || '', neck: it.neck || '', color: it.color || '', screenColor: it.screenColor || '', capColor: it.capColor || '', name: it.name, perBag: it.perBag || perBag_(it.type, it.size) || 0, count: 0 };
+      e.count++; e.last = o['วันที่รับ']; e.bags = Number(it.bags) || 0; e.extra = Number(it.extra) || 0; e.qty = Number(it.qty) || 0; e.price = Number(it.price) || 0;
+    });
     if (cu && its.length) lastOrder[cu] = { id: o['Order_ID'], date: o['วันที่รับ'], due: o['กำหนดส่ง'], buyType: o['ประเภทการซื้อ'] || '', priceMode: o['ราคา'] || '', brand: o['แบรนด์'] || '',
       items: its.map(function (it) { return { type: it.type, size: it.size, shape: it.shape, neck: it.neck, color: it.color, screenColor: it.screenColor || '', capColor: it.capColor || '', bags: it.bags || 0, extra: it.extra || 0, qty: it.qty, price: it.price || 0, name: it.name }; }) };
     its.forEach(function (it) {
@@ -1010,10 +1060,15 @@ function teamData(p, me) {
   });
   const topSpecs = Object.keys(specCount).sort(function (a, b) { return specCount[b] - specCount[a]; }).slice(0, 12)
     .map(function (k) { const x = specSample[k]; x.count = specCount[k]; return x; });
+  const custSpecs = {};
+  Object.keys(custSpec).forEach(function (cu) {
+    custSpecs[cu] = Object.keys(custSpec[cu]).map(function (k) { return custSpec[cu][k]; })
+      .sort(function (a, b) { return b.count - a.count || String(b.last || '').localeCompare(String(a.last || '')); }).slice(0, 8);
+  });
   return {
     ok: true, version: CODE_VERSION, me: { id: me.id, name: me.name, nick: me.nick, dept: me.dept, via: me.via },
     customers: custs, products: rowsToObjs('Products').filter(function (p2) { return (p2['สถานะ'] || 'ใช้งาน') !== 'เลิกขาย'; }),
-    spec: SPEC, perBag: PER_BAG, minOrder: MIN_ORDER, topSpecs: topSpecs, lastOrder: lastOrder,
+    spec: SPEC, perBag: PER_BAG, minOrder: MIN_ORDER, topSpecs: topSpecs, lastOrder: lastOrder, custSpecs: custSpecs,
     machines: rowsToObjs('Machines').filter(function (m) { return (m['สถานะ'] || 'ใช้งาน') === 'ใช้งาน'; }).map(function (m) { return m['ชื่อเครื่อง']; }),
     settings: settingsMap(),
     orders: active.reverse().concat(recentDone),
@@ -1722,8 +1777,11 @@ function orderDetail(pay) {
     items: items.map(function (it) {
       const k = it.pid || it.name;
       return { name: it.name, qty: it.qty, price: it.price, bags: it.bags || 0, extra: it.extra || 0, perBag: it.perBag || 0,
-               screenColor: it.screenColor || '', capColor: it.capColor || '', sent: sent[k] || 0 };
+               screenColor: it.screenColor || '', capColor: it.capColor || '', sent: sent[k] || 0,
+               // สเปกดิบ — หน้าเว็บใช้เติมฟอร์มตอน "แก้ไข" ไม่ต้องแกะจากชื่อ
+               type: it.type || '', size: it.size || '', neck: it.neck || '', shape: it.shape || '', color: it.color || '', screen: !!it.screen };
     }),
+    lock: orderLock_(o),
     prodJobs: jobsOf('Production'), screenJobs: jobsOf('ScreenJobs'),
     deliveries: rowsToObjs('Deliveries').filter(function (d) { return d['Order_ID'] === o['Order_ID']; })
       .map(function (d) { return { when: d['เมื่อ'], by: d['ผู้ส่ง'], note: d['หมายเหตุ'] || '', items: d['รายการ'] }; }),

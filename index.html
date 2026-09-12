@@ -151,7 +151,44 @@ li.flash{animation:flash 1.6s ease-out both;}
 .more-btn .sum{font-weight:500; color:var(--gold); font-family:"Sarabun",sans-serif;}
 .more{display:grid; grid-template-rows:0fr; transition:grid-template-rows .26s cubic-bezier(.2,.8,.2,1);}
 .more>div{overflow:hidden;} .more.open{grid-template-rows:1fr;}
-.savebar{position:sticky; bottom:10px; z-index:4; display:flex; align-items:center; gap:12px; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:10px 10px 10px 16px; margin-top:16px; box-shadow:0 10px 28px rgba(0,0,0,.12);}
+.savebar{position:sticky; bottom:10px; z-index:4; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:10px 10px 10px 16px; margin-top:16px; box-shadow:0 10px 28px rgba(0,0,0,.12); transition:box-shadow .3s ease, border-color .3s ease, transform .3s cubic-bezier(.2,.8,.2,1);}
+.sb-head{display:flex; align-items:center; gap:12px;}
+/* ยืดออกเป็นการ์ดสรุป: grid-rows 0fr→1fr (สูงตามเนื้อหา นุ่ม) + เงาหนาขึ้น + ยกตัวเล็กน้อย */
+.sb-sum{display:grid; grid-template-rows:0fr; transition:grid-template-rows .34s cubic-bezier(.2,.8,.2,1);}
+.sb-sum>div{overflow:hidden; min-height:0;}
+.savebar.open .sb-sum{grid-template-rows:1fr;}
+.savebar.open{box-shadow:0 22px 56px rgba(0,0,0,.24); border-color:var(--green); transform:translateY(-6px);}
+.sb-body{padding:12px 6px 0 0; max-height:52vh; overflow-y:auto;}
+.sb-body .h{font:700 15px "Anuphan",sans-serif; margin:2px 0 6px;}
+.sb-body ul{margin:8px 0 0; padding:0; list-style:none;}
+.sb-body li{padding:8px 0; border-bottom:1px dashed var(--line); display:flex; justify-content:space-between; gap:10px; align-items:center; animation:rise .25s ease both; animation-delay:calc(var(--i,0)*30ms);}
+.sb-body li .q{font:700 14.5px "Anuphan",sans-serif; color:var(--green); white-space:nowrap; text-align:right;}
+.sb-kv{display:flex; flex-wrap:wrap; gap:6px 14px; font-size:13px; color:var(--muted); margin-top:10px;} .sb-kv b{color:var(--ink); font-weight:600;}
+.sb-actions{display:flex; gap:8px; padding:12px 0 2px;}
+.sb-actions:empty{display:none;}
+.sb-actions button{flex:1; min-height:44px; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--green); font:600 13.5px "Anuphan",sans-serif; cursor:pointer;}
+.sb-actions button.warn{color:var(--warn);} .sb-actions button.pri{background:var(--green); color:var(--ground); border-color:var(--green);}
+.savebar[data-state="confirm"] #oSave{background:var(--ok); animation:pop .3s ease;}
+.savebar[data-state="saving"] #oSave{opacity:.7;}
+.savebar[data-state="done"] .tot{color:var(--ok);}
+.savebar[data-state="done"] #oSave{background:none; color:var(--muted); border:1px solid var(--line);}
+.savebar .slip{margin:10px 0 0; max-height:34vh;}
+/* การ์ด "เคยสั่ง" — มือถือ: แทรกใต้ช่องลูกค้า · จอกว้าง (≥1300px): ลอยขวาฟอร์ม */
+.side{margin-top:10px; border:1px solid var(--line); border-radius:12px; padding:10px 12px; background:var(--surface); animation:rise .25s ease both;}
+.side.empty{display:none;}
+.side-h{font:600 11.5px "Anuphan",sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin-bottom:6px;}
+.side-list{display:flex; flex-direction:column; gap:6px;}
+.side-list button{text-align:left; display:flex; justify-content:space-between; align-items:center; gap:8px; padding:9px 12px; border:1px solid var(--line); border-radius:10px; background:var(--ground); color:var(--ink); font:500 13.5px "Sarabun",sans-serif; cursor:pointer; min-height:46px; animation:rise .25s ease both; animation-delay:calc(var(--i,0)*30ms);}
+.side-list button b{font:600 13.5px "Anuphan",sans-serif; display:block;} .side-list button small{color:var(--muted); font-size:11.5px; display:block;}
+.side-list button .n{flex:0 0 auto; font:700 12.5px "Anuphan",sans-serif; color:var(--green); background:var(--green-soft); border-radius:99px; padding:3px 9px;}
+.side-list button:hover{border-color:var(--green);} .side-list button.on{background:var(--green); color:var(--ground); border-color:var(--green);}
+.side-list button.on small,.side-list button.on .n{color:inherit; background:none;}
+.side .hint{font-size:12.5px; color:var(--muted);}
+@media (min-width:1300px){
+  .side{position:fixed; left:calc(50% + 376px); top:112px; width:290px; max-height:calc(100vh - 130px); overflow-y:auto; margin:0; border:0; border-radius:14px; z-index:3; box-shadow:0 1px 2px rgba(0,0,0,.04), 0 12px 32px rgba(23,90,76,.10);}
+  .side.empty{display:block;}
+  #t-order.on{animation-name:fade;}   /* แท็บนี้ไม่ใช้ transform ตอนเลื่อนเข้า — ไม่งั้นการ์ดลอย (fixed) กระโดด */
+}
 .savebar .tot{flex:1; font:700 16px "Anuphan",sans-serif; color:var(--green); line-height:1.25;} .savebar .tot small{display:block; font:500 12px "Sarabun",sans-serif; color:var(--muted);}
 .savebar .btn{margin:0; width:auto; padding:12px 22px; border-radius:10px; min-height:48px;}
 .savebar .btn.ok{background:var(--ok);}
@@ -162,6 +199,28 @@ li.flash{animation:flash 1.6s ease-out both;}
 .sheet .opts button.soft{color:var(--muted); font-weight:500;}
 .sheet .sh-top{display:flex; justify-content:space-between; align-items:center;}
 .sheet .sh-top .meta{font-size:12.5px;}
+/* ── v2.1: ลูกค้าใหม่ · การ์ดสำเร็จ+แชร์ · แก้ไข · ค้นหา ── */
+.custtag{font-size:12.5px; color:var(--muted); margin-top:6px; display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+.custtag[hidden]{display:none;} .custtag .new{color:var(--gold); font-weight:600;} .custtag a{color:var(--muted); text-decoration:underline; cursor:pointer;}
+.ncwarn{background:var(--gold-soft); border:1px solid var(--gold); border-radius:10px; padding:8px 12px; font-size:13px; margin-top:8px; animation:rise .2s ease both;}
+.ncwarn[hidden]{display:none;} .ncwarn b{color:var(--gold);} .ncwarn .chips{margin-top:6px;}
+.ncwarn .chips button{border-color:var(--gold);}
+.editbar{display:flex; justify-content:space-between; align-items:center; gap:8px; background:var(--gold-soft); border:1px solid var(--gold); border-radius:10px; padding:8px 12px; margin-bottom:12px; font:600 13.5px "Anuphan",sans-serif; color:var(--gold); animation:rise .2s ease both;}
+.editbar[hidden]{display:none;}
+.ok-head{display:flex; align-items:center; gap:14px; margin-bottom:10px;}
+.ok-ico{width:52px; height:52px; border-radius:50%; background:var(--ok); color:#fff; display:grid; place-items:center; font:700 26px "Anuphan",sans-serif; animation:pop .4s cubic-bezier(.2,.8,.2,1) both; flex:0 0 auto;}
+.ok-head b{font:700 18px "Anuphan",sans-serif;}
+.slip{white-space:pre-wrap; word-break:break-word; font:13.5px/1.55 "Sarabun",sans-serif; background:var(--ground); border:1px solid var(--line); border-radius:12px; padding:12px 14px; margin:8px 0 12px; max-height:38vh; overflow-y:auto;}
+.btn.ghost2{background:none; color:var(--green); border:1px solid var(--line);}
+.od-actions{display:flex; gap:8px; margin:4px 0 12px; flex-wrap:wrap;}
+.od-actions button{flex:1 1 30%; min-height:44px; border-radius:10px; border:1px solid var(--line); background:var(--surface); color:var(--green); font:600 13.5px "Anuphan",sans-serif; cursor:pointer;}
+.od-actions button.pri{background:var(--green); color:var(--ground); border-color:var(--green);}
+.od-actions button:disabled{opacity:.45; cursor:not-allowed;}
+.od-actions button.warn{color:var(--warn);}
+.findbar{display:flex; flex-direction:column; gap:8px; margin:8px 0 4px;}
+.findbar input{min-height:42px;}
+.findbar .chips button{padding:6px 11px; min-height:34px; font-size:13px;} .findbar .chips button small{color:var(--muted); margin-left:4px;}
+.findbar .chips button.on small{color:inherit; opacity:.85;}
 .verline{text-align:center; font-size:11.5px; color:var(--muted); padding:14px 8px 24px; line-height:1.8;}
 .verline b{color:var(--text); font-weight:600;}
 .verline .old{color:var(--warn); font-weight:600;}
@@ -262,18 +321,21 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 
 <section class="tabpane" id="t-order">
   <div class="card hero">
+    <div class="editbar" id="oEditBar" hidden><span id="oEditText">✏️ กำลังแก้ไข</span><button class="mini" type="button" id="oEditCancel">ยกเลิกการแก้ไข</button></div>
     <div class="sec">ลูกค้า</div>
     <div class="sugg-wrap">
       <input id="oCust" placeholder="พิมพ์ 2-3 ตัวอักษร แล้วเลือก" autocomplete="off">
       <div class="sugg" id="oSugg" hidden></div>
     </div>
+    <div class="custtag" id="oCustTag" hidden></div>
     <div class="repeat" id="oRepeat" hidden>
       <div><b>🔁 สั่งเหมือนครั้งก่อน</b><br><span class="meta" id="oRepeatSub"></span></div>
       <button class="mini" id="oRepeatGo" type="button" style="min-height:40px">ใช้เลย</button>
     </div>
 
-    <div class="sec">สินค้า <span class="meta" style="text-transform:none; letter-spacing:0">— แตะที่สั่งบ่อย ได้ทั้งไลน์</span></div>
-    <div class="chips scroll" id="oQuick"></div>
+    <!-- การ์ด "เคยสั่ง": จอกว้างลอยอยู่ขวาฟอร์ม · มือถือแทรกใต้ช่องลูกค้า — โชว์เมื่อเลือกลูกค้าแล้ว -->
+    <aside class="side empty" id="custCard"><div class="side-h" id="custCardH">🕘 เคยสั่ง</div><div class="side-list" id="custSpecs"></div></aside>
+    <div class="sec">สินค้า</div>
     <div id="oItems" style="margin-top:10px"></div>
     <button class="mini ghost" id="oAdd" type="button" style="background:none; border:1px dashed var(--line); color:var(--muted); width:100%; min-height:40px">+ เพิ่มไลน์สินค้า</button>
 
@@ -306,9 +368,16 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
       <label>หมายเหตุอื่น ๆ</label><input id="oNote" placeholder="นัดรับของ / หน่วยพิเศษ / อื่น ๆ">
     </div></div>
 
-    <div class="savebar">
-      <div class="tot" id="oTotal">รวม 0 ใบ<small>ยังไม่มีรายการ</small></div>
-      <button class="btn" id="oSave">บันทึกออเดอร์</button>
+    <!-- แถบบันทึก: กดแล้ว "ยืด" ออกเป็นการ์ดสรุปให้ยืนยันอีกครั้ง (แก้ไข/ยกเลิกได้) → บันทึกแล้วกลายเป็นการ์ด ✓ + แชร์ -->
+    <div class="savebar" id="saveBar" data-state="">
+      <div class="sb-head">
+        <div class="tot" id="oTotal">รวม 0 ใบ<small>ยังไม่มีรายการ</small></div>
+        <button class="btn" id="oSave">บันทึกออเดอร์</button>
+      </div>
+      <div class="sb-sum"><div>
+        <div class="sb-body" id="sbBody"></div>
+        <div class="sb-actions" id="sbActions"></div>
+      </div></div>
     </div>
   </div>
   <div class="card">
@@ -318,6 +387,11 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
         <button type="button" data-view="tree">รวมตามสินค้า</button>
       </div>
     </div>
+    <div class="findbar" id="findBar">
+      <input id="oFind" placeholder="🔍 ค้นหา ลูกค้า · เลขที่ · สินค้า · แบรนด์" autocomplete="off">
+      <div class="chips scroll" id="oStatus"></div>
+    </div>
+    <p class="meta" id="oCount" style="margin:0 0 4px" hidden></p>
     <ul class="list" id="orderList"></ul>
     <div id="treeWrap" hidden>
       <p class="meta" id="treeSum" style="margin:8px 0 2px"></p>
@@ -455,6 +529,23 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
   <div class="opts" id="axOpts"></div>
   <button class="btn" id="axClose" style="background:none; color:var(--muted); border:1px solid var(--line); margin-top:14px">ปิด</button>
 </div></div>
+<!-- ลูกค้าใหม่: เพิ่มอย่างตั้งใจ (ชื่อ + อำเภอ) ไม่ใช่พิมพ์อะไรก็กลายเป็นลูกค้าใหม่ — ของเดิมชื่อตรงทะเบียนแค่ 5/105 -->
+<div class="modal-bg" id="ncModal"><div class="modal sheet">
+  <div class="sh-top"><h2 style="margin:0">ลูกค้าใหม่</h2><span class="meta">ยังไม่มีชื่อนี้ในทะเบียน</span></div>
+  <label>ชื่อลูกค้า <span class="meta">(ชื่อร้าน/ชื่อคน อย่างเดียว — ชื่องานใส่ช่อง "แบรนด์/ชื่องาน")</span></label>
+  <input id="ncName" autocomplete="off">
+  <div class="ncwarn" id="ncSplit" hidden></div>
+  <div class="ncwarn" id="ncSim" hidden></div>
+  <label>อำเภอ</label>
+  <div class="chips" id="ncDist"></div>
+  <input id="ncDistOther" placeholder="พิมพ์ชื่ออำเภอ" hidden style="margin-top:8px">
+  <label>เบอร์โทร <span class="meta">(ไม่บังคับ)</span></label>
+  <input id="ncTel" inputmode="tel" autocomplete="off">
+  <div class="row" style="margin-top:4px">
+    <button class="btn" id="ncOk">เพิ่มและใช้ชื่อนี้</button>
+    <button class="btn ghost2" id="ncCancel">ยกเลิก</button>
+  </div>
+</div></div>
 <datalist id="dlCust"></datalist>
 <datalist id="dlProd"></datalist>
 <datalist id="dlMat"></datalist>
@@ -473,7 +564,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-12b';
+const WEB_VERSION = '2026-09-12c';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -698,6 +789,7 @@ async function enterApp(){
   $('login').hidden = true; $('app').hidden = false;
   $('uName').innerHTML = esc(ME.name) + ' · ' + esc(ME.dept || '-');
   buildNav(); renderQueue();
+  if (!$('oPay').options.length) $('oItems').innerHTML = '<div class="skel"></div><div class="skel" style="width:60%"></div>';   // ยังไม่มีข้อมูล → โครงร่างระหว่างโหลด
   await flushQueue();
   await loadData();
 }
@@ -733,7 +825,7 @@ async function loadData(){
     $('oItems').innerHTML = ''; addSpecRow();
     renderDueChips();
   }
-  renderQuick();
+  renderCustCard();
   // ทะเบียนเครื่องฉีด — มาจากแท็บ Machines (แก้เพิ่ม/ปิดเครื่องได้ในชีต ไม่ต้องแก้โค้ด)
   $('plMachine').innerHTML = opts(DATA.machines || [], '', 'ไม่ระบุเครื่อง');
   $('dlMat').innerHTML = DATA.materials.map(m => '<option value="' + esc(m['ชื่อวัตถุดิบ']) + '">').join('');
@@ -955,33 +1047,106 @@ $('axOpts').addEventListener('click', e => {
 $('axClose').addEventListener('click', () => $('axModal').classList.remove('on'));
 $('axModal').addEventListener('click', e => { if (e.target.id === 'axModal') $('axModal').classList.remove('on'); });
 
-// ─── ลูกค้า: พิมพ์แล้วเด้งแนะนำ (เรียงตามใช้ล่าสุด · โชว์สาย/อำเภอ) + "สั่งเหมือนครั้งก่อน" ───
-let O_CUST = '', O_HI = -1;
+// ─── ลูกค้า: พิมพ์แล้วเด้งแนะนำ (จับคู่หลวม · เคยสั่งขึ้นก่อน · โชว์สาย/อำเภอ) + "สั่งเหมือนครั้งก่อน" ───
+// ของเดิมชื่อลูกค้าในออเดอร์ตรงทะเบียนแค่ 5 จาก 105 ชื่อ (พิมพ์ชื่องานปน + สะกดไม่นิ่ง)
+// → ออเดอร์ต้องผูก Customer_ID จากทะเบียน · ชื่อใหม่ต้อง "เพิ่มอย่างตั้งใจ" ผ่านแผ่นลูกค้าใหม่ ไม่ใช่พิมพ์อะไรก็กลายเป็นลูกค้า
+let O_CUST = '', O_CUST_ID = '', O_NEW = null, O_HI = -1;
+const normName = s => String(s || '').toLowerCase().replace(/[\s()\-_.,'"]/g, '');
 function custItems(){
-  const q = $('oCust').value.trim().toLowerCase();
+  const raw = $('oCust').value.trim(), q = normName(raw);
   const last = (DATA && DATA.lastOrder) || {};
-  const all = ((DATA && DATA.customers) || []).map(c => ({ name: String(c['ชื่อลูกค้า']).trim(), tag: [c['เส้นทาง'] ? 'สาย ' + c['เส้นทาง'] : '', c['อำเภอ'] || ''].filter(Boolean).join(' · '), recent: last[String(c['ชื่อลูกค้า']).trim()] ? 1 : 0 }));
-  const hit = all.filter(c => !q || c.name.toLowerCase().includes(q));
-  hit.sort((a, b) => b.recent - a.recent);            // เคยสั่งแล้วขึ้นก่อน
-  const items = hit.slice(0, q ? 12 : 8).map(c => ({ name: c.name, sub: [c.tag, last[c.name] ? 'ล่าสุด ' + last[c.name].date : ''].filter(Boolean).join(' · ') || 'ทะเบียน' }));
-  if (q && !items.some(i => i.name.toLowerCase() === q)) items.push({ name: $('oCust').value.trim(), sub: 'ลูกค้าใหม่', isNew: true });
+  const all = ((DATA && DATA.customers) || []).map(c => { const name = String(c['ชื่อลูกค้า']).trim(); return { name, id: c['Customer_ID'] || '', district: c['อำเภอ'] || '', key: normName(name),
+    tag: [c['เส้นทาง'] ? 'สาย ' + c['เส้นทาง'] : '', c['อำเภอ'] || ''].filter(Boolean).join(' · '), recent: last[name] ? 1 : 0 }; });
+  const hit = all.filter(c => !q || c.key.includes(q) || (c.district && normName(c.district).includes(q)));
+  hit.sort((a, b) => b.recent - a.recent || (q ? a.key.indexOf(q) - b.key.indexOf(q) : 0));   // เคยสั่งแล้วขึ้นก่อน · ขึ้นต้นตรงขึ้นก่อน
+  const items = hit.slice(0, q ? 12 : 8).map(c => ({ name: c.name, id: c.id, sub: [c.tag, last[c.name] ? 'ล่าสุด ' + last[c.name].date : ''].filter(Boolean).join(' · ') || 'ทะเบียน' }));
+  if (q && !all.some(c => c.key === q)) items.push({ name: raw, sub: 'ยังไม่มีในทะเบียน — แตะเพื่อเพิ่ม', isNew: true });
   return items;
 }
 function renderCustSugg(show){
   const items = custItems(), box = $('oSugg');
   if (!show || !items.length) { box.hidden = true; return; }
-  box.innerHTML = items.map((it, i) => '<button type="button" data-i="' + i + '" class="' + (i === O_HI ? 'hi' : '') + '"><span>' + (it.isNew ? '+ ใช้ชื่อ "' + esc(it.name) + '"' : esc(it.name)) + '<br><span class="sub">' + esc(it.sub) + '</span></span></button>').join('');
+  box.innerHTML = items.map((it, i) => '<button type="button" data-i="' + i + '" class="' + (i === O_HI ? 'hi' : '') + '"><span>' + (it.isNew ? '+ ลูกค้าใหม่ "' + esc(it.name) + '"' : esc(it.name)) + '<br><span class="sub">' + esc(it.sub) + '</span></span></button>').join('');
   box.hidden = false;
 }
+function custTagOf(id){
+  const c = id && ((DATA && DATA.customers) || []).find(x => String(x['Customer_ID']) === String(id));
+  return c ? [c['เส้นทาง'] ? 'สาย ' + c['เส้นทาง'] : '', c['อำเภอ'] ? 'อ.' + c['อำเภอ'] : ''].filter(Boolean).join(' · ') : '';
+}
+function paintCustTag(){
+  const t = $('oCustTag');
+  if (O_NEW) { t.hidden = false; t.innerHTML = '<span class="new">🆕 ลูกค้าใหม่</span><span>' + esc([O_NEW.district ? 'อ.' + O_NEW.district : 'ยังไม่ระบุอำเภอ', O_NEW.tel].filter(Boolean).join(' · ')) + '</span><a id="oCustEdit">แก้</a>'; return; }
+  const tag = custTagOf(O_CUST_ID);
+  t.hidden = !tag; t.innerHTML = tag ? '<span>✓ ทะเบียน · ' + esc(tag) + '</span>' : '';
+}
+$('oCustTag').addEventListener('click', e => { if (e.target.id === 'oCustEdit' && O_NEW) openNewCust(O_NEW.name); });
 function pickCust(it){
-  O_CUST = it.name; $('oCust').value = it.name; $('oSugg').hidden = true; O_HI = -1;
+  if (it.isNew) { $('oSugg').hidden = true; O_HI = -1; openNewCust(it.name); return; }
+  O_CUST = it.name; O_CUST_ID = it.id || ''; O_NEW = null;
+  $('oCust').value = it.name; $('oSugg').hidden = true; O_HI = -1; paintCustTag(); renderCustCard();
   const lo = ((DATA && DATA.lastOrder) || {})[it.name];
   $('oRepeat').hidden = !lo;
   if (lo) $('oRepeatSub').textContent = lo.date + ' · ' + lo.items.map(x => (x.name || [x.type, x.size, x.color].filter(Boolean).join(' ')) + (x.bags ? ' ' + x.bags + ' ถุง' : ' ' + baht(x.qty) + ' ใบ')).join(' · ');
   const first = $('oItems').querySelector('.spec-row');
   if (first && !first.querySelector('.i-type').value) openAxisSheet(first, 'type', true);   // ยังไม่มีสินค้า → ไล่ถามต่อเลย
 }
-$('oCust').addEventListener('input', () => { O_CUST = ''; O_HI = -1; $('oRepeat').hidden = true; renderCustSugg(true); });
+$('oCust').addEventListener('input', () => { O_CUST = ''; O_CUST_ID = ''; O_NEW = null; O_HI = -1; $('oRepeat').hidden = true; paintCustTag(); renderCustCard(); renderCustSugg(true); });
+// ─── ลูกค้าใหม่: แผ่นเพิ่มอย่างตั้งใจ — เตือนชื่อคล้าย · แยกชื่องานออก · อำเภอแตะเลือก ───
+let NC_DIST = '';
+function lev(a, b){ if (a === b) return 0; if (!a.length || !b.length) return a.length || b.length; let prev = [...Array(b.length + 1).keys()];
+  for (let i = 1; i <= a.length; i++) { const cur = [i]; for (let j = 1; j <= b.length; j++) cur[j] = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1)); prev = cur; } return prev[b.length]; }
+function similarCust(name){
+  const q = normName(name); if (q.length < 2) return [];
+  return ((DATA && DATA.customers) || []).map(c => ({ name: String(c['ชื่อลูกค้า']).trim(), id: c['Customer_ID'] || '', district: c['อำเภอ'] || '' }))
+    .filter(c => { const k = normName(c.name); if (!k) return false; if (k === q) return true; if (q.length >= 3 && (k.includes(q) || q.includes(k))) return true; return q.length >= 4 && lev(k, q) <= 2; })
+    .slice(0, 5);
+}
+function districtChips(){
+  const cnt = {}; ((DATA && DATA.customers) || []).forEach(c => { const d = String(c['อำเภอ'] || '').trim(); if (d) cnt[d] = (cnt[d] || 0) + 1; });
+  return Object.keys(cnt).sort((a, b) => cnt[b] - cnt[a]).slice(0, 10);
+}
+function paintNc(){
+  const name = $('ncName').value.trim();
+  const m = name.match(/^(.+?)\s+(งาน\S.*)$/);   // "ช้างทิพย์ งานช้างทิพย์" → ชื่อลูกค้า + ชื่องาน (แบบที่เคยพิมพ์ปนกันในแอปเดิม)
+  $('ncSplit').hidden = !m;
+  if (m) $('ncSplit').innerHTML = '<b>ดูเหมือนมีชื่องานปนอยู่</b> — ชื่อลูกค้าควรเป็น "' + esc(m[1]) + '" ส่วน "' + esc(m[2]) + '" ไปอยู่ช่องแบรนด์/ชื่องาน<div class="chips"><button type="button" id="ncSplitGo" data-a="' + esc(m[1]) + '" data-b="' + esc(m[2]) + '">แยกให้เลย</button></div>';
+  const sim = similarCust(name);
+  $('ncSim').hidden = !sim.length;
+  if (sim.length) $('ncSim').innerHTML = '<b>มีชื่อคล้ายในทะเบียน</b> — ถ้าเป็นเจ้าเดียวกัน แตะเลือกแทน ไม่ต้องเพิ่มใหม่<div class="chips">' +
+    sim.map(c => '<button type="button" data-pick="' + esc(c.id) + '" data-name="' + esc(c.name) + '">' + esc(c.name) + (c.district ? ' <small>' + esc(c.district) + '</small>' : '') + '</button>').join('') + '</div>';
+}
+function openNewCust(name){
+  const same = O_NEW && O_NEW.name === name;
+  $('ncName').value = name || ''; $('ncTel').value = same ? O_NEW.tel : ''; NC_DIST = same ? O_NEW.district : '';
+  const ds = districtChips();
+  $('ncDist').innerHTML = ds.map((d, i) => '<button type="button" data-d="' + esc(d) + '" style="--i:' + i + '" class="' + (d === NC_DIST ? 'on' : '') + '">' + esc(d) + '</button>').join('') +
+    '<button type="button" data-d="__other__" style="--i:' + ds.length + '" class="' + (NC_DIST && !ds.includes(NC_DIST) ? 'on' : '') + '">อื่น ๆ</button>';
+  $('ncDistOther').hidden = !(NC_DIST && !ds.includes(NC_DIST)); $('ncDistOther').value = $('ncDistOther').hidden ? '' : NC_DIST;
+  paintNc();
+  $('ncModal').classList.add('on');
+}
+$('ncName').addEventListener('input', paintNc);
+$('ncSplit').addEventListener('click', e => { const b = e.target.closest('#ncSplitGo'); if (!b) return;
+  $('ncName').value = b.dataset.a; $('oBrand').value = b.dataset.b; paintMoreSum(); paintNc(); toast('ย้าย "' + b.dataset.b + '" ไปช่องแบรนด์/ชื่องานแล้ว'); });
+$('ncSim').addEventListener('click', e => { const b = e.target.closest('button[data-pick]'); if (!b) return;
+  $('ncModal').classList.remove('on'); pickCust({ name: b.dataset.name, id: b.dataset.pick }); });
+$('ncDist').addEventListener('click', e => { const b = e.target.closest('button[data-d]'); if (!b) return;
+  [...$('ncDist').children].forEach(x => x.classList.toggle('on', x === b));
+  const other = b.dataset.d === '__other__'; NC_DIST = other ? '' : b.dataset.d;
+  $('ncDistOther').hidden = !other; if (other) setTimeout(() => $('ncDistOther').focus(), 50); });
+$('ncCancel').addEventListener('click', () => $('ncModal').classList.remove('on'));
+$('ncModal').addEventListener('click', e => { if (e.target.id === 'ncModal') $('ncModal').classList.remove('on'); });
+$('ncOk').addEventListener('click', () => {
+  const name = $('ncName').value.trim(); if (!name) return toast('ใส่ชื่อลูกค้าก่อน');
+  const ex = ((DATA && DATA.customers) || []).find(c => normName(c['ชื่อลูกค้า']) === normName(name));
+  if (ex) { $('ncModal').classList.remove('on'); pickCust({ name: String(ex['ชื่อลูกค้า']).trim(), id: ex['Customer_ID'] || '' }); return toast('มีในทะเบียนแล้ว — ใช้ชื่อเดิม'); }
+  const district = $('ncDistOther').hidden ? NC_DIST : $('ncDistOther').value.trim();
+  O_NEW = { name, district, tel: $('ncTel').value.trim() }; O_CUST = name; O_CUST_ID = '';
+  $('oCust').value = name; $('oRepeat').hidden = true; paintCustTag(); renderCustCard();
+  $('ncModal').classList.remove('on');
+  const first = $('oItems').querySelector('.spec-row');
+  if (first && !first.querySelector('.i-type').value) openAxisSheet(first, 'type', true);
+});
 $('oCust').addEventListener('focus', () => renderCustSugg(true));
 $('oCust').addEventListener('keydown', e => {
   const items = custItems();
@@ -1003,21 +1168,30 @@ $('oRepeatGo').addEventListener('click', () => {
   $('oRepeat').hidden = true; calcTotal();
   toast('ใส่รายการเหมือนครั้งก่อนแล้ว — เช็คจำนวนถุงอีกที');
 });
-// ─── ⚡ สเปกที่สั่งบ่อย — แตะทีเดียวได้ทั้งไลน์ ───
-function renderQuick(){
-  const top = (DATA && DATA.topSpecs) || [];
-  $('oQuick').innerHTML = top.slice(0, 10).map((t, i) => {
-    const short = [t.size, t.shape, t.neck, t.color].filter(Boolean).join(' ') + (t.screenColor ? ' · สกรีน' + t.screenColor : '');
-    return '<button type="button" data-q="' + i + '" style="--i:' + i + '"><b>' + esc(t.type) + '</b> ' + esc(short) + '</button>';
-  }).join('') || '<span class="meta">ยังไม่มีประวัติสั่ง — แตะ "เลือก" ในไลน์ด้านล่าง</span>';
+// ─── 🕘 การ์ด "เคยสั่ง" — สินค้าที่ลูกค้าคนนี้เคยสั่ง เรียงจากบ่อยสุด · แตะทีเดียวได้ทั้งไลน์ + ถุง/ราคาครั้งล่าสุด ───
+// (ลูกค้าใหม่/ยังไม่เคยสั่ง → โชว์ที่สั่งบ่อยทั่วไปแทน ไม่ให้การ์ดว่าง)
+let CS_LIST = [], CS_HIST = false;
+const specLabel = t => [t.type, t.size, t.shape, t.neck, t.color].filter(Boolean).join(' ');
+function renderCustCard(){
+  const box = $('custCard');
+  if (!O_CUST) { box.classList.add('empty'); $('custCardH').textContent = '🕘 เคยสั่ง'; $('custSpecs').innerHTML = '<div class="hint">เลือกลูกค้าก่อน — สินค้าที่เขาเคยสั่งจะขึ้นตรงนี้ แตะทีเดียวได้ทั้งไลน์</div>'; CS_LIST = []; return; }
+  const hist = ((DATA && DATA.custSpecs) || {})[O_CUST] || [];
+  CS_HIST = !!hist.length; CS_LIST = CS_HIST ? hist : ((DATA && DATA.topSpecs) || []).slice(0, 6);
+  box.classList.remove('empty');
+  $('custCardH').textContent = CS_HIST ? '🕘 ' + O_CUST + ' เคยสั่ง' : '⚡ ' + O_CUST + ' ยังไม่เคยสั่ง — ที่สั่งบ่อยทั่วไป';
+  $('custSpecs').innerHTML = CS_LIST.map((t, i) => '<button type="button" data-cs="' + i + '" style="--i:' + i + '"><span><b>' + esc(t.name || specLabel(t)) + '</b><small>' +
+    esc([t.screenColor ? 'สกรีน' + t.screenColor : '', t.capColor ? 'ฝา' + t.capColor : '',
+         CS_HIST ? (t.bags ? 'ล่าสุด ' + t.bags + ' ถุง' : (t.qty ? 'ล่าสุด ' + baht(t.qty) : '')) : '', CS_HIST && t.price ? baht(t.price) + ' บ.' : '', CS_HIST && t.last ? thDate(t.last) : ''].filter(Boolean).join(' · ')) +
+    '</small></span>' + (t.count ? '<span class="n">' + t.count + '×</span>' : '') + '</button>').join('') || '<div class="hint">ยังไม่มีประวัติ</div>';
 }
-$('oQuick').addEventListener('click', e => {
-  const b = e.target.closest('button[data-q]'); if (!b) return;
-  const t = DATA.topSpecs[Number(b.dataset.q)];
-  const rows = [...$('oItems').querySelectorAll('.spec-row')];
-  const blank = rows.find(r => !r.querySelector('.i-type').value);
+$('custSpecs').addEventListener('click', e => {
+  const b = e.target.closest('button[data-cs]'); if (!b) return;
+  const t = CS_LIST[Number(b.dataset.cs)]; if (!t) return;
+  const blank = [...$('oItems').querySelectorAll('.spec-row')].find(r => !r.querySelector('.i-type').value);
   if (blank) blank.remove();                           // ไลน์เปล่าที่ยังไม่ได้แตะ → แทนที่เลย
-  addSpecRow({ type: t.type, size: t.size, shape: t.shape, neck: t.neck, color: t.color, screenColor: t.screenColor, capColor: t.capColor }, { focusQty: true });
+  addSpecRow({ type: t.type, size: t.size, shape: t.shape, neck: t.neck, color: t.color, screenColor: t.screenColor, capColor: t.capColor,
+    bags: CS_HIST ? (t.bags || '') : '', extra: CS_HIST && !t.bags ? (t.extra || t.qty || '') : '', price: CS_HIST ? (t.price || '') : '' }, { focusQty: true });
+  b.classList.add('on'); setTimeout(() => b.classList.remove('on'), 450);
 });
 // ─── กำหนดส่ง: แตะเลือกจำนวนวัน ───
 function renderDueChips(){
@@ -1049,8 +1223,17 @@ function readSpecItems(){
       color: ax('สี', g('.i-color')), screenColor: ax('สีสกรีน', g('.i-scrcolor')),
       capColor: ax('พร้อมฝาสี', g('.i-cap')), bags, extra, perBag: per,
       qty: per > 0 && bags > 0 ? bags * per + extra : extra,
-      price: Number(g('.i-price')) || 0, screen: !!ax('สีสกรีน', g('.i-scrcolor')) };
+      price: Number(g('.i-price')) || 0, screen: !!ax('สีสกรีน', g('.i-scrcolor')),
+      name: r.querySelector('.s-title').textContent, unit: unitOfType(type) };
   }).filter(it => it.type && it.qty > 0);
+}
+// หน่วยนับของประเภท (ใช้นอก addSpecRow ด้วย — ใบสั่งข้อความ)
+function unitOfType(t){
+  if (!t) return 'ใบ';
+  const m = ((DATA && DATA.spec && DATA.spec['หน่วยนับตามประเภท']) || {})[t];
+  if (m) return m === 'ถุง' ? 'ใบ' : m;
+  const per = (DATA && DATA.perBag) || {};
+  return Object.keys(per).some(k => k.indexOf(t + '|') === 0) ? 'ใบ' : 'ชิ้น';
 }
 function addItemRow(target='oItems', it={}){
   const d = document.createElement('div');
@@ -1074,31 +1257,156 @@ function readItems(target){
   })).filter(it => it.name && it.qty);
 }
 function calcTotal(){
+  if (typeof SB_STATE !== 'undefined' && (SB_STATE === 'done' || SB_STATE === 'saving')) return;   // หัวการ์ดกำลังโชว์ ✓ บันทึกแล้ว
   const items = readSpecItems();
   const t = items.reduce((s,it) => s + it.qty*it.price, 0);
   const pcs = items.reduce((s,it) => s + it.qty, 0);
   $('oTotal').innerHTML = 'รวม ' + baht(pcs) + ' ใบ<small>' + (items.length ? items.length + ' รายการ' + (t ? ' · ' + baht(t) + ' บาท' : ' · ยังไม่ใส่ราคา') : 'ยังไม่มีรายการ') + '</small>';
 }
 $('oAdd').addEventListener('click', () => addSpecRow({}, { guide: true }));
-$('oSave').addEventListener('click', async () => {
-  const items = readSpecItems();
-  const customer = $('oCust').value.trim();
-  if (!customer) return toast('ใส่ชื่อลูกค้าก่อน');
-  if (!items.length) return toast('เลือกสินค้าและใส่จำนวนก่อน');
-  const j = await api('pkOrderSave', {
-    customer, items, due: $('oDue').value, note: $('oNote').value,
-    buyType: segVal('oBuyType'), priceMode: segVal('oPriceMode'), brand: $('oBrand').value.trim(),
-    payStatus: $('oPay').value, artStatus: $('oArt').value,
-    blockFee: $('oBlock').value, screenTeam: $('oTeam').value, urgent: $('oUrgent').checked,
+// ─── ใบสั่งแบบข้อความ — แชร์เข้าไลน์กลุ่มผลิต / ส่งให้ลูกค้าเช็ค ───
+const TH_MO = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+const thDate = iso => { const m = String(iso || '').match(/^(\d{4})-(\d{2})-(\d{2})/); return m ? Number(m[3]) + ' ' + TH_MO[Number(m[2]) - 1] + ' ' + String(Number(m[1]) + 543).slice(-2) : String(iso || ''); };
+const thNow = () => { const d = new Date(), p = n => String(n).padStart(2, '0'); return thDate(d.getFullYear() + '-' + p(d.getMonth() + 1) + '-' + p(d.getDate())) + ' ' + p(d.getHours()) + ':' + p(d.getMinutes()); };
+function slipText(o){
+  const L = ['🧾 ใบสั่ง ' + o.id + ' · P&K โรงขวด'];
+  L.push('ลูกค้า: ' + o.customer + (o.custTag ? ' (' + o.custTag + ')' : ''));
+  if (o.brand) L.push('งาน/แบรนด์: ' + o.brand);
+  L.push('กำหนดส่ง: ' + (o.due ? thDate(o.due) : 'ยังไม่กำหนด') + (o.urgent ? ' ⚡ ด่วน' : ''));
+  let pcs = 0; const units = new Set();
+  (o.items || []).forEach(it => {
+    const unit = it.unit || (it.type ? unitOfType(it.type) : 'ใบ'); units.add(unit); pcs += Number(it.qty) || 0;
+    const q = it.bags ? it.bags + ' ถุง' + (it.extra ? ' + ' + baht(it.extra) + ' ' + unit : '') + ' (' + baht(it.qty) + ' ' + unit + ')' : baht(it.qty) + ' ' + unit;
+    L.push('• ' + it.name + ' — ' + q + (it.screenColor ? ' · สกรีน' + it.screenColor : '') + (it.capColor ? ' · ฝา' + it.capColor : ''));
   });
-  toast('✅ ' + j.id + ' · ' + baht(j.total) + ' บ.' + (j.unmapped.length ? ' ⚠️ นอกระบบสต๊อก: ' + j.unmapped.join(',') : ''));
-  const sb = $('oSave'); sb.textContent = '✓ บันทึกแล้ว'; sb.classList.add('ok');
-  setTimeout(() => { sb.textContent = 'บันทึกออเดอร์'; sb.classList.remove('ok'); }, 1400);
-  $('oCust').value=''; O_CUST=''; $('oNote').value=''; $('oBlock').value=''; $('oUrgent').checked=false; $('oBrand').value=''; $('oRepeat').hidden = true;
-  $('oItems').innerHTML=''; addSpecRow(); calcTotal(); paintMoreSum();
-  FLASH_ID = j.id;
+  L.push('รวม ' + baht(pcs) + ' ' + (units.size === 1 ? [...units][0] : 'ชิ้น') + ' · ' + (o.items || []).length + ' รายการ' + (o.total ? ' · ' + baht(o.total) + ' บาท' : ''));
+  if (o.buyType) L.push('ประเภท: ' + o.buyType + (o.priceMode ? ' · ราคา' + o.priceMode : ''));
+  if (o.note) L.push('หมายเหตุ: ' + o.note);
+  if (o.status) L.push('สถานะ: ' + o.status);
+  L.push('รับโดย ' + (o.by || '-') + (o.when ? ' · ' + o.when : ''));
+  return L.join('\n');
+}
+async function shareText(text){
+  if (navigator.share) { try { await navigator.share({ text }); return 'shared'; } catch(e){ if (e && e.name === 'AbortError') return 'abort'; } }
+  try { await navigator.clipboard.writeText(text); toast('คัดลอกแล้ว — เปิดไลน์แล้ววางได้เลย'); return 'copied'; }
+  catch(e){
+    const ta = document.createElement('textarea'); ta.value = text; ta.style.position = 'fixed'; ta.style.opacity = '0'; document.body.appendChild(ta); ta.select();
+    let ok = false; try { ok = document.execCommand('copy'); } catch(e2){} ta.remove();
+    toast(ok ? 'คัดลอกแล้ว — เปิดไลน์แล้ววางได้เลย' : 'คัดลอกไม่ได้ — กดค้างที่ข้อความแล้วคัดลอกเอง'); return ok ? 'copied' : 'fail';
+  }
+}
+// ─── ฟอร์ม: ล้าง / โหมดแก้ไข ───
+let EDIT_ID = '', OK_ID = '', OK_TEXT = '';
+function resetOrderForm(){
+  $('oCust').value = ''; O_CUST = ''; O_CUST_ID = ''; O_NEW = null; paintCustTag(); renderCustCard(); $('oRepeat').hidden = true;
+  ['oNote','oBlock','oBrand','oPay','oArt','oTeam','oDue'].forEach(id => { $(id).value = ''; }); $('oUrgent').checked = false;
+  [...$('oDueChips').children].forEach(x => x.classList.remove('on'));
+  ['oBuyType','oPriceMode'].forEach(id => [...$(id).children].forEach((b, i) => b.classList.toggle('on', i === 0)));
+  $('oMore').classList.remove('open');
+  $('oItems').innerHTML = ''; addSpecRow(); calcTotal(); paintMoreSum();
+}
+function exitEdit(reset){ EDIT_ID = ''; $('oEditBar').hidden = true; if (!SB_STATE) $('oSave').textContent = 'บันทึกออเดอร์'; if (reset) resetOrderForm(); }
+$('oEditCancel').addEventListener('click', () => { exitEdit(true); toast('ยกเลิกการแก้ไขแล้ว'); });
+function startEdit(d){
+  const o = d.order;
+  $('odModal').classList.remove('on'); sbSet('');
+  const nb = document.querySelector('#nav button[data-t="order"]'); if (nb && !nb.classList.contains('on')) nb.click();
+  EDIT_ID = o['Order_ID'];
+  $('oEditBar').hidden = false; $('oEditText').textContent = '✏️ กำลังแก้ไข ' + o['Order_ID'] + ' · ' + o['ลูกค้า'];
+  O_CUST = String(o['ลูกค้า']).trim(); O_CUST_ID = o['Customer_ID'] || ''; O_NEW = null; $('oCust').value = O_CUST; $('oRepeat').hidden = true; paintCustTag(); renderCustCard();
+  $('oItems').innerHTML = '';
+  const its = d.items || [];
+  if (its.length && !its.some(x => x.type)) toast('ระบบหลังบ้านรุ่นเก่า — เติมรายการให้ไม่ได้ กรุณาเลือกสินค้าใหม่');
+  its.filter(x => x.type).forEach(x => addSpecRow({ type: x.type, size: x.size, shape: x.shape, neck: x.neck, color: x.color, screenColor: x.screenColor, capColor: x.capColor,
+    bags: x.bags || '', extra: x.extra || (x.bags ? '' : x.qty), price: x.price || '' }));
+  if (!$('oItems').children.length) addSpecRow();
+  $('oDue').value = /^\d{4}-\d{2}-\d{2}/.test(String(o['กำหนดส่ง'] || '')) ? String(o['กำหนดส่ง']).slice(0, 10) : ''; [...$('oDueChips').children].forEach(x => x.classList.remove('on'));
+  const setSeg = (id, v) => { const bs = [...$(id).children]; if (v && bs.some(b => b.textContent === v)) bs.forEach(b => b.classList.toggle('on', b.textContent === v)); };
+  setSeg('oBuyType', o['ประเภทการซื้อ']); setSeg('oPriceMode', o['ราคา']);
+  $('oBrand').value = o['แบรนด์'] || ''; $('oPay').value = o['สถานะเงิน'] || ''; $('oArt').value = o['สถานะแบบ'] || ''; $('oTeam').value = o['ทีมสกรีน'] || '';
+  $('oBlock').value = o['ค่าบล็อก'] || ''; $('oUrgent').checked = !!o['ด่วน']; $('oNote').value = o['หมายเหตุ'] || '';
+  paintMoreSum(); $('oMore').classList.toggle('open', !!$('oMoreSum').textContent);
+  sbSet('');   // ปุ่มเป็น "บันทึกการแก้ไข" + คำนวณรวม
+  $('oEditBar').scrollIntoView({ behavior: 'smooth', block: 'start' });
+}
+// ─── แถบบันทึก 3 จังหวะ: กด "บันทึก" → แถบยืดออกเป็นการ์ดสรุปให้ตรวจ+ยืนยัน (แก้ไข/ยกเลิกได้)
+//     → กำลังบันทึก → กลายเป็นการ์ด ✓ บันทึกแล้ว + ใบสั่งข้อความ + แชร์ไลน์ · ปิดแล้วหุบกลับเป็นแถบเดิม ───
+let SB_STATE = '', SB_META = null, SB_CANCEL_T = 0;
+function sbSet(state){
+  SB_STATE = state; const sb = $('saveBar'); sb.dataset.state = state; sb.classList.toggle('open', !!state);
+  $('oSave').textContent = state === 'confirm' ? '✓ ยืนยันบันทึก' : state === 'saving' ? 'กำลังบันทึก…' : state === 'done' ? 'ปิด' : (EDIT_ID ? 'บันทึกการแก้ไข' : 'บันทึกออเดอร์');
+  $('oSave').disabled = state === 'saving';
+  if (!state) { $('sbBody').innerHTML = ''; $('sbActions').innerHTML = ''; SB_META = null; calcTotal(); }
+}
+function collectOrder(){   // อ่านฟอร์ม + ตรวจลูกค้าให้เรียบร้อย → {pay, items, total, pcs, custTag} · ไม่ผ่าน = null (toast บอกแล้ว)
+  const items = readSpecItems();
+  if (!items.length) { toast('เลือกสินค้าและใส่จำนวนก่อน'); return null; }
+  const typed = $('oCust').value.trim();
+  if (!typed) { toast('ใส่ชื่อลูกค้าก่อน'); $('oCust').focus(); return null; }
+  if (O_CUST !== typed) {   // พิมพ์เองไม่ได้แตะเลือก → จับคู่ทะเบียนให้ · ไม่เจอ = ต้องเพิ่มอย่างตั้งใจ (กันชื่อเพี้ยน/ชื่องานปน)
+    const ex = ((DATA && DATA.customers) || []).find(c => normName(c['ชื่อลูกค้า']) === normName(typed));
+    if (!ex) { openNewCust(typed); toast('ชื่อนี้ยังไม่มีในทะเบียน — เพิ่มลูกค้าใหม่ก่อน'); return null; }
+    O_CUST = String(ex['ชื่อลูกค้า']).trim(); O_CUST_ID = ex['Customer_ID'] || ''; O_NEW = null; $('oCust').value = O_CUST; paintCustTag(); renderCustCard();
+  }
+  const pay = { customer: O_CUST, customerId: O_CUST_ID, newCustomer: O_NEW, items, due: $('oDue').value, note: $('oNote').value.trim(),
+    buyType: segVal('oBuyType'), priceMode: segVal('oPriceMode'), brand: $('oBrand').value.trim(),
+    payStatus: $('oPay').value, artStatus: $('oArt').value, blockFee: $('oBlock').value, screenTeam: $('oTeam').value, urgent: $('oUrgent').checked };
+  return { pay, items, total: items.reduce((s, it) => s + it.qty * it.price, 0), pcs: items.reduce((s, it) => s + it.qty, 0),
+    custTag: O_NEW ? (O_NEW.district ? 'อ.' + O_NEW.district : '') : custTagOf(O_CUST_ID) };
+}
+function sbSummaryHtml(m){
+  const p = m.pay;
+  const kv = [['กำหนดส่ง', p.due ? thDate(p.due) + (p.urgent ? ' ⚡ ด่วน' : '') : (p.urgent ? '⚡ ด่วน' : 'ยังไม่กำหนด')],
+    ['ประเภท', p.buyType + (p.priceMode ? ' · ราคา' + p.priceMode : '')], ['แบรนด์', p.brand], ['เงิน', p.payStatus], ['แบบ', p.artStatus],
+    ['ค่าบล็อก', p.blockFee ? baht(p.blockFee) + ' บ.' : ''], ['ทีมสกรีน', p.screenTeam], ['หมายเหตุ', p.note]].filter(x => x[1]);
+  return '<div class="h">' + (EDIT_ID ? '✏️ ยืนยันการแก้ไข ' + esc(EDIT_ID) : 'ตรวจอีกครั้งก่อนบันทึก') + '</div>' +
+    '<div><b>' + esc(O_CUST) + '</b>' + (m.custTag ? ' <span class="meta">' + esc(m.custTag) + '</span>' : '') + (O_NEW ? ' <span class="chip c-wait">ลูกค้าใหม่</span>' : '') + '</div>' +
+    '<ul>' + m.items.map((it, i) => '<li style="--i:' + i + '"><span>' + esc(it.name) +
+      (it.screenColor ? ' <span class="meta">· สกรีน' + esc(it.screenColor) + '</span>' : '') + (it.capColor ? ' <span class="meta">· ฝา' + esc(it.capColor) + '</span>' : '') +
+      (it.price ? '<br><span class="meta">' + baht(it.price) + ' บ./' + esc(it.unit) + '</span>' : '') + '</span>' +
+      '<span class="q">' + (it.bags ? it.bags + ' ถุง<br><span class="meta">' + baht(it.qty) + ' ' + esc(it.unit) + '</span>' : baht(it.qty) + ' ' + esc(it.unit)) + '</span></li>').join('') + '</ul>' +
+    '<div class="sb-kv">' + kv.map(x => '<span>' + esc(x[0]) + ' <b>' + esc(x[1]) + '</b></span>').join('') + '</div>';
+}
+$('oSave').addEventListener('click', async () => {
+  if (SB_STATE === 'saving') return;
+  if (SB_STATE === 'done') { sbSet(''); return; }
+  if (SB_STATE === '') {                              // จังหวะ 1: ยืดออกให้ตรวจ
+    const m = collectOrder(); if (!m) return;
+    SB_META = m; $('sbBody').innerHTML = sbSummaryHtml(m);
+    $('sbActions').innerHTML = '<button type="button" data-sb="edit">✏️ แก้ไข</button><button type="button" class="warn" data-sb="cancel">✕ ยกเลิก</button>';
+    sbSet('confirm'); return;
+  }
+  // จังหวะ 2: ยืนยัน — อ่านฟอร์มใหม่อีกรอบ ถ้าระหว่างนั้นมีใครแก้ค่าข้างบน ให้โชว์สรุปใหม่แทนการบันทึกของเก่า
+  const m = collectOrder(); if (!m) { sbSet(''); return; }
+  if (JSON.stringify(m.pay) !== JSON.stringify(SB_META.pay)) { SB_META = m; $('sbBody').innerHTML = sbSummaryHtml(m); toast('รายการเปลี่ยน — ตรวจอีกครั้งแล้วกดยืนยัน'); return; }
+  const editing = EDIT_ID; sbSet('saving');
+  let j; try { j = editing ? await api('pkOrderEdit', { id: editing, ...m.pay }) : await api('pkOrderSave', m.pay); } catch(e){ sbSet('confirm'); return; }
+  const id = editing || j.id, un = j.unmapped || [];
+  OK_ID = id; OK_TEXT = slipText({ id, customer: O_CUST, custTag: m.custTag, due: m.pay.due, urgent: m.pay.urgent, items: m.items, total: m.total, note: m.pay.note, brand: m.pay.brand, buyType: m.pay.buyType, priceMode: m.pay.priceMode, by: (ME && ME.name) || '', when: thNow() });
+  // จังหวะ 3: การ์ดเดิมกลายเป็น ✓ บันทึกแล้ว (ฟอร์มข้างหลังล้างรอใบถัดไป)
+  $('sbBody').innerHTML = '<div class="ok-head"><div class="ok-ico">✓</div><div><b>' + (editing ? 'แก้ไขแล้ว' : 'บันทึกแล้ว') + ' ' + esc(id) + '</b><br><span class="meta">' +
+    esc(O_CUST + ' · ' + baht(m.pcs) + ' ใบ' + (m.total ? ' · ' + baht(m.total) + ' บ.' : '') + (un.length ? ' · ⚠️ นอกระบบสต๊อก: ' + un.join(',') : '')) + '</span></div></div>' +
+    '<pre class="slip" id="okSlip">' + esc(OK_TEXT) + '</pre>';
+  $('sbActions').innerHTML = '<button type="button" class="pri" data-sb="share">📤 แชร์ไป LINE</button><button type="button" data-sb="detail">ดูรายละเอียด</button>';
+  sbSet('done');
+  $('oTotal').innerHTML = '✓ ' + (editing ? 'แก้ไขแล้ว' : 'บันทึกแล้ว') + '<small>' + esc(id + ' · ' + O_CUST) + '</small>';
+  if (editing) exitEdit(false);
+  resetOrderForm();
+  FLASH_ID = id;
   loadData();
 });
+$('sbActions').addEventListener('click', e => {
+  const b = e.target.closest('button[data-sb]'); if (!b) return;
+  const a = b.dataset.sb;
+  if (a === 'edit') sbSet('');
+  else if (a === 'cancel') {                           // แตะ 2 ครั้งถึงล้างฟอร์ม — กันมือลั่นทิ้งที่กรอกมาทั้งหมด
+    if (!SB_CANCEL_T) { b.textContent = 'แตะอีกครั้งเพื่อล้างฟอร์ม'; SB_CANCEL_T = setTimeout(() => { SB_CANCEL_T = 0; b.textContent = '✕ ยกเลิก'; }, 3000); return; }
+    clearTimeout(SB_CANCEL_T); SB_CANCEL_T = 0; sbSet(''); if (EDIT_ID) exitEdit(false); resetOrderForm(); toast('ยกเลิกแล้ว — ฟอร์มว่างพร้อมลงใบใหม่');
+  }
+  else if (a === 'share') shareText(OK_TEXT);
+  else if (a === 'detail') { sbSet(''); if (OK_ID) openOrderDetail(OK_ID); }
+});
+document.addEventListener('keydown', e => { if (e.key === 'Escape' && SB_STATE === 'confirm') sbSet(''); });
 let FLASH_ID = '';
 const CHIP = s => ({'รอผลิต':'c-wait','กำลังผลิต':'c-doing','รอสกรีน':'c-wait','กำลังสกรีน':'c-doing','พร้อมส่ง':'c-ready','ส่งบางส่วน':'c-doing','ส่งแล้ว':'c-done','ยกเลิก':'c-done','เสร็จ':'c-done','ค้างชำระ':'c-owe','วางบิลแล้ว':'c-wait','ชำระแล้ว':'c-done','รอเก็บ':'c-owe'}[s] || 'c-wait');
 // ป้ายสถานะที่เดิมต้องอ่านเอาจากหมายเหตุ — ให้เห็นตั้งแต่ในลิสต์
@@ -1113,23 +1421,47 @@ function orderBadges(o){
   if (o['ทีมสกรีน']) s += '<span class="chip c-doing">' + esc(o['ทีมสกรีน']) + '</span> ';
   return s;
 }
+// ─── ค้นหา/กรองรายการ (ฝั่งหน้าเว็บ — ข้อมูลอยู่ในมือแล้ว ไม่ต้องยิง GAS) ───
+let O_FIND = '', O_STAT = '';
+const STAT_ORDER = ['รอผลิต','กำลังผลิต','รอสกรีน','กำลังสกรีน','พร้อมส่ง','ส่งบางส่วน','ส่งแล้ว','ยกเลิก'];
+function orderHay(o){
+  if (o._hay === undefined) { let its = []; try { its = JSON.parse(o['รายการ'] || '[]'); } catch(e){}
+    o._hay = normName([o['Order_ID'], o['ลูกค้า'], o['แบรนด์'], o['หมายเหตุ'], o['ทีมสกรีน']].concat(its.map(i => i.name)).join(' ')); }
+  return o._hay;
+}
+function filterOrders(){ const q = normName(O_FIND); return DATA.orders.filter(o => (!O_STAT || o['สถานะ'] === O_STAT) && (!q || orderHay(o).includes(q))); }
+function renderStatusChips(){
+  const cnt = {}; DATA.orders.forEach(o => { cnt[o['สถานะ']] = (cnt[o['สถานะ']] || 0) + 1; });
+  const stats = STAT_ORDER.filter(s => cnt[s]).concat(Object.keys(cnt).filter(s => !STAT_ORDER.includes(s)));
+  if (O_STAT && !cnt[O_STAT]) O_STAT = '';
+  $('oStatus').innerHTML = '<button type="button" data-s="" class="' + (O_STAT ? '' : 'on') + '">ทั้งหมด<small>' + DATA.orders.length + '</small></button>' +
+    stats.map((s, i) => '<button type="button" data-s="' + esc(s) + '" class="' + (s === O_STAT ? 'on' : '') + '" style="--i:' + (i + 1) + '">' + esc(s) + '<small>' + cnt[s] + '</small></button>').join('');
+}
+$('oFind').addEventListener('input', () => { O_FIND = $('oFind').value; renderOrderList(); });
+$('oStatus').addEventListener('click', e => { const b = e.target.closest('button[data-s]'); if (!b) return; O_STAT = b.dataset.s; renderStatusChips(); renderOrderList(); });
 function renderOrders(){
-  renderOrderTree();
+  renderOrderTree(); renderStatusChips(); renderOrderList();
+}
+function renderOrderList(){
   if (FLASH_ID) setTimeout(() => { FLASH_ID = ''; }, 2000);
-  $('orderList').innerHTML = DATA.orders.slice(0,40).map((o, i) =>
+  const filtering = !!(normName(O_FIND) || O_STAT);
+  const list = filterOrders();
+  $('oCount').hidden = !filtering;
+  if (filtering) $('oCount').textContent = 'พบ ' + list.length + ' จาก ' + DATA.orders.length + ' ใบ' + (list.length > 100 ? ' (แสดง 100 ใบแรก)' : '');
+  $('orderList').innerHTML = list.slice(0, filtering ? 100 : 40).map((o, i) =>
     '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer; --i:' + Math.min(i, 12) + '"' + (o['Order_ID'] === FLASH_ID ? ' class="flash"' : '') + '><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + ' · แตะดูรายละเอียด</span></div>' +
     '<div>' + orderBadges(o) + '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
     (['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ']) ? '' : '<button class="mini warn" data-cancel="' + esc(o['Order_ID']) + '">ยกเลิก</button>') +
-    '</div></div></li>').join('') || '<li class="meta">ยังไม่มีออเดอร์</li>';
+    '</div></div></li>').join('') || '<li class="meta">' + (filtering ? 'ไม่พบออเดอร์ที่ตรงเงื่อนไข' : 'ยังไม่มีออเดอร์') + '</li>';
+}
+async function cancelOrder(id){
+  const why = prompt('เหตุผลการยกเลิก ' + id + ':'); if (why === null) return;
+  try { await api('pkOrderCancel', { id, note: why }); } catch(e){ return; }
+  $('odModal').classList.remove('on'); toast('ยกเลิกแล้ว'); loadData();
 }
 $('orderList').addEventListener('click', async e => {
   const id = e.target.dataset && e.target.dataset.cancel;
-  if (id) {
-    const why = prompt('เหตุผลการยกเลิก ' + id + ':'); if (why === null) return;
-    await api('pkOrderCancel', { id, note: why });
-    toast('ยกเลิกแล้ว'); loadData();
-    return;
-  }
+  if (id) return cancelOrder(id);
   const li = e.target.closest('li[data-open]');
   if (li) openOrderDetail(li.dataset.open);
 });
@@ -1222,7 +1554,7 @@ $('oView').addEventListener('click', e => {
   b.classList.add('on');
   const tree = b.dataset.view === 'tree';
   $('treeWrap').hidden = !tree;
-  $('orderList').hidden = tree;
+  $('orderList').hidden = tree; $('findBar').hidden = tree; $('oCount').hidden = tree || !(normName(O_FIND) || O_STAT);
 });
 
 // ─── รายละเอียดออเดอร์ (แตะจากลิสต์ไหนก็เปิดได้) ───
@@ -1245,7 +1577,17 @@ async function openOrderDetail(id){
     '<span class="meta">ดี ' + baht(j.good) + '/' + baht(j.ordered) +
     (j.gradeB ? ' · เกรด B ' + baht(j.gradeB) : '') + (j.waste ? ' · เสีย ' + baht(j.waste) : '') +
     (j.by ? ' · ' + esc(j.by) : '') + (j.stuck ? ' · ค้าง: ' + esc(j.stuck) : '') + '</span></li>';
-  $('odBody').innerHTML =
+  OD_LAST = d;
+  // แก้ได้ไหม — GAS รุ่นใหม่บอกมาเลย (lock) · รุ่นเก่าคำนวณเองจากงาน/บิล/การส่ง
+  const lock = d.lock !== undefined ? d.lock : (o['สถานะ'] === 'ยกเลิก' ? 'ยกเลิกแล้ว' :
+    (d.prodJobs.concat(d.screenJobs).some(j => !['รอผลิต','รอสกรีน','ยกเลิก'].includes(j.status)) ? 'งานเริ่มผลิต/สกรีนแล้ว' : d.bill ? 'มีบิลแล้ว' : d.deliveries.length ? 'ส่งของไปแล้ว' : ''));
+  const canCancel = !['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ']);
+  const actions = '<div class="od-actions">' +
+    '<button type="button" class="pri" data-od="share">📤 แชร์ใบสั่ง</button>' +
+    '<button type="button" data-od="edit"' + (lock ? ' disabled' : '') + '>✏️ แก้ไข</button>' +
+    (canCancel ? '<button type="button" class="warn" data-od="cancel">ยกเลิก</button>' : '') + '</div>' +
+    (lock ? '<p class="meta" style="margin:-6px 0 10px">แก้ไม่ได้: ' + esc(lock) + '</p>' : '');
+  $('odBody').innerHTML = actions +
     row_('ลูกค้า', '<b>' + esc(o['ลูกค้า']) + '</b>' + (custLine ? '<br><span class="meta">' + custLine + '</span>' : '')) +
     (c.note ? row_('หมายเหตุลูกค้า', '<span style="color:var(--gold)">' + esc(c.note) + '</span>') : '') +
     row_('สถานะ', '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' + orderBadges(o)) +
@@ -1260,6 +1602,18 @@ async function openOrderDetail(id){
     (d.deliveries.length ? '<h2 style="margin:14px 0 4px">การส่งของ</h2><ul class="list">' +
       d.deliveries.map(x => '<li>' + esc(x.when) + ' <span class="meta">โดย ' + esc(x.by) + (x.note ? ' · ' + esc(x.note) : '') + '</span></li>').join('') + '</ul>' : '');
 }
+let OD_LAST = null;
+$('odBody').addEventListener('click', e => {
+  const b = e.target.closest('button[data-od]'); if (!b || !OD_LAST) return;
+  const d = OD_LAST, o = d.order, c = d.customer || {};
+  if (b.dataset.od === 'share') {
+    const items = d.items.map(it => ({ name: it.name, bags: it.bags, extra: it.extra, qty: it.qty, unit: it.type ? unitOfType(it.type) : 'ใบ', screenColor: it.screenColor, capColor: it.capColor }));
+    shareText(slipText({ id: o['Order_ID'], customer: o['ลูกค้า'], custTag: [c.route ? 'สาย ' + c.route : '', c.district ? 'อ.' + c.district : ''].filter(Boolean).join(' · '),
+      due: o['กำหนดส่ง'], urgent: !!o['ด่วน'], items, total: Number(String(o['ยอดรวม']).replace(/,/g, '')) || 0, note: o['หมายเหตุ'], brand: o['แบรนด์'], buyType: o['ประเภทการซื้อ'], priceMode: o['ราคา'],
+      status: o['สถานะ'], by: o['ผู้รับออเดอร์'], when: thDate(o['วันที่รับ']) }));
+  } else if (b.dataset.od === 'edit') startEdit(d);
+  else if (b.dataset.od === 'cancel') cancelOrder(o['Order_ID']);
+});
 $('odClose').addEventListener('click', () => $('odModal').classList.remove('on'));
 $('odModal').addEventListener('click', e => { if (e.target.id === 'odModal') $('odModal').classList.remove('on'); });
 
