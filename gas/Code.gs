@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-12e';
+const CODE_VERSION = '2026-09-12f';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -164,6 +164,7 @@ const SETTINGS_SEED = [
 ];
 
 function setupPkSystem() {
+  dirty_(); _SH = {};
   let ss;
   const id = prop('PK_SHEET_ID');
   if (id) { ss = SpreadsheetApp.openById(id); }
@@ -199,11 +200,15 @@ function setupPkSystem() {
 // ─── ตัวช่วยชีต (หาคอลัมน์จากหัวตารางเสมอ) ───
 let _SS = null;
 function book() { if (!_SS) _SS = SpreadsheetApp.openById(prop('PK_SHEET_ID')); return _SS; }
+let _SH = {}, _TAB = {};   // แคชต่อคำขอ: sheet object + ข้อมูลที่อ่านแล้ว (ทุกฟังก์ชันเขียนต้องล้าง _TAB ของแท็บนั้น)
 function tab(name) {
+  if (_SH[name]) return _SH[name];
   const sh = book().getSheetByName(name);
   if (!sh) throw new Error('ไม่พบแท็บ ' + name + ' — รัน setupPkSystem() ก่อน');
+  _SH[name] = sh;
   return sh;
 }
+function dirty_(name) { if (name) delete _TAB[name]; else _TAB = {}; }
 // Sheets คืนวันที่เป็น Date object — แปลงเป็นข้อความรูปแบบเดียวเสมอก่อนใช้เทียบ
 function fmtCell(v) {
   if (v instanceof Date) {
@@ -214,9 +219,12 @@ function fmtCell(v) {
   return v;
 }
 function readTab(name) {
+  if (_TAB[name]) return { head: _TAB[name].head.slice(), rows: _TAB[name].rows.map(function (r) { return r.slice(); }) };
   const v = tab(name).getDataRange().getValues();
   const head = (v[0] || []).map(String);
-  return { head: head, rows: v.slice(1).filter(function (r) { return r.join('') !== ''; }).map(function (r) { return r.map(fmtCell); }) };
+  const out = { head: head, rows: v.slice(1).filter(function (r) { return r.join('') !== ''; }).map(function (r) { return r.map(fmtCell); }) };
+  _TAB[name] = out;
+  return { head: head.slice(), rows: out.rows.map(function (r) { return r.slice(); }) };
 }
 function toObjs(head, rows) {
   return rows.map(function (r) { const o = {}; head.forEach(function (h, i) { o[h] = r[i] !== undefined ? r[i] : ''; }); return o; });
@@ -251,6 +259,7 @@ function col(head, label) {
   return i;
 }
 function appendObj(name, obj) {
+  dirty_(name);
   const sh = tab(name);
   const head = sh.getRange(1, 1, 1, sh.getLastColumn()).getValues()[0].map(String);
   sh.appendRow(head.map(function (h) { return obj[h] !== undefined ? obj[h] : ''; }));
@@ -259,6 +268,7 @@ function appendObj(name, obj) {
 // อย่างละ 1 เรียก API ต่อ 1 แถว หลักพันแถวจะชนเพดานรัน 6 นาทีของ Apps Script แน่นอน
 function appendObjs(name, objs) {
   if (!objs || !objs.length) return 0;
+  dirty_(name);
   const sh = tab(name);
   const cols = sh.getLastColumn();
   const head = sh.getRange(1, 1, 1, cols).getValues()[0].map(String);
@@ -269,6 +279,7 @@ function appendObjs(name, objs) {
   return rows.length;
 }
 function updateWhere(name, idLabel, idValue, patch) {
+  dirty_(name);
   const sh = tab(name);
   const v = sh.getDataRange().getValues();
   const head = v[0].map(String);
@@ -297,6 +308,7 @@ function settingsMap() {
 }
 // เลขรัน (เรียกได้เฉพาะใน mutation ที่ถือ lock อยู่แล้ว — ห้ามใส่ lock ซ้อน)
 function seq(counterKey, prefix, pad) {
+  dirty_('Settings');
   const st = tab('Settings');
   const v = st.getDataRange().getValues();
   const head = v[0].map(String);
@@ -313,6 +325,7 @@ function seq(counterKey, prefix, pad) {
 }
 // ตัวนับแบบระบุ key ตรง ๆ (ใช้กับ BILL_NEXT / STMT_NEXT เดิมของ v1)
 function nextCounter(counterKey, pad, prefix) {
+  dirty_('Settings');
   const st = tab('Settings');
   const v = st.getDataRange().getValues();
   const head = v[0].map(String);
@@ -348,6 +361,7 @@ function repairStaffIds_() {
     if (String(vals[i][0]).trim() === '') { vals[i][0] = seq('STAFF_NEXT', 'S', 3); n++; }
   }
   if (n) col1.setValues(vals);
+  dirty_();
   return n;
 }
 function staffPublic() {
@@ -1232,7 +1246,7 @@ function autoMigrate_() {
   if (!prop('PK_SHEET_ID')) return;                    // ยังไม่เคยติดตั้ง — ต้องรัน setupPkSystem() ใน editor ก่อน
   if (prop('SCHEMA_AT') === CODE_VERSION) return;
   const lock = LockService.getScriptLock();
-  if (!lock.tryLock(30000)) return;                    // คำขออื่นทำอยู่ — รอบหน้าค่อยว่า
+  if (!lock.tryLock(1500)) return;                     // คำขออื่นกำลังปรับอยู่ — ไม่รอ (เดิมรอ 30 วิ ทำให้ทุกคนค้างพร้อมกัน) โครงเก่ายังใช้ได้เพราะเพิ่มคอลัมน์ต่อท้ายอย่างเดียว
   try {
     if (prop('SCHEMA_AT') !== CODE_VERSION) {          // เช็คซ้ำหลังได้ lock กันทำสองรอบ
       setupPkSystem();
@@ -1454,6 +1468,7 @@ function importLegacyAccounting(srcId) {
       touched++;
     }
     if (touched) bsh.getRange(1, 1, bv.length, bh.length).setValues(bv);
+    dirty_();
   }
   // เขียนลงชีตทีเดียวจบ (2 เรียก API แทนหลักพัน) — ตายกลางทางแล้วรันซ้ำได้ ไม่เบิ้ล
   appendObjs('Customers', outCust);
@@ -1467,6 +1482,7 @@ function importLegacyAccounting(srcId) {
     if (String(sv[i][0]) === 'CUST_NEXT') { stg.getRange(i + 1, 2).setValue(Math.max(Number(sv[i][1]) || 1, custCount + 1)); seeded = true; break; }
   }
   if (!seeded) stg.appendRow(['CUST_NEXT', custCount + 1]);
+  dirty_();
   Logger.log('ซิงก์บัญชีเสร็จ: บิลใหม่ ' + bills + ' · ลูกหนี้เครดิตใหม่ ' + ar + ' · อัปเดตของเดิม ' + updated + ' · ลูกค้าใหม่ ' + customers);
   Logger.log('⚠️ แท็บเครดิตกับแท็บบิลรายวันอาจมีบิลซ้ำกัน — เช็คก่อนใช้ยอดย้อนหลังจริงจัง');
   return { bills: bills, ar: ar, updated: updated, customers: customers };

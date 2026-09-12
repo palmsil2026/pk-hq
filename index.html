@@ -290,6 +290,8 @@ li.flash{animation:flash 1.6s ease-out both;}
 .verline .old{color:var(--warn); font-weight:600;}
 .banner[hidden]{display:none}
 .banner{background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn); border-radius:8px; padding:10px 14px; font-size:13.5px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;}
+.banner.load{background:var(--green-soft); color:var(--green); border-color:transparent; gap:10px;}
+.banner.load.err{background:var(--warn-soft); color:var(--warn); border-color:var(--warn);}
 .modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:flex-end; justify-content:center; z-index:50;}
 .modal-bg.on{display:flex;}
 .modal{background:var(--glass-strong); -webkit-backdrop-filter:saturate(180%) blur(20px); backdrop-filter:saturate(180%) blur(20px); border:1px solid var(--edge); border-bottom:0; border-radius:16px 16px 0 0; padding:18px; width:100%; max-width:520px; max-height:86vh; overflow-y:auto;}
@@ -394,6 +396,8 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 <div class="banner" id="qBanner" hidden><span id="qText"></span><button class="mini" id="qRetry">ส่งอีกครั้ง</button></div>
 <div class="banner" id="verBanner" hidden><span id="verText"></span></div>
 <div class="banner" id="appBanner" hidden><span id="appText"></span></div>
+<!-- สถานะโหลดข้อมูล: รีเฟรชแล้วเห็นโครงร่างเทา ๆ = กำลังรอหลังบ้าน ไม่ใช่หลุดล็อกอิน -->
+<div class="banner load" id="loadBanner" hidden><span id="loadText"></span><button class="mini" id="loadRetry" hidden>ลองใหม่</button></div>
 
 <section class="tabpane" id="t-home">
     <div class="card"><h2>วันนี้ของฉัน</h2><p id="homeSum" class="meta" style="margin:0"></p></div>
@@ -697,7 +701,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-12e';
+const WEB_VERSION = '2026-09-12f';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -724,12 +728,20 @@ async function api(action, payload=null, params={}, opts={}){
     let j;
     const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
     const tm = ctl ? setTimeout(() => ctl.abort(), API_TIMEOUT_MS) : 0;
+    let stage = 'fetch';
     try {
       const r = await fetch(url, ctl ? { signal: ctl.signal } : undefined);
+      stage = 'parse';
       j = await r.json();
     } catch(netErr){
       if (opts.queueable){ pushQueue(action, payload); throw new Error('queued'); }
-      toast(netErr && netErr.name === 'AbortError' ? 'หลังบ้านตอบช้าเกินไป — ลองใหม่อีกครั้ง (หลังอัปเวอร์ชัน ครั้งแรกจะช้ากว่าปกติ)' : 'เน็ตมีปัญหา — ลองใหม่'); throw netErr;
+      // คำขออ่าน (ไม่ใช่บันทึก) ล้มครั้งแรก → ลองซ้ำเงียบ ๆ 1 ครั้ง — ช่วงหลังบ้านกำลังอัปเดต/สะดุด จะได้ไม่เด้ง error ใส่หน้าคนใช้
+      if (!isMut && !opts._retried && !(netErr && netErr.name === 'AbortError')) { await new Promise(res => setTimeout(res, 1200)); return await api(action, payload, params, { ...opts, _retried: true }); }
+      // "เน็ตมีปัญหา" เดิมขึ้นทุกกรณี ทั้งที่ส่วนใหญ่คือหลังบ้านตอบเป็นหน้า error (กำลังอัปเดต/คิวแน่น) ไม่ใช่เน็ตคนใช้
+      toast(netErr && netErr.name === 'AbortError' ? 'หลังบ้านตอบช้าเกินไป — ลองใหม่อีกครั้ง (หลังอัปเวอร์ชัน ครั้งแรกจะช้ากว่าปกติ)'
+        : stage === 'parse' ? 'หลังบ้านตอบผิดรูปแบบ — อาจกำลังอัปเดตอยู่ รอสักครู่แล้วลองใหม่'
+        : 'ติดต่อหลังบ้านไม่ได้ — ถ้าเน็ตปกติ แปลว่าหลังบ้านกำลังอัปเดต/สะดุด รอสักครู่แล้วลองใหม่');
+      throw netErr;
     } finally { clearTimeout(tm); }
     if (!j.ok){
       if (j.needLogin){ doLogout(false); toast('เข้าสู่ระบบใหม่อีกครั้ง'); const e1 = new Error('need login'); e1.needLogin = true; throw e1; }
@@ -803,10 +815,16 @@ const DEPT_CLS = { 'ผลิต':'d1', 'สกรีน':'d2', 'ออฟฟิ
 const avOf = s => '<div class="av ' + (DEPT_CLS[s.dept] || '') + '">' + esc(String(s.nick || s.name || '?').trim().slice(0, 2)) + '</div>';
 function lgShow(step){ ['lgStep1','lgStep2'].forEach(id => $(id).hidden = id !== step); $('lgTypedBox').hidden = step !== 'typed'; }
 async function loadStaffCards(){
+  let cached = null; try { cached = JSON.parse(localStorage.getItem('pk_cards') || 'null'); } catch(e){}
+  if (cached && cached.length && !LG_STAFF.length) { renderStaffCards(cached); }   // โชว์ทันทีจากที่จำไว้ ระหว่างรอของจริง
   let list = [];
-  try { const j = await api('pkStaffCards'); list = j.staff || []; } catch(e){}
+  try { const j = await api('pkStaffCards'); list = j.staff || []; } catch(e){ if (cached && cached.length) return; }
+  if (list.length) { try { localStorage.setItem('pk_cards', JSON.stringify(list)); } catch(e){} }
+  if (!list.length) { if (cached && cached.length) return; lgShow('typed'); return; }   // หลังบ้านรุ่นเก่า/ยังไม่มีพนักงาน → ใช้แบบพิมพ์
+  if (JSON.stringify(list) !== JSON.stringify(cached) || !LG_STAFF.length) renderStaffCards(list);
+}
+function renderStaffCards(list){
   LG_STAFF = list;
-  if (!list.length) { lgShow('typed'); return; }           // หลังบ้านรุ่นเก่า/ยังไม่มีพนักงาน → ใช้แบบพิมพ์
   const last = localStorage.getItem('pk_last_nick') || '';
   const mine = (APP ? { office:['ออฟฟิศ','บริหาร'], prod:['ผลิต'], screen:['สกรีน'], deliver:['ส่งของ'] }[APP_KEY] || [] : []);                 // ทีมของแอปนี้ขึ้นก่อน
   const first = list.filter(s => !mine.length || mine.includes(s.dept)), rest = list.filter(s => mine.length && !mine.includes(s.dept));
@@ -943,7 +961,16 @@ function showVersion(gas){
 }
 showVersion('');
 async function loadData(){
-  try { DATA = await api('pkTeamData'); } catch(e){ return; }
+  const lb = $('loadBanner');
+  if (!DATA) { lb.hidden = false; lb.classList.remove('err'); $('loadRetry').hidden = true; $('loadText').textContent = '⏳ กำลังโหลดข้อมูลจากระบบหลังบ้าน… ปกติ 2-5 วินาที (ครั้งแรกหลังอัปเดตอาจถึง 20 วินาที) — คุณยังล็อกอินอยู่ ไม่ต้องทำอะไร'; }
+  try { DATA = await api('pkTeamData'); }
+  catch(e){
+    if (e && e.needLogin) return;   // ออกจากระบบให้แล้ว
+    lb.hidden = false; lb.classList.add('err'); $('loadRetry').hidden = false;
+    $('loadText').textContent = '❌ โหลดข้อมูลไม่สำเร็จ — ' + (e && e.name === 'AbortError' ? 'หลังบ้านตอบช้าเกินไป' : 'เน็ตหรือหลังบ้านมีปัญหา') + ' กด "ลองใหม่"';
+    return;
+  }
+  lb.hidden = true;
   showVersion(DATA.version || '');
   // ทะเบียนลูกค้า: โชว์เส้นทาง/อำเภอ กันเลือกผิดคนชื่อคล้ายกัน
   $('dlCust').innerHTML = DATA.customers.map(c => {
@@ -2222,6 +2249,7 @@ function printStmtDoc(no, date, customer, bills, total, due, st){
 
 // ─── เริ่มระบบ ───
 $('qRetry').addEventListener('click', flushQueue);
+$('loadRetry').addEventListener('click', loadData);
 addItemRow('bItems');
 if (TOKEN && ME) enterApp(); else doLogout(false);
 </script>
