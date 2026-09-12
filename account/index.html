@@ -85,6 +85,37 @@ table.st td.r,table.st th.r{text-align:right;}
 .verline{text-align:center; font-size:11.5px; color:var(--muted); padding:14px 8px 24px; line-height:1.8;}
 .verline b{color:var(--text); font-weight:600;} .verline .old{color:var(--warn); font-weight:600;}
 #login{max-width:360px; margin:10vh auto; padding:0 20px;}
+@keyframes pane-in{from{opacity:0; transform:translateY(6px)} to{opacity:1; transform:none}}
+@keyframes rise{from{opacity:0; transform:translateY(8px)} to{opacity:1; transform:none}}
+@keyframes shimmer{from{background-position:200% 0} to{background-position:-200% 0}}
+.skel{height:14px; border-radius:6px; background:linear-gradient(90deg,var(--line) 25%,var(--surface) 50%,var(--line) 75%); background-size:200% 100%; animation:shimmer 1.2s linear infinite; margin:10px 0;}
+@media (prefers-reduced-motion: reduce){ *,*::before,*::after{animation:none !important; transition:none !important;} }
+/* ── ล็อกอินแบบแตะการ์ด + แป้น PIN ── */
+#login{max-width:420px;}
+.lg-step{animation:pane-in .2s cubic-bezier(.2,.8,.2,1) both;} .lg-step[hidden]{display:none;}
+.cards{display:grid; grid-template-columns:repeat(auto-fill,minmax(104px,1fr)); gap:10px; margin-top:10px;}
+.cards button{display:flex; flex-direction:column; align-items:center; gap:6px; padding:14px 8px 12px; border:1px solid var(--line); border-radius:14px; background:var(--surface); cursor:pointer; min-height:104px; animation:rise .3s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*30ms);}
+.cards button:hover{border-color:var(--green);} .cards button.last{border-color:var(--gold); box-shadow:0 0 0 3px var(--gold-soft);}
+.cards .av{width:44px; height:44px; border-radius:50%; display:grid; place-items:center; font:700 18px "Anuphan",sans-serif; color:#fff; background:var(--green);}
+.cards .av.d1{background:#2F6F8F;} .cards .av.d2{background:#8A5A9E;} .cards .av.d3{background:#B8912F;} .cards .av.d4{background:#B3541E;} .cards .av.d5{background:#2E7D4F;}
+.cards b{font:600 14px "Anuphan",sans-serif; color:var(--ink); line-height:1.2; text-align:center;}
+.cards small{font-size:11.5px; color:var(--muted);}
+.cards-h{font:600 11.5px "Anuphan",sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:16px 0 0;}
+.pin-who{display:flex; align-items:center; gap:12px; margin-bottom:14px;}
+.pin-who .av{width:48px; height:48px; border-radius:50%; display:grid; place-items:center; font:700 19px "Anuphan",sans-serif; color:#fff; background:var(--green);}
+.pin-who b{font:700 17px "Anuphan",sans-serif; display:block;} .pin-who small{color:var(--muted);}
+.pin-who a{margin-left:auto; font-size:12.5px; color:var(--muted); text-decoration:underline; cursor:pointer;}
+.dots{display:flex; justify-content:center; gap:14px; margin:14px 0 18px; min-height:18px;}
+.dots i{width:14px; height:14px; border-radius:50%; border:2px solid var(--line); background:transparent; transition:background .12s ease, transform .12s ease;}
+.dots i.on{background:var(--green); border-color:var(--green); transform:scale(1.15);}
+.dots.shake{animation:shake .4s ease;} @keyframes shake{20%{transform:translateX(-8px)} 40%{transform:translateX(8px)} 60%{transform:translateX(-5px)} 80%{transform:translateX(5px)}}
+.pad{display:grid; grid-template-columns:repeat(3,1fr); gap:10px;}
+.pad button{min-height:60px; border-radius:14px; border:1px solid var(--line); background:var(--surface); font:600 24px "Anuphan",sans-serif; color:var(--ink); cursor:pointer;}
+.pad button.ok{background:var(--green); color:#fff; border-color:var(--green); font-size:22px;} .pad button.ok:disabled{opacity:.35;}
+.pad button.soft{color:var(--muted); font-size:20px;}
+.lg-alt{text-align:center; margin-top:12px;} .lg-alt a{font-size:12.5px; color:var(--muted); text-decoration:underline; cursor:pointer;}
+.lg-typed[hidden]{display:none;}
+
 #login .logo{font:700 26px "Anuphan",sans-serif; text-align:center; margin-bottom:4px;}
 #login .sub2{text-align:center; color:var(--muted); font-size:13.5px; margin-bottom:24px;}
 .sticky-sum{position:sticky; bottom:0; background:var(--surface); border-top:1px solid var(--line); padding:10px 14px; margin:0 -14px -14px; display:flex; justify-content:space-between; align-items:center; gap:10px;}
@@ -94,12 +125,28 @@ table.st td.r,table.st th.r{text-align:right;}
 
 <div id="login" hidden>
   <div class="logo">💰 P&K ลงบัญชี</div>
-  <div class="sub2">ฝ่ายบัญชี — เข้าระบบด้วยชื่อเล่น + PIN ของคุณ</div>
+  <div class="sub2">ฝ่ายบัญชี — แตะชื่อของคุณ แล้วใส่ PIN</div>
   <div class="card">
-    <label>ชื่อเล่น</label><input id="lgNick" autocomplete="username">
-    <label>PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password">
-    <button class="btn" id="lgBtn">เข้าสู่ระบบ</button>
-    <div class="meta" style="margin-top:10px">ลืม PIN → แจ้งผู้บริหารตั้งใหม่ให้จากบอร์ดบริหาร</div>
+    <!-- ขั้น 1: แตะการ์ดชื่อ (ไม่ต้องพิมพ์) -->
+    <div class="lg-step" id="lgStep1">
+      <div class="meta" style="text-align:center">แตะชื่อของคุณ</div>
+      <div id="lgCards"><div class="skel"></div><div class="skel" style="width:70%"></div></div>
+      <div class="lg-alt"><a id="lgTyped">ไม่มีชื่อในนี้ — พิมพ์เอง</a></div>
+    </div>
+    <!-- ขั้น 2: แป้น PIN -->
+    <div class="lg-step" id="lgStep2" hidden>
+      <div class="pin-who"><div class="av" id="pinAv"></div><div><b id="pinName"></b><small id="pinDept"></small></div><a id="pinBack">ไม่ใช่คุณ?</a></div>
+      <div class="dots" id="pinDots"></div>
+      <div class="pad" id="pinPad"></div>
+    </div>
+    <!-- แบบพิมพ์ (สำรอง / คนไม่มีในรายชื่อ) — ตัวเดิม ยังเป็นเครื่องยนต์ของการล็อกอิน -->
+    <div class="lg-typed" id="lgTypedBox" hidden>
+      <label>ชื่อเล่น</label><input id="lgNick" autocomplete="username">
+      <label>PIN</label><input id="lgPin" type="password" inputmode="numeric" autocomplete="current-password">
+      <button class="btn" id="lgBtn">เข้าสู่ระบบ</button>
+      <div class="lg-alt"><a id="lgCardsBack">กลับไปแตะการ์ด</a></div>
+    </div>
+    <div class="meta" style="margin-top:12px; text-align:center">ลืม PIN → แจ้งผู้บริหารตั้งใหม่ให้จากบอร์ดบริหาร</div>
     <div class="verline" id="lgVer" style="padding-bottom:0"></div>
   </div>
 </div>
@@ -222,7 +269,7 @@ table.st td.r,table.st th.r{text-align:right;}
 // ═══ ตั้งค่า: GAS "P&K System" ตัวเดียวกับแอปทีมงาน/บอร์ดบริหาร — ไม่มี GAS แยกของบัญชี ═══
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (เดินเลขพร้อม index.html / exec / gas)
-const WEB_VERSION = '2026-09-12a';
+const WEB_VERSION = '2026-09-12b';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -254,15 +301,75 @@ async function api(action, payload=null, params={}, opts={}){
   } finally { if (isMut && !opts._noGuard) INFLIGHT = false; }
 }
 function doLogout(clear=true){
+  setTimeout(loadStaffCards, 0);
   if (clear){ TOKEN=''; ME=null; localStorage.removeItem('pk_token'); localStorage.removeItem('pk_me'); }
   $('app').hidden = true; $('login').hidden = false;
 }
-$('lgBtn').addEventListener('click', async () => {
+async function doLogin(){
   const nick = $('lgNick').value.trim(), pin = $('lgPin').value.trim();
-  if (!nick || !pin) return toast('ใส่ชื่อเล่นและ PIN');
+  if (!nick || !pin) { toast('ใส่ชื่อเล่นและ PIN'); return false; }
   try { const j = await api('pkLogin', { nick, pin }); TOKEN = j.token; ME = j.me;
-    localStorage.setItem('pk_token', TOKEN); localStorage.setItem('pk_me', JSON.stringify(ME)); enterApp(); } catch(e){}
+    localStorage.setItem('pk_token', TOKEN); localStorage.setItem('pk_me', JSON.stringify(ME)); localStorage.setItem('pk_last_nick', nick); enterApp(); return true; } catch(e){ return false; }
+}
+$('lgBtn').addEventListener('click', doLogin);
+// ─── ล็อกอินแบบแตะการ์ด: โหลดรายชื่อ (ไม่มี PIN) → แตะชื่อ → แป้น PIN · จำคนล่าสุดของเครื่องนี้ ───
+let LG_STAFF = [], LG_PICK = null, LG_PIN = '';
+const DEPT_CLS = { 'ผลิต':'d1', 'สกรีน':'d2', 'ออฟฟิศ':'d3', 'ส่งของ':'d4', 'บัญชี':'d5', 'บริหาร':'' };
+const avOf = s => '<div class="av ' + (DEPT_CLS[s.dept] || '') + '">' + esc(String(s.nick || s.name || '?').trim().slice(0, 2)) + '</div>';
+function lgShow(step){ ['lgStep1','lgStep2'].forEach(id => $(id).hidden = id !== step); $('lgTypedBox').hidden = step !== 'typed'; }
+async function loadStaffCards(){
+  let list = [];
+  try { const j = await api('pkStaffCards'); list = j.staff || []; } catch(e){}
+  LG_STAFF = list;
+  if (!list.length) { lgShow('typed'); return; }           // หลังบ้านรุ่นเก่า/ยังไม่มีพนักงาน → ใช้แบบพิมพ์
+  const last = localStorage.getItem('pk_last_nick') || '';
+  const mine = ['บัญชี','ออฟฟิศ','บริหาร'];                 // ทีมของแอปนี้ขึ้นก่อน
+  const first = list.filter(s => !mine.length || mine.includes(s.dept)), rest = list.filter(s => mine.length && !mine.includes(s.dept));
+  const card = (s, i) => '<button type="button" data-nick="' + esc(s.nick) + '" class="' + (s.nick === last ? 'last' : '') + '" style="--i:' + i + '">' + avOf(s) + '<b>' + esc(s.nick) + '</b><small>' + esc(s.dept || '') + '</small></button>';
+  $('lgCards').innerHTML = '<div class="cards">' + first.map(card).join('') + '</div>' +
+    (rest.length ? '<div class="cards-h">คนอื่น ๆ</div><div class="cards">' + rest.map((s, i) => card(s, i + first.length)).join('') + '</div>' : '');
+  const remembered = list.find(s => s.nick === last);
+  if (remembered) pickStaff(remembered); else lgShow('lgStep1');   // เคยล็อกอินเครื่องนี้ → ข้ามไปแป้น PIN เลย
+}
+function pickStaff(s){
+  LG_PICK = s; LG_PIN = '';
+  $('pinAv').outerHTML = avOf(s).replace('class="av', 'id="pinAv" class="av');
+  $('pinName').textContent = s.nick + (s.name && s.name !== s.nick ? ' · ' + s.name : ''); $('pinDept').textContent = s.dept || '';
+  if (!$('pinPad').children.length) $('pinPad').innerHTML = ['1','2','3','4','5','6','7','8','9','⌫','0','✓'].map(k => '<button type="button" data-k="' + k + '" class="' + (k==='✓' ? 'ok' : k==='⌫' ? 'soft' : '') + '">' + k + '</button>').join('');
+  paintDots(); lgShow('lgStep2');
+}
+function paintDots(){
+  const n = Math.max(4, LG_PIN.length);
+  $('pinDots').innerHTML = Array.from({ length: n }, (_, i) => '<i class="' + (i < LG_PIN.length ? 'on' : '') + '"></i>').join('');
+  $('pinPad').querySelector('.ok').disabled = LG_PIN.length < 4;
+}
+async function submitPin(){
+  if (!LG_PICK || LG_PIN.length < 4) return;
+  $('lgNick').value = LG_PICK.nick; $('lgPin').value = LG_PIN;   // ส่งผ่านเครื่องยนต์เดิม
+  const ok = await doLogin();
+  if (ok) localStorage.setItem('pk_last_nick', LG_PICK.nick);
+  else { $('pinDots').classList.add('shake'); setTimeout(() => { $('pinDots').classList.remove('shake'); LG_PIN = ''; paintDots(); }, 420); }
+}
+$('pinPad').addEventListener('click', e => {
+  const b = e.target.closest('button[data-k]'); if (!b) return;
+  const k = b.dataset.k;
+  if (k === '⌫') LG_PIN = LG_PIN.slice(0, -1);
+  else if (k === '✓') return submitPin();
+  else if (LG_PIN.length < 6) LG_PIN += k;
+  paintDots();
+  if (LG_PIN.length === 6) submitPin();                       // PIN ยาวสุด 6 → ส่งเลยไม่ต้องกด ✓
 });
+document.addEventListener('keydown', e => {
+  if ($('login').hidden || $('lgStep2').hidden) return;
+  if (/^[0-9]$/.test(e.key) && LG_PIN.length < 6) { LG_PIN += e.key; paintDots(); if (LG_PIN.length === 6) submitPin(); }
+  else if (e.key === 'Backspace') { LG_PIN = LG_PIN.slice(0, -1); paintDots(); }
+  else if (e.key === 'Enter') submitPin();
+});
+$('lgCards').addEventListener('click', e => { const b = e.target.closest('button[data-nick]'); if (b) pickStaff(LG_STAFF.find(s => s.nick === b.dataset.nick)); });
+$('pinBack').addEventListener('click', () => { localStorage.removeItem('pk_last_nick'); LG_PICK = null; lgShow('lgStep1'); });
+$('lgTyped').addEventListener('click', () => { lgShow('typed'); $('lgNick').focus(); });
+$('lgCardsBack').addEventListener('click', () => lgShow(LG_STAFF.length ? 'lgStep1' : 'typed'));
+
 $('lgPin').addEventListener('keydown', e => { if (e.key === 'Enter') $('lgBtn').click(); });
 $('logout').addEventListener('click', () => doLogout());
 
@@ -506,7 +613,7 @@ function renderSum(){
 }
 
 // ─── เริ่ม ───
-if (TOKEN && ME) enterApp(); else $('login').hidden = false;
+if (TOKEN && ME) enterApp(); else { $('login').hidden = false; loadStaffCards(); }
 </script>
 </body>
 </html>

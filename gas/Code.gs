@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-12a';
+const CODE_VERSION = '2026-09-12b';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -1185,6 +1185,12 @@ function ACTIONS() {
   return {
     pkHealth: { auth: 'none', fn: function () { return { ok: true, version: CODE_VERSION, sheet: !!prop('PK_SHEET_ID'), schemaAt: prop('SCHEMA_AT') || '(ยังไม่เคยปรับ)' }; } },
     pkLogin: { auth: 'none', mut: true, fn: function (pay) { return login(pay); } },
+    // การ์ดชื่อบนหน้าล็อกอิน — แตะแทนพิมพ์ · ส่งแค่ ชื่อเล่น/ชื่อ/แผนก ของคนที่ยังทำงาน (ไม่มี PIN/เบอร์/token)
+    // เปิดสาธารณะได้เพราะ login() ล็อก 10 นาทีหลังผิด 5 ครั้งอยู่แล้ว
+    pkStaffCards: { auth: 'none', fn: function () {
+      return { ok: true, staff: staffPublic().filter(function (s) { return s['สถานะ'] === 'ทำงาน' && String(s['ชื่อเล่น']).trim(); })
+        .map(function (s) { return { id: s['Staff_ID'], nick: String(s['ชื่อเล่น']).trim(), name: s['ชื่อ'], dept: s['แผนก'] || '' }; }) };
+    } },
     pkTeamData: { auth: 'team', fn: function (pay, me, p) { return teamData(p, me); } },
     pkBills: { auth: 'team', fn: function (pay, me, p) { return { ok: true, bills: billList(p) }; } },
     pkOrderSave: { auth: 'team', mut: true, fn: orderSave },
