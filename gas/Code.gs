@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-12f';
+const CODE_VERSION = '2026-09-12g';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -389,7 +389,10 @@ function login(pay) {
   const token = Utilities.getUuid();
   const exp = Utilities.formatDate(new Date(Date.now() + TOKEN_DAYS * 86400000), TZ, 'yyyy-MM-dd HH:mm');
   updateWhere('Staff', 'Staff_ID', o['Staff_ID'], { 'Token': token, 'TokenExp': exp });
-  return { ok: true, token: token, me: { id: o['Staff_ID'], name: o['ชื่อ'], nick: o['ชื่อเล่น'], dept: o['แผนก'] }, _log: { ref: o['Staff_ID'], detail: nick } };
+  const me = { id: o['Staff_ID'], name: o['ชื่อ'], nick: o['ชื่อเล่น'], dept: o['แผนก'] };
+  // ส่งข้อมูลหน้าแรกไปพร้อมกันเลย — หน้าเว็บไม่ต้องยิงอีกรอบ (ประหยัด ~3 วิ ตอนล็อกอิน) · พลาดก็ไม่เป็นไร หน้าเว็บดึงเองได้
+  let data = null; try { data = teamData({}, Object.assign({ via: 'pin' }, me)); } catch (e) {}
+  return { ok: true, token: token, me: me, data: data, _log: { ref: o['Staff_ID'], detail: nick } };
 }
 function who(p) {
   if (p.token) {
@@ -1104,7 +1107,7 @@ function teamData(p, me) {
     screens: rowsToObjs('ScreenJobs').filter(notJob).reverse(),
     billable: billable.map(function (o) { return { id: o['Order_ID'], customer: o['ลูกค้า'], total: o['ยอดรวม'] }; }),
     deliverQueue: deliverQueue, loadsToday: loadsToday,
-    bills: activeBills_().reverse().slice(0, 25),
+    bills: tailObjs('Bills', 80).filter(function (b) { return b['สถานะ'] !== 'ยกเลิก'; }).reverse().slice(0, 25),   // อ่านแค่หางแท็บ — Bills มีบิล 2 ปีจากบัญชี อ่านทั้งแท็บทุกคำขอคือตัวถ่วง
     stmts: rowsToObjs('Statements').filter(function (s) { return s['สถานะ'] === 'รอเก็บ'; }).reverse(),
     materials: rowsToObjs('Materials'),
     wasteReasons: WASTE_REASONS,
