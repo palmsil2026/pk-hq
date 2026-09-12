@@ -7,38 +7,63 @@
 <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700&family=Sarabun:wght@400;500;600&display=swap">
 <style>
 :root{
-  --ground:#EAF0ED; --surface:#FFFFFF; --ink:#1B2A26; --muted:#5E6F6A;
-  --green:#175A4C; --green-soft:#E1EFE9; --gold:#B8912F; --gold-soft:#F6EED9;
+  --ground:#EEF3F0; --surface:#FFFFFF; --ink:#1B2A26; --muted:#56675F;
+  --green:#175A4C; --green-2:#1F6E5C; --green-soft:#E1EFE9; --gold:#B8912F; --gold-soft:#F6EED9;
   --ok:#2E7D4F; --warn:#B3541E; --warn-soft:#F7E8DE; --danger:#A63A3A;
-  --line:#D3DDD8; --well:#F3F7F5;   /* well = สีพื้นของแถวย่อยในการ์ด (ไลน์สินค้า/รายการ) ให้แยกจากการ์ดขาว */
-  --shadow:0 1px 2px rgba(0,0,0,.04), 0 6px 20px rgba(23,90,76,.07);
+  /* ── ผิวกระจก (ชุดเดียวกับแอปโรงน้ำ origin-hq) ── */
+  --card:rgba(255,255,255,.72);          /* การ์ดกระจก */
+  --glass-strong:rgba(255,255,255,.88);  /* แผ่น/แถบที่ต้องอ่านชัด */
+  --edge:rgba(255,255,255,.78);          /* ขอบสว่างของกระจก */
+  --line:rgba(27,42,38,.12);             /* เส้นแบ่งในการ์ด */
+  --well:rgba(255,255,255,.62);          /* แถวย่อยในการ์ด (ไลน์สินค้า/รายการ) */
+  --shadow:0 6px 20px rgba(23,90,76,.08), 0 1px 2px rgba(23,90,76,.05);
+  --blur:saturate(180%) blur(16px);
+}
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root{ --card:rgba(255,255,255,.95); --glass-strong:rgba(255,255,255,.97); --well:#F3F7F5; }
 }
 @media (prefers-color-scheme: dark){
   :root{
     --ground:#0E1815; --surface:#16241F; --ink:#E7F0EC; --muted:#93A8A0;
-    --green:#7FC7B2; --green-soft:#16352C; --gold:#D9B65C; --gold-soft:#332A14;
+    --green:#7FC7B2; --green-2:#5FAE9A; --green-soft:#16352C; --gold:#D9B65C; --gold-soft:#332A14;
     --ok:#6FBE92; --warn:#E0925F; --warn-soft:#3A2313; --danger:#E08585;
-    --line:#2A3D34; --well:#1C2B25;
-    --shadow:0 1px 2px rgba(0,0,0,.3), 0 8px 24px rgba(0,0,0,.35);
+    --card:rgba(22,36,31,.66); --glass-strong:rgba(22,36,31,.92); --edge:rgba(255,255,255,.10);
+    --line:rgba(231,240,236,.13); --well:rgba(255,255,255,.05);
+    --shadow:0 8px 24px rgba(0,0,0,.35), 0 1px 2px rgba(0,0,0,.3);
   }
 }
 *{box-sizing:border-box}
-body{margin:0; background:var(--ground); color:var(--ink); font:15px/1.6 "Sarabun",system-ui,sans-serif; padding-bottom:84px;}
-header{background:var(--green); color:#F4F7F6; padding:12px 16px; display:flex; justify-content:space-between; align-items:center;}
+html{background:var(--ground);}
+body{margin:0; background:transparent; color:var(--ink); font:15px/1.6 "Sarabun",system-ui,sans-serif; padding-bottom:84px;}
+/* พื้นหลังไล่สีนุ่ม ๆ หลังกระจก (เขียว/ทอง ของ P&K) — fixed ไม่เลื่อนตามหน้า */
+body::before{content:""; position:fixed; inset:0; z-index:-1; pointer-events:none;
+  background:
+    radial-gradient(58vmax 58vmax at 4% -12%, rgba(23,90,76,.22), transparent 62%),
+    radial-gradient(46vmax 46vmax at 102% 0%, rgba(184,145,47,.20), transparent 58%),
+    radial-gradient(56vmax 56vmax at 92% 98%, rgba(31,110,92,.18), transparent 62%),
+    radial-gradient(50vmax 50vmax at 0% 88%, rgba(127,199,178,.22), transparent 60%),
+    var(--ground);}
+@media (prefers-color-scheme: dark){ body::before{background:
+    radial-gradient(58vmax 58vmax at 4% -12%, rgba(23,90,76,.45), transparent 62%),
+    radial-gradient(46vmax 46vmax at 102% 0%, rgba(184,145,47,.18), transparent 58%),
+    radial-gradient(56vmax 56vmax at 92% 98%, rgba(31,110,92,.35), transparent 62%), var(--ground);} }
+header{background:linear-gradient(135deg, rgba(23,90,76,.95), rgba(18,72,61,.97)); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); color:#F4F7F6; padding:12px 16px; display:flex; justify-content:space-between; align-items:center; border-bottom:1px solid rgba(255,255,255,.22); box-shadow:0 4px 18px rgba(23,90,76,.18);}
 header h1{font-family:"Anuphan",sans-serif; font-size:17px; margin:0; font-weight:700;}
 header .u{font-size:12px; opacity:.9; text-align:right; line-height:1.4;}
 header .u a{color:inherit; text-decoration:underline; cursor:pointer;}
-nav{display:flex; background:var(--surface); border-bottom:1px solid var(--line); position:sticky; top:0; z-index:5; overflow-x:auto;}
+nav{display:flex; background:var(--glass-strong); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border-bottom:1px solid var(--edge); box-shadow:0 4px 18px rgba(23,90,76,.06); position:sticky; top:0; z-index:5; overflow-x:auto;}
 nav button{flex:1 0 auto; min-width:72px; border:0; background:none; color:var(--muted); font:600 13.5px "Anuphan",sans-serif; padding:12px 8px; cursor:pointer; border-bottom:3px solid transparent; white-space:nowrap;}
 nav button.on{color:var(--green); border-bottom-color:var(--gold);}
 main{max-width:720px; margin:0 auto; padding:14px;}
-.card{background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:16px; margin-bottom:14px; box-shadow:var(--shadow);}
+.card{background:var(--card); border:1px solid var(--edge); border-radius:16px; padding:16px; margin-bottom:14px; box-shadow:var(--shadow), inset 0 1px 0 rgba(255,255,255,.55); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur);}
 h2{font-family:"Anuphan",sans-serif; font-size:16px; margin:0 0 10px;}
 label{display:block; font-size:12.5px; color:var(--muted); margin:10px 0 3px;}
-input,select,textarea{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:8px; background:var(--well); color:var(--ink); font:inherit;}
-input:focus,select:focus{outline:2px solid var(--green); outline-offset:1px;}
+input,select,textarea{width:100%; padding:9px 10px; border:1px solid var(--line); border-radius:10px; background:rgba(255,255,255,.78); color:var(--ink); font:inherit;}
+@media (prefers-color-scheme: dark){ input,select,textarea{background:rgba(255,255,255,.06);} }
+input:focus,select:focus{outline:2px solid var(--green); outline-offset:1px; background:var(--surface);}
 .row{display:flex; gap:8px;} .row>*{flex:1;}
-button.btn{background:var(--green); color:var(--ground); border:0; border-radius:8px; padding:11px 18px; font:600 14.5px "Anuphan",sans-serif; cursor:pointer; margin-top:12px; width:100%;}
+button.btn{background:linear-gradient(135deg, var(--green), var(--green-2)); color:#F4F7F6; border:0; border-radius:10px; padding:11px 18px; font:600 14.5px "Anuphan",sans-serif; cursor:pointer; margin-top:12px; width:100%; box-shadow:0 6px 16px rgba(23,90,76,.22);}
+button.btn:disabled{opacity:.7; cursor:wait;}
 button.btn.gold{background:var(--gold);}
 button.mini{background:var(--green-soft); color:var(--green); border:0; border-radius:6px; padding:6px 12px; font:600 12.5px "Anuphan",sans-serif; cursor:pointer;}
 button.mini.warn{background:var(--warn-soft); color:var(--warn);}
@@ -120,7 +145,7 @@ li.flash{animation:flash 1.6s ease-out both;}
 .sec{font:600 11.5px "Anuphan",sans-serif; letter-spacing:.04em; text-transform:uppercase; color:var(--muted); margin:16px 0 6px;}
 .sec:first-child{margin-top:0;}
 .sugg-wrap{position:relative;}
-.sugg{position:absolute; left:0; right:0; top:100%; z-index:20; background:var(--surface); border:1px solid var(--line); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.14); max-height:50vh; overflow-y:auto; margin-top:4px; transform-origin:top; animation:pane-in .14s ease both;}
+.sugg{position:absolute; left:0; right:0; top:100%; z-index:20; background:var(--glass-strong); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border:1px solid var(--line); border-radius:12px; box-shadow:0 12px 32px rgba(0,0,0,.14); max-height:50vh; overflow-y:auto; margin-top:4px; transform-origin:top; animation:pane-in .14s ease both;}
 .sugg[hidden]{display:none;}
 .sugg button{display:flex; width:100%; justify-content:space-between; align-items:center; gap:10px; text-align:left; padding:11px 12px; border:0; border-bottom:1px solid var(--line); background:none; font:500 14.5px "Sarabun",sans-serif; color:var(--ink); cursor:pointer; min-height:46px;}
 .sugg button:last-child{border-bottom:none;} .sugg button:hover,.sugg button.hi{background:var(--green-soft);}
@@ -157,7 +182,7 @@ li.flash{animation:flash 1.6s ease-out both;}
 .more-btn .sum{font-weight:500; color:var(--gold); font-family:"Sarabun",sans-serif;}
 .more{display:grid; grid-template-rows:0fr; transition:grid-template-rows .26s cubic-bezier(.2,.8,.2,1);}
 .more>div{overflow:hidden;} .more.open{grid-template-rows:1fr;}
-.savebar{position:sticky; bottom:10px; z-index:4; background:var(--surface); border:1px solid var(--line); border-radius:14px; padding:10px 10px 10px 16px; margin-top:16px; box-shadow:0 10px 28px rgba(0,0,0,.12); transition:box-shadow .3s ease, border-color .3s ease, transform .3s cubic-bezier(.2,.8,.2,1);}
+.savebar{position:sticky; bottom:10px; z-index:4; background:var(--glass-strong); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); border:1px solid var(--edge); border-radius:14px; padding:10px 10px 10px 16px; margin-top:16px; box-shadow:0 10px 28px rgba(0,0,0,.12); transition:box-shadow .3s ease, border-color .3s ease, transform .3s cubic-bezier(.2,.8,.2,1);}
 .sb-head{display:flex; align-items:center; gap:12px;}
 /* ยืดออกเป็นการ์ดสรุป: grid-rows 0fr→1fr (สูงตามเนื้อหา นุ่ม) + เงาหนาขึ้น + ยกตัวเล็กน้อย */
 .sb-sum{display:grid; grid-template-rows:0fr; transition:grid-template-rows .34s cubic-bezier(.2,.8,.2,1);}
@@ -183,14 +208,14 @@ li.flash{animation:flash 1.6s ease-out both;}
 .dlv-wrap{display:grid; grid-template-columns:1fr; gap:14px;}
 @media (min-width:1000px){ .dlv-wrap{grid-template-columns:370px 1fr; align-items:start;} .truck-card{position:sticky; top:60px;} }
 .truck{position:relative; display:flex; align-items:stretch; margin:12px 0 0; padding-bottom:34px;}
-.cargo{flex:1; min-height:176px; border:3px solid var(--green); border-right:0; border-radius:14px 0 0 14px; background:var(--ground); padding:10px; display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-content:start;}
+.cargo{flex:1; min-height:176px; border:3px solid var(--green); border-right:0; border-radius:14px 0 0 14px; background:var(--well); padding:10px; display:grid; grid-template-columns:repeat(2,1fr); gap:8px; align-content:start;}
 .cab{width:92px; flex:0 0 92px; display:block; align-self:flex-end; height:auto; margin-bottom:-4px;}
 .plate{position:absolute; right:10px; bottom:38px; background:#fff; border:2px solid #2C3E3A; border-radius:5px; font:700 12.5px "Anuphan",sans-serif; padding:0 7px; color:#2C3E3A; line-height:1.5;}
 .wheel{position:absolute; bottom:2px; width:38px; height:38px; border-radius:50%; background:#2C3E3A; border:7px solid #97A5A0; box-sizing:border-box;}
 .wheel::after{content:""; position:absolute; inset:5px; border-radius:50%; background:#DDE5E1;}
 .road{position:absolute; left:-16px; right:-16px; bottom:8px; height:3px; background:var(--line); border-radius:99px;}
 .slot{border-radius:10px; min-height:66px; padding:8px 10px; text-align:left; animation:rise .3s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*40ms); overflow:hidden;}
-.slot.on{background:var(--surface); border:1px solid var(--line); box-shadow:0 2px 6px rgba(0,0,0,.06);}
+.slot.on{background:var(--glass-strong); border:1px solid var(--edge); box-shadow:0 2px 6px rgba(0,0,0,.06);}
 .slot.on b{font:600 13px "Anuphan",sans-serif; display:block; white-space:nowrap; overflow:hidden; text-overflow:ellipsis;}
 .slot.on small{display:block; font-size:11px; color:var(--muted); line-height:1.35;}
 .slot.pop{animation:pop .45s cubic-bezier(.2,.8,.2,1);}
@@ -200,6 +225,7 @@ li.flash{animation:flash 1.6s ease-out both;}
 .dcard{border:1px solid var(--line); border-radius:14px; padding:12px 14px; background:var(--well); animation:rise .28s cubic-bezier(.2,.8,.2,1) both; animation-delay:calc(var(--i,0)*30ms); transition:box-shadow .25s ease, border-color .25s ease, opacity .2s ease;}
 .dcard.open{border-color:var(--green); box-shadow:0 12px 32px rgba(23,90,76,.12);}
 .dcard.ghost{pointer-events:none; box-shadow:0 18px 40px rgba(0,0,0,.25);}
+.dcard.busy .dc-load{opacity:.6; pointer-events:none;}
 .dc-head{display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;} .dc-head b{font:700 15.5px "Anuphan",sans-serif;}
 .dc-items{list-style:none; margin:8px 0 0; padding:0;} .dc-items li{display:flex; justify-content:space-between; gap:10px; padding:5px 0; border-bottom:1px dashed var(--line);} .dc-items li:last-child{border-bottom:none;}
 .dc-items b{font:700 14px "Anuphan",sans-serif; color:var(--green); white-space:nowrap;}
@@ -224,10 +250,8 @@ li.flash{animation:flash 1.6s ease-out both;}
 .side-list button:hover{border-color:var(--green);} .side-list button.on{background:var(--green); color:var(--ground); border-color:var(--green);}
 .side-list button.on small,.side-list button.on .n{color:inherit; background:none;}
 .side .hint{font-size:12.5px; color:var(--muted);}
-@media (min-width:1300px){
-  .side{position:fixed; left:calc(50% + 376px); top:112px; width:290px; max-height:calc(100vh - 130px); overflow-y:auto; margin:0; border:0; border-radius:14px; z-index:55; box-shadow:var(--shadow);}   /* z 55 > ฉากหลังมืด (50) → แผ่นเลือกเปิดอยู่ก็ยังแตะการ์ดได้ ไม่โดนเบลอ */
-  .side.empty{display:block;}
-  #t-order.on{animation-name:fade;}   /* แท็บนี้ไม่ใช้ transform ตอนเลื่อนเข้า — ไม่งั้นการ์ดลอย (fixed) กระโดด */
+@media (min-width:1100px){
+  .o-aside{position:relative; z-index:55;}   /* คอลัมน์ขวา (การ์ดเคยสั่ง) อยู่เหนือฉากหลังมืด (50) → แผ่นเลือกเปิดอยู่ก็ยังแตะได้ */
 }
 .savebar .tot{flex:1; font:700 16px "Anuphan",sans-serif; color:var(--green); line-height:1.25;} .savebar .tot small{display:block; font:500 12px "Sarabun",sans-serif; color:var(--muted);}
 .savebar .btn{margin:0; width:auto; padding:12px 22px; border-radius:10px; min-height:48px;}
@@ -268,7 +292,7 @@ li.flash{animation:flash 1.6s ease-out both;}
 .banner{background:var(--warn-soft); color:var(--warn); border:1px solid var(--warn); border-radius:8px; padding:10px 14px; font-size:13.5px; margin-bottom:12px; display:flex; justify-content:space-between; align-items:center;}
 .modal-bg{position:fixed; inset:0; background:rgba(0,0,0,.5); display:none; align-items:flex-end; justify-content:center; z-index:50;}
 .modal-bg.on{display:flex;}
-.modal{background:var(--surface); border-radius:14px 14px 0 0; padding:18px; width:100%; max-width:520px; max-height:86vh; overflow-y:auto;}
+.modal{background:var(--glass-strong); -webkit-backdrop-filter:saturate(180%) blur(20px); backdrop-filter:saturate(180%) blur(20px); border:1px solid var(--edge); border-bottom:0; border-radius:16px 16px 0 0; padding:18px; width:100%; max-width:520px; max-height:86vh; overflow-y:auto;}
 #login{max-width:360px; margin:10vh auto; padding:0 20px;}
 /* ── ล็อกอินแบบแตะการ์ด + แป้น PIN ── */
 #login{max-width:420px;}
@@ -312,6 +336,22 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 #paper th{background:#EEF4F1;}
 #paper .sign{display:flex; justify-content:space-around; margin-top:48px; text-align:center; font-size:13px;}
 #paper .sign div{border-top:1px dotted #555; padding-top:6px; width:180px;}
+/* ── กฎจอกว้างต้องอยู่ท้ายสุด: ทับกฎพื้นฐานที่ประกาศก่อนหน้า (display/พื้น/ขอบ) ── */
+/* จอคอม (≥1100px): กว้าง 1360 · แท็บชิดซ้าย · แต่ละหน้าจัด 2 คอลัมน์ */
+@media (min-width:1100px){
+  main{max-width:1360px; padding:18px 24px;}
+  header{padding:12px max(16px, calc((100% - 1360px)/2 + 24px));}
+  nav{justify-content:flex-start; padding:0 max(16px, calc((100% - 1360px)/2 + 12px));}
+  nav button{flex:0 0 auto; min-width:140px; padding:13px 22px; font-size:14px;}
+  .o-wrap{display:grid; grid-template-columns:minmax(560px,800px) minmax(380px,1fr); gap:18px; align-items:start;}
+  .o-aside{position:sticky; top:62px; max-height:calc(100vh - 78px); overflow-y:auto; padding:2px; scrollbar-width:thin;}
+  .side{background:var(--card); border:1px solid var(--edge); -webkit-backdrop-filter:var(--blur); backdrop-filter:var(--blur); box-shadow:var(--shadow); border-radius:16px; padding:14px 16px; margin:0 0 14px;}
+  .o-aside>.side.empty{display:block;}   /* บนคอลัมน์ขวาโชว์คำแนะนำไว้แม้ยังไม่เลือกลูกค้า (specificity สูงกว่า .side.empty{display:none} ที่อยู่ท้ายไฟล์) */
+  .dlv-wrap{grid-template-columns:400px 1fr;}
+  .dlv-list{display:grid; grid-template-columns:repeat(auto-fill,minmax(340px,1fr)); gap:12px; align-items:start;}
+  #t-office.on,#t-stock.on,#t-history.on{display:grid; grid-template-columns:1fr 1fr; gap:14px; align-items:start;}
+  #t-office.on .card,#t-stock.on .card,#t-history.on .card{margin-bottom:0;}
+}
 </style>
 </head>
 <body>
@@ -360,6 +400,8 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
 </section>
 
 <section class="tabpane" id="t-order">
+<div class="o-wrap">
+<div class="o-main">
   <div class="card hero">
     <div class="editbar" id="oEditBar" hidden><span id="oEditText">✏️ กำลังแก้ไข</span><button class="mini" type="button" id="oEditCancel">ยกเลิกการแก้ไข</button></div>
     <div class="sec">ลูกค้า</div>
@@ -420,6 +462,8 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
       </div></div>
     </div>
   </div>
+</div>
+<div class="o-aside" id="oAside">
   <div class="card">
     <div class="li-top"><h2 style="margin:0">ออเดอร์</h2>
       <div class="seg" id="oView" style="max-width:230px; margin:0">
@@ -438,6 +482,8 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
       <ul class="tree" id="orderTree"></ul>
     </div>
   </div>
+</div>
+</div>
 </section>
 
 <section class="tabpane" id="t-prod"><div class="card"><h2>คิวงานผลิต (รายสินค้า)</h2><ul class="list" id="prodList"></ul></div></section>
@@ -535,10 +581,6 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
   <div class="card"><h2>ใบวางบิลรอเก็บเงิน</h2><ul class="list" id="stmtList"></ul></div>
 </section>
 
-<div class="verline" id="verLine"></div>
-</main>
-</div>
-
 <section class="tabpane" id="t-history">
   <div class="card">
     <h2>ประวัติออเดอร์ของลูกค้า</h2>
@@ -558,6 +600,10 @@ table.st td{padding:6px; border-bottom:1px dashed var(--line); font-variant-nume
     <ul class="list" id="hScrList"></ul>
   </div>
 </section>
+
+<div class="verline" id="verLine"></div>
+</main>
+</div>
 
 <div class="modal-bg" id="odModal">
   <div class="modal">
@@ -651,7 +697,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-12d';
+const WEB_VERSION = '2026-09-12e';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -659,6 +705,7 @@ function toast(t){ const m=$('msg'); m.textContent=t; m.classList.add('show'); s
 
 const MUT = /^pk(OrderSave|OrderEdit|OrderCancel|JobStart|ProdLog|JobClose|Deliver|BillCreate|BillPay|BillCancel|StmtCreate|StmtDone|CustSave|StockIn|StockCount|Login)$/;
 let INFLIGHT = false;   // กันกดปุ่มซ้ำระหว่างรอ — บันทึกได้ทีละรายการ
+let API_TIMEOUT_MS = 45000;   // GAS ตอบช้า/ค้าง → ตัดแล้วบอก ไม่ปล่อยให้หน้า "ค้าง" เงียบ ๆ
 async function api(action, payload=null, params={}, opts={}){
   if (GAS_URL.indexOf('PASTE_') === 0){ toast('ยังไม่ได้ตั้ง GAS_URL ในไฟล์'); throw new Error('no url'); }
   const isMut = MUT.test(action);
@@ -675,13 +722,15 @@ async function api(action, payload=null, params={}, opts={}){
     const url = GAS_URL + '?' + q.toString();
     if (url.length > 7500){ toast('รายการยาวเกินไป — แบ่งเป็นสองรอบ'); throw new Error('url too long'); }
     let j;
+    const ctl = typeof AbortController !== 'undefined' ? new AbortController() : null;
+    const tm = ctl ? setTimeout(() => ctl.abort(), API_TIMEOUT_MS) : 0;
     try {
-      const r = await fetch(url);
+      const r = await fetch(url, ctl ? { signal: ctl.signal } : undefined);
       j = await r.json();
     } catch(netErr){
       if (opts.queueable){ pushQueue(action, payload); throw new Error('queued'); }
-      toast('เน็ตมีปัญหา — ลองใหม่'); throw netErr;
-    }
+      toast(netErr && netErr.name === 'AbortError' ? 'หลังบ้านตอบช้าเกินไป — ลองใหม่อีกครั้ง (หลังอัปเวอร์ชัน ครั้งแรกจะช้ากว่าปกติ)' : 'เน็ตมีปัญหา — ลองใหม่'); throw netErr;
+    } finally { clearTimeout(tm); }
     if (!j.ok){
       if (j.needLogin){ doLogout(false); toast('เข้าสู่ระบบใหม่อีกครั้ง'); const e1 = new Error('need login'); e1.needLogin = true; throw e1; }
       if (j.retry && !opts.noRetry){ toast('ระบบคิวแน่น — กำลังลองใหม่…'); await new Promise(res=>setTimeout(res,1500));
@@ -1259,6 +1308,12 @@ $('oRepeatGo').addEventListener('click', () => {
 // (ลูกค้าใหม่/ยังไม่เคยสั่ง → โชว์ที่สั่งบ่อยทั่วไปแทน ไม่ให้การ์ดว่าง)
 let CS_LIST = [], CS_HIST = false;
 const specLabel = t => [t.type, t.size, t.shape, t.neck, t.color].filter(Boolean).join(' ');
+function placeCustCard(){
+  const card = $('custCard'), wide = window.matchMedia('(min-width:1100px)').matches;
+  if (wide) { const a = $('oAside'); if (card.parentNode !== a) a.insertBefore(card, a.firstChild); }
+  else { const r = $('oRepeat'); if (r.nextElementSibling !== card) r.after(card); }
+}
+window.addEventListener('resize', placeCustCard); placeCustCard();
 function renderCustCard(){
   const box = $('custCard');
   if (!O_CUST) { box.classList.add('empty'); $('custCardH').textContent = '🕘 เคยสั่ง'; $('custSpecs').innerHTML = '<div class="hint">เลือกลูกค้าก่อน — สินค้าที่เขาเคยสั่งจะขึ้นตรงนี้ แตะทีเดียวได้ทั้งไลน์</div>'; CS_LIST = []; return; }
@@ -1922,7 +1977,9 @@ $('dlvList').addEventListener('click', async e => {
     const items = q.remain.map((r, ri) => ({ pid: r.pid, name: r.name, qty: full ? r.remain : Math.min(r.remain, Number(card.querySelector('.dc-part input[data-ri="' + ri + '"]').value) || 0) })).filter(it => it.qty > 0);
     if (!items.length) return toast('ใส่จำนวนที่จะขึ้นรถ');
     const tOn = card.querySelector('.dc-trucks button.on'); const truck = tOn ? tOn.dataset.tr : DLV_TRUCK;
-    let r; try { r = await api('pkDeliver', { orderId: q.id, items, truck }); } catch(e2){ return; }
+    const go = card.querySelector('[data-go]'), goTxt = go.textContent;
+    go.disabled = true; go.textContent = '⏳ กำลังขึ้นรถ…'; card.classList.add('busy');
+    let r; try { r = await api('pkDeliver', { orderId: q.id, items, truck }); } catch(e2){ go.disabled = false; go.textContent = goTxt; card.classList.remove('busy'); return; }
     DLV_TRUCK = truck; localStorage.setItem('pk_truck', truck);
     const load = { id: r.id, orderId: q.id, customer: q.customer, truck, by: ME ? ME.name : '', when: r.when || (todayIso() + ' ' + new Date().toTimeString().slice(0, 5)), items };
     (DATA.loadsToday = DATA.loadsToday || []).push(load);
@@ -1998,7 +2055,9 @@ $('prGo').addEventListener('click', async () => {
     printBillDoc(b['Bill_No'], b['วันที่'], b['ลูกค้า'], its, b['ยอดรวม'], b['ประเภท'], b['กำหนดชำระ'], DATA.settings);
     $('prModal').classList.remove('on'); return;
   }
-  let j; try { j = await api('pkBillCreate', { orderId: q.id, type: t, channel: t === 'เงินสด' ? 'เงินสด' : '', dueDays: $('prDue').value, items: rows, note }); } catch(e){ return; }
+  const gb = $('prGo'), gbTxt = gb.textContent; gb.disabled = true; gb.textContent = '⏳ กำลังออกบิล…';
+  let j; try { j = await api('pkBillCreate', { orderId: q.id, type: t, channel: t === 'เงินสด' ? 'เงินสด' : '', dueDays: $('prDue').value, items: rows, note }); } catch(e){ gb.disabled = false; gb.textContent = gbTxt; return; }
+  gb.disabled = false; gb.textContent = gbTxt;
   toast('🧾 ออกบิล ' + j.no);
   printBillDoc(j.no, j.date, j.customer, j.items, j.total, t, j.due, j.settings);
   $('prModal').classList.remove('on');
