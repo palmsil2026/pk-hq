@@ -269,7 +269,7 @@ table.st td.r,table.st th.r{text-align:right;}
 // ═══ ตั้งค่า: GAS "P&K System" ตัวเดียวกับแอปทีมงาน/บอร์ดบริหาร — ไม่มี GAS แยกของบัญชี ═══
 const GAS_URL = 'https://script.google.com/macros/s/AKfycbw8guY7h7Q_BCfl_RwlD6PQn5fmhXmsu1myjr60OGwbEiAwB_PVE59iAsZmgY9meWH-/exec';
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (เดินเลขพร้อม index.html / exec / gas)
-const WEB_VERSION = '2026-09-13a';
+const WEB_VERSION = '2026-09-13b';
 
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
@@ -375,7 +375,7 @@ $('logout').addEventListener('click', () => doLogout());
 
 // ─── เวอร์ชัน (เตือนเฉพาะตอนหลังบ้านเก่ากว่าหน้าเว็บ) ───
 function showVersion(gas){
-  const ok = !gas || gas >= WEB_VERSION;
+  const ok = !gas || String(gas).slice(0, 10) >= WEB_VERSION.slice(0, 10);
   $('verLine').innerHTML = 'เวอร์ชัน · หน้าเว็บ <b>' + esc(WEB_VERSION) + '</b>' + (gas ? ' · ระบบหลังบ้าน <b class="' + (ok?'':'old') + '">' + esc(gas) + '</b>' : '');
   $('lgVer').innerHTML = 'เวอร์ชันหน้าเว็บ <b>' + esc(WEB_VERSION) + '</b>';
   $('verBanner').hidden = ok;

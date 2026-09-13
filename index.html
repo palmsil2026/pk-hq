@@ -96,6 +96,11 @@ button.mini.gold{background:var(--gold-soft); color:var(--gold);}
 .list li:last-child{border-bottom:none;}
 #orderList li{padding:11px 12px; border:1px solid var(--line); border-bottom:1px solid var(--line); border-radius:12px; background:var(--well); margin-bottom:8px;}
 #orderList li:hover{border-color:var(--green);}
+.ol-items{list-style:none; margin:6px 0 2px; padding:0;}
+#orderList .ol-items li,#recentMini .ol-items li{padding:2px 0; border:0; background:none; margin:0; border-radius:0; animation:none; font-size:14px; line-height:1.5;}
+.ol-items li b{font:600 14px "Anuphan",sans-serif;}
+.ol-when{margin-top:4px;} .ol-when b{color:var(--ink); font-weight:600;}
+.ol-one{margin-top:3px;} .ol-one b{font:600 13px "Anuphan",sans-serif; color:var(--ink);}
 .li-top{display:flex; justify-content:space-between; gap:8px; align-items:center; flex-wrap:wrap;}
 .chip{font:600 11.5px "Anuphan",sans-serif; padding:2px 10px; border-radius:99px; white-space:nowrap; display:inline-block;}
 .c-wait{background:var(--gold-soft); color:var(--gold);} .c-doing{background:var(--green-soft); color:var(--green);}
@@ -749,7 +754,7 @@ let DATA = null;
 let CURRENT_JOB = null;
 
 // เวอร์ชันหน้าเว็บ — bump ทุกครั้งที่แก้ไฟล์นี้ (หลังบ้านใช้ CODE_VERSION ใน gas/Code.gs)
-const WEB_VERSION = '2026-09-13a';
+const WEB_VERSION = '2026-09-13b';
 const $ = id => document.getElementById(id);
 const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 const baht = n => (Number(String(n).replace(/,/g,'')) || 0).toLocaleString('th-TH');
@@ -1005,7 +1010,7 @@ async function enterApp(){
 }
 function showVersion(gas){
   // เลขเป็น YYYY-MM-DD + ตัวอักษร → เทียบแบบข้อความได้ตรงลำดับเวลา
-  const same = !gas || gas >= WEB_VERSION;
+  const same = !gas || gas.slice(0, 10) >= WEB_VERSION.slice(0, 10);   // เทียบแค่วัน — รอบที่แก้หน้าเว็บอย่างเดียว (ตัวท้าย b/c/…) ไม่ต้องวาง GAS ใหม่
   const line = 'เวอร์ชัน · หน้าเว็บ <b>' + esc(WEB_VERSION) + '</b>' +
     (gas ? ' · ระบบหลังบ้าน <b class="' + (same ? '' : 'old') + '">' + esc(gas) + '</b>' : '');
   $('verLine').innerHTML = line;
@@ -1679,7 +1684,8 @@ $('oStatus').addEventListener('click', e => { const b = e.target.closest('button
 function renderOrders(){
   renderOrderTree(); renderStatusChips(); renderOrderList();
   $('recentMini').innerHTML = DATA.orders.slice(0, 5).map((o, i) => '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer; --i:' + i + '"' + (o['Order_ID'] === FLASH_ID ? ' class="flash"' : '') +
-    '><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + (o['กำหนดส่ง'] ? ' · ส่ง ' + esc(thDate(o['กำหนดส่ง'])) : '') + '</span></div><span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span></div></li>').join('') || '<li class="meta">ยังไม่มีออเดอร์</li>';
+    '><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + (o['กำหนดส่ง'] ? ' · ส่ง ' + esc(thDate(o['กำหนดส่ง'])) : '') + '</span></div><span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span></div>' +
+    '<div class="meta ol-one">' + (itemsBrief(o, 1)[0] || '') + '</div></li>').join('') || '<li class="meta">ยังไม่มีออเดอร์</li>';
   $('oMore').hidden = O_OLD_DONE;
 }
 function goTab(id){ const b = document.querySelector('#nav button[data-t="' + id + '"]'); if (b) b.click(); }
@@ -1696,17 +1702,34 @@ $('oMore').addEventListener('click', async () => {
   toast('โหลดเพิ่ม ' + (j.orders || []).length + ' ใบ · รวม ' + baht(DATA.orders.length) + ' ใบ');
   renderOrders();
 });
+// สินค้าในออเดอร์แบบสั้น อ่านง่าย: "ขวด 250 ml เพชร คอยาว น้ำเงิน — 20 ถุง (5,040 ใบ) · สกรีนขาว" บรรทัดละรายการ
+function itemsBrief(o, max){
+  let its = []; try { its = JSON.parse(o['รายการ'] || '[]'); } catch(e){}
+  const lines = its.map(it => {
+    const unit = it.type ? unitOfType(it.type) : 'ใบ';
+    const q = it.bags ? it.bags + ' ถุง <span class="meta">(' + baht(it.qty) + ' ' + unit + ')</span>' : baht(it.qty) + ' ' + unit;
+    return '<b>' + esc(it.name || specLabel(it)) + '</b> — ' + q + (it.screenColor ? ' <span class="meta">· สกรีน' + esc(it.screenColor) + '</span>' : '') + (it.capColor ? ' <span class="meta">· ฝา' + esc(it.capColor) + '</span>' : '');
+  });
+  const shown = lines.slice(0, max || 3);
+  if (lines.length > shown.length) shown.push('<span class="meta">+ อีก ' + (lines.length - shown.length) + ' รายการ</span>');
+  return shown;
+}
+function orderRowHtml(o, i){
+  const when = [o['กำหนดส่ง'] ? 'ส่ง <b>' + esc(thDate(o['กำหนดส่ง'])) + '</b>' : 'ยังไม่กำหนดส่ง', o['วันที่รับ'] ? 'ลงออเดอร์ ' + esc(thDate(o['วันที่รับ'])) : '', o['แบรนด์'] ? 'งาน ' + esc(o['แบรนด์']) : ''].filter(Boolean).join(' · ');
+  return '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer; --i:' + Math.min(i, 12) + '"' + (o['Order_ID'] === FLASH_ID ? ' class="flash"' : '') +
+    '><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + '</span></div>' +
+    '<div>' + orderBadges(o) + '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
+    (['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ']) ? '' : '<button class="mini warn" data-cancel="' + esc(o['Order_ID']) + '">ยกเลิก</button>') + '</div></div>' +
+    '<ul class="ol-items">' + (itemsBrief(o, 3).map(l => '<li>' + l + '</li>').join('') || '<li class="meta">ไม่มีรายการ</li>') + '</ul>' +
+    '<div class="meta ol-when">' + when + '</div></li>';
+}
 function renderOrderList(){
   if (FLASH_ID) setTimeout(() => { FLASH_ID = ''; }, 2000);
   const filtering = !!(normName(O_FIND) || O_STAT);
   const list = filterOrders();
   $('oCount').hidden = !filtering;
   if (filtering) $('oCount').textContent = 'พบ ' + list.length + ' จาก ' + DATA.orders.length + ' ใบ' + (list.length > 100 ? ' (แสดง 100 ใบแรก)' : '');
-  $('orderList').innerHTML = list.slice(0, filtering ? 100 : 40).map((o, i) =>
-    '<li data-open="' + esc(o['Order_ID']) + '" style="cursor:pointer; --i:' + Math.min(i, 12) + '"' + (o['Order_ID'] === FLASH_ID ? ' class="flash"' : '') + '><div class="li-top"><div><b>' + esc(o['ลูกค้า']) + '</b> <span class="meta">' + esc(o['Order_ID']) + ' · ' + baht(o['ยอดรวม']) + ' บ.' + (o['กำหนดส่ง']?' · ส่ง '+esc(o['กำหนดส่ง']):'') + ' · แตะดูรายละเอียด</span></div>' +
-    '<div>' + orderBadges(o) + '<span class="chip ' + CHIP(o['สถานะ']) + '">' + esc(o['สถานะ']) + '</span> ' +
-    (['ส่งแล้ว','ยกเลิก'].includes(o['สถานะ']) ? '' : '<button class="mini warn" data-cancel="' + esc(o['Order_ID']) + '">ยกเลิก</button>') +
-    '</div></div></li>').join('') || '<li class="meta">' + (filtering ? 'ไม่พบออเดอร์ที่ตรงเงื่อนไข' : 'ยังไม่มีออเดอร์') + '</li>';
+  $('orderList').innerHTML = list.slice(0, filtering ? 100 : 40).map((o, i) => orderRowHtml(o, i)).join('') || '<li class="meta">' + (filtering ? 'ไม่พบออเดอร์ที่ตรงเงื่อนไข' : 'ยังไม่มีออเดอร์') + '</li>';
 }
 async function cancelOrder(id){
   const why = prompt('เหตุผลการยกเลิก ' + id + ':'); if (why === null) return;
