@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-12i';
+const CODE_VERSION = '2026-09-13a';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -1034,7 +1034,7 @@ function acctEdit(pay, me) {   // แก้ได้เฉพาะบิลท�
 function teamData(p, me) {
   const orders = rowsToObjs('Orders');
   const active = orders.filter(function (o) { return ['ส่งแล้ว', 'ยกเลิก'].indexOf(o['สถานะ']) < 0; });
-  const recentDone = orders.filter(function (o) { return o['สถานะ'] === 'ส่งแล้ว'; }).slice(-10).reverse();
+  const recentDone = orders.filter(function (o) { return o['สถานะ'] === 'ส่งแล้ว' || o['สถานะ'] === 'ยกเลิก'; }).slice(-40).reverse();   // หน้า "ออเดอร์" โชว์ทั้งหมด: ที่ยังไม่จบ + ที่จบล่าสุด 40 · เก่ากว่านั้นกด "โหลดเพิ่ม" (pkOrders)
   const notJob = function (j) { return j['สถานะ'] !== 'เสร็จ' && j['สถานะ'] !== 'ยกเลิก'; };
   const billable = orders.filter(function (o) { return ['พร้อมส่ง', 'ส่งบางส่วน', 'ส่งแล้ว'].indexOf(o['สถานะ']) >= 0 && !o['Bill_No']; });
   // คิวส่ง: ออเดอร์ที่ยังมีของค้างส่ง
@@ -1303,6 +1303,7 @@ function ACTIONS() {
     pkOrderFlags: { auth: 'team', mut: true, fn: orderFlags },
     pkScreenAssign: { auth: 'team', mut: true, fn: screenAssign },
     pkOrderDetail: { auth: 'team', fn: orderDetail },
+    pkOrders: { auth: 'team', fn: function (pay, me, p) { return ordersMore(p); } },
     pkCustomerHistory: { auth: 'team', fn: customerHistory },
     pkScreenHistory: { auth: 'team', fn: screenHistory },
     pkExec: { auth: 'exec', fn: function () { return execData(); } },
@@ -1823,6 +1824,12 @@ function orderDetail(pay) {
 }
 
 // ประวัติออเดอร์ของลูกค้ารายหนึ่ง — เทียบเคียงชื่อแบบหลวม (ชื่อในออเดอร์เก่ามักมีชื่องานพ่วง)
+// หน้า "ออเดอร์ทั้งหมด": ดึงออเดอร์ที่จบแล้ว (ส่งแล้ว/ยกเลิก) ทีละหน้า ใหม่สุดก่อน — ที่ยังไม่จบมากับ teamData อยู่แล้ว
+function ordersMore(p) {
+  const from = Math.max(0, Number(p.from) || 0), limit = Math.min(300, Number(p.limit) || 100);
+  const done = rowsToObjs('Orders').filter(function (o) { return o['สถานะ'] === 'ส่งแล้ว' || o['สถานะ'] === 'ยกเลิก'; }).reverse();
+  return { ok: true, orders: done.slice(from, from + limit), from: from, total: done.length, more: from + limit < done.length };
+}
 function customerHistory(pay) {
   const key = String(pay.customer || '').trim();
   if (!key) return { ok: false, error: 'ระบุชื่อลูกค้า' };
