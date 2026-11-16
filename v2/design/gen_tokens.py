@@ -198,15 +198,18 @@ def css():
 def main():
     out = css()
     path = os.path.join(HERE, 'tokens.css')
+    web = os.path.join(HERE, '..', 'web', 'assets', 'tokens.css')   # สำเนาที่หน้าเว็บโหลด (Pages เสิร์ฟเฉพาะ v2/web)
     errs = check('สว่าง', LIGHT) + check('มืด', DARK)
     if '--check' in sys.argv:
         cur = open(path, encoding='utf-8').read() if os.path.exists(path) else ''
-        if cur != out:
+        curw = open(web, encoding='utf-8').read() if os.path.exists(web) else ''
+        if cur != out or curw != out:
             print('✗ tokens.css ไม่ตรงกับ gen_tokens.py — รัน python3 v2/design/gen_tokens.py แล้ว commit')
             sys.exit(1)
     else:
         open(path, 'w', encoding='utf-8').write(out)
-        print('เขียน tokens.css แล้ว')
+        open(web, 'w', encoding='utf-8').write(out)
+        print('เขียน tokens.css แล้ว (design/ + web/assets/)')
     print('ตรวจคอนทราสต์ %d คู่ × 2 โหมด' % len(PAIRS))
     for mode, S in (('สว่าง', LIGHT), ('มืด', DARK)):
         worst = min(PAIRS, key=lambda p: ratio(S[p[0]], S[p[1]]) / p[2])
