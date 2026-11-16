@@ -9,6 +9,7 @@ import { iso, thaiDay, specKey, specLabel, newId } from "../core.mjs";
 import { sha256Hex } from "../ticket.mjs";
 import { nameKey, splitCustomerText, matchCustomer, thaiDate, thaiTime, parseLegacyNote, intOf, satangOf, colOf } from "./legacy.mjs";
 import { PRODUCTS, MACHINES } from "./reference.generated.mjs";
+import { importLegacyRuns } from "../actions/prodLegacy.mjs";   // โมดูลทีมผลิตดูแล
 
 const DEPT_ROLE = { "ออฟฟิศ": "office", "ผลิต": "prod", "สกรีน": "screen", "ส่งของ": "deliver", "บัญชี": "account", "บริหาร": "exec" };
 export const rolesOfDept = d => [...new Set(String(d || "").split(/[,/\s]+/).map(x => DEPT_ROLE[x.trim()]).filter(Boolean))];
@@ -272,58 +273,8 @@ export async function importLegacyOrders(X, page) {
   return { ops, stats: st, problems };
 }
 
-// ── รอบผลิตเก่า (Stock Management › ProductionLog) — ประวัติ ไม่แตะสต๊อก ─────────────────────
-export async function importLegacyRuns(X, page) {
-  const st = S(), ops = [], problems = [];
-  const h = page.head;
-  const col = { id: colOf(h, "ID"), day: colOf(h, "วันที่"), start: colOf(h, "เวลาเริ่มเครื่อง"), end: colOf(h, "เวลาเปลี่ยนสี/ปิดเครื่อง", "เวลาปิดเครื่อง"), status: colOf(h, "สถานะ"),
-    ops: colOf(h, "ผู้ปฏิบัติงาน"), machine: colOf(h, "เครื่อง"), type: colOf(h, "ประเภทสินค้า"), size: colOf(h, "ขนาด"), neck: colOf(h, "คอขวด"), shape: colOf(h, "รูปทรง"), color: colOf(h, "สี"),
-    good: colOf(h, "ผลิตได้"), b: colOf(h, "เกรด B", "เกรดB"), waste: colOf(h, "ของเสีย"), note: colOf(h, "หมายเหตุ") };
-  const missing = ["day", "start", "machine", "type", "good"].filter(k => col[k] < 0);
-  if (missing.length) return { ops, stats: st, problems: ["หัวคอลัมน์ไม่ครบ (" + missing.join(", ") + ") — ตรวจหัวชีต ProductionLog จริงก่อน ระบบไม่เดา"], fatal: true };
-  const g = (r, k) => (col[k] < 0 ? "" : String(r[col[k]] == null ? "" : r[col[k]]).trim());
-  const rows = page.rows.filter(r => g(r, "day") && g(r, "machine"));
-  const hashes = await Promise.all(rows.map(rowHash));
-  const keys = rows.map((r, i) => (g(r, "id") || "h" + hashes[i]));
-  const map = await loadMap(X, "legacy:stock:ProductionLog", keys);
-  const machines = await X.db.all("SELECT id, name, legacy_name FROM machines");
-  const mByName = new Map(); machines.forEach(m => { mByName.set(m.name, m.id); if (m.legacy_name) mByName.set(m.legacy_name, m.id); });
-  const types = new Map((await X.db.all("SELECT code, axes FROM product_types")).map(t => [t.code, t.axes]));
-  const staffByNick = new Map((await X.db.all("SELECT id, nick FROM staff")).map(s => [s.nick, s.id]));
-  let stuck = 0;
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i], key = keys[i];
-    if (map.has(key)) { st.skipped++; continue; }   // ประวัติ: นำเข้าแล้วไม่ทับ (แก้ในชีตเดิมหลังนำเข้า = ไม่ตาม · ดูหมายเหตุใน SCHEMA.md)
-    const day = thaiDate(g(r, "day"));
-    const startAt = thaiTime(day, g(r, "start"));
-    if (!day || !startAt) { problems.push("รอบ " + key + ": วันที่/เวลาเริ่มอ่านไม่ได้ — ข้าม"); st.skipped++; continue; }
-    let endAt = thaiTime(day, g(r, "end"));
-    if (endAt && endAt < startAt) endAt = new Date(Date.parse(endAt) + 864e5).toISOString();   // ปิดหลังเที่ยงคืน
-    let mid = mByName.get(g(r, "machine"));
-    if (!mid) {
-      mid = "LM" + (await sha256Hex(g(r, "machine"))).slice(0, 8).toUpperCase();
-      if (!mByName.has("#" + mid)) { ops.push({ op: "raw", sql: "INSERT INTO machines(id, name, kind, legacy_name, note, src, created_at, updated_at) VALUES (?,?,?,?,?,?,?,?) ON CONFLICT(id) DO NOTHING", args: [mid, g(r, "machine"), "อื่น", g(r, "machine"), "เจอในประวัติแอปเดิม ไม่อยู่ในทะเบียน — รอจับคู่", "legacy:stock", iso(X.now), iso(X.now)] }); mByName.set("#" + mid, mid); }
-      mByName.set(g(r, "machine"), mid);
-    }
-    const open = !endAt;
-    if (open) stuck++;
-    const it = { type: g(r, "type"), size: g(r, "size"), neck: g(r, "neck"), shape: g(r, "shape"), color: g(r, "color") };
-    const id = "L-" + key;
-    ops.push({ op: "insert", table: "machine_runs", undo: false, row: {
-      id, machine_id: mid, ...it, spec_key: specKey(it, types.get(it.type)), started_at: startAt, started_day: day,
-      ended_at: endAt, ended_day: endAt ? thaiDay(Date.parse(endAt)) : "", end_kind: endAt ? "ปิดรอบ" : "",
-      good_pcs: intOf(g(r, "good")), grade_b_pcs: intOf(g(r, "b")), waste_pcs: intOf(g(r, "waste")),
-      status: open ? "ค้างจากระบบเดิม" : "ปิดแล้ว", note: g(r, "note"), src: "legacy:stock",
-    } });
-    for (const nm of g(r, "ops").split(/\s*[,،、]\s*|\s+และ\s+/).map(x => x.trim()).filter(Boolean)) {
-      ops.push({ op: "raw", sql: "INSERT INTO run_operators(run_id, name_text, staff_id) VALUES (?,?,?) ON CONFLICT DO NOTHING", args: [id, nm, staffByNick.get(nm) || null] });
-    }
-    ops.push(mapSql(X, "legacy:stock:ProductionLog", key, "machine_runs", id, hashes[i]));
-    st.inserted++;
-  }
-  if (stuck) ops.push({ op: "flag", kind: "รอบค้าง", team: "prod", title: "รอบเครื่องค้าง \"กำลังผลิต\" จากแอปเดิม", detail: "นำเข้าเป็นสถานะ \"ค้างจากระบบเดิม\" (ไม่นับว่าเครื่องเดินอยู่) — ไล่ปิดในแอปเดิมหรือในหน้าทีมผลิต", dedupe_key: "import:legacy:runs:stuck" });
-  return { ops, stats: st, problems };
-}
+// ── รอบผลิตเก่า (Stock Management › ProductionLog) — ย้ายไปโมดูลทีมผลิต (หัวคอลัมน์จริง · ข้ามเที่ยงคืน/พิมพ์ผิด · ซิงก์ซ้ำได้) ──
+//    ดู server/actions/prodLegacy.mjs
 
 // ── บิลจากชีท "ระบบบัญชี" (อ่านอย่างเดียว · ชีทบัญชีเป็นตัวจริง) ─────────────────────────
 //   เหมือน importLegacyAccounting() ใน gas/Code.gs: Bill_No = 'เก่า-<แท็บ>-<เลข>' · แท็บลูกหนี้ใช้ "ยอดค้าง"+"สถานะ" · ระวัง "ค้างจ่าย" มีคำว่า "จ่าย"

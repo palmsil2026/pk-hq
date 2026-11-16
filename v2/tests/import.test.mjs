@@ -138,7 +138,7 @@ test("รอบผลิตเก่า: ข้ามเที่ยงคืน
   assert.equal(r.page.inserted, 3);
   const night = W.one("SELECT * FROM machine_runs WHERE id='L-r002'");
   assert.equal(night.started_at, "2026-11-10T15:00:00.000Z"); assert.equal(night.ended_at, "2026-11-10T23:30:00.000Z"); assert.equal(night.ended_day, "2026-11-11");
-  assert.deepEqual(W.q("SELECT name_text, staff_id FROM run_operators WHERE run_id='L-r001' ORDER BY name_text").map(x => x.name_text + ":" + x.staff_id), ["บี:S002", "เอ:S001"]);
+  assert.deepEqual(W.q("SELECT name_text, staff_id FROM run_crew WHERE run_id='L-r001' ORDER BY name_text").map(x => x.name_text + ":" + x.staff_id), ["บี:S002", "เอ:S001"]);
   const stuck = W.one("SELECT * FROM machine_runs WHERE id='L-r003'");
   assert.equal(stuck.status, "ค้างจากระบบเดิม"); assert.equal(stuck.machine_id, "SHE230G");
   assert.equal(W.q("SELECT * FROM flags WHERE kind='รอบค้าง'").length, 1);
