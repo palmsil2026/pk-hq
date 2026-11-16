@@ -15,7 +15,7 @@ registerTable("prices", { pk: "pid", created: false });
 registerTable("price_history", { pk: "item_key", stamp: false });
 
 const EXEC = ["exec"];
-export const PRICE_KINDS = ["โรงงาน", "หน้าร้าน", "ไม่รวมฝา"];
+export const PRICE_KINDS = ["ราคาโรงงาน", "ราคาหน้าร้าน", "ราคาไม่รวมฝา"];   // ตรงกับที่ออฟฟิศอ่าน (office-lib.mjs › PRICE_KIND)
 const OPEN_ORDER = "('รอผลิต','กำลังผลิต','รอสกรีน','กำลังสกรีน','พร้อมส่ง','ส่งบางส่วน')";
 const REF = new Map(PRODUCTS.map(p => [p.SKU, p]));
 const satangOfBaht = s => { const m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(s || "").trim()); return m ? Number(m[1]) * 100 + Number((m[2] || "").padEnd(2, "0") || 0) : null; };

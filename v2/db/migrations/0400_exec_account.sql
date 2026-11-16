@@ -28,9 +28,10 @@ CREATE TRIGGER vocab_bill_payments_channel_upd BEFORE UPDATE OF channel ON bill_
 -- ── ชนิดราคา + กุญแจแถว ─────────────────────────────────────────────────────
 ALTER TABLE prices ADD COLUMN pid TEXT NOT NULL DEFAULT '';           -- = ชนิด|item_key (ตั้งตอนเพิ่มแถว)
 CREATE UNIQUE INDEX prices_pid ON prices(pid) WHERE pid <> '';
-INSERT INTO vocab(kind, value, pos, label, tone) VALUES ('prices.kind', 'โรงงาน', 1, 'ราคาโรงงาน', ''), ('prices.kind', 'หน้าร้าน', 2, 'ราคาหน้าร้าน', ''), ('prices.kind', 'ไม่รวมฝา', 3, 'ไม่รวมฝา', '');
-CREATE TRIGGER vocab_prices_kind_ins BEFORE INSERT ON prices WHEN NOT EXISTS (SELECT 1 FROM vocab WHERE kind = 'prices.kind' AND value = NEW.kind) BEGIN SELECT RAISE(ABORT, 'ชนิดราคาไม่อยู่ในรายการ (โรงงาน / หน้าร้าน / ไม่รวมฝา)'); END;
-CREATE TRIGGER vocab_price_history_kind_ins BEFORE INSERT ON price_history WHEN NOT EXISTS (SELECT 1 FROM vocab WHERE kind = 'prices.kind' AND value = NEW.kind) BEGIN SELECT RAISE(ABORT, 'ชนิดราคาไม่อยู่ในรายการ (โรงงาน / หน้าร้าน / ไม่รวมฝา)'); END;
+-- ชื่อชนิดราคา = ที่โมดูลออฟฟิศอ่าน (office-lib.mjs › PRICE_KIND: ขายราคาโรงงาน → ราคาโรงงาน · ขายหน้าร้าน → ราคาหน้าร้าน)
+INSERT INTO vocab(kind, value, pos, label, tone) VALUES ('prices.kind', 'ราคาโรงงาน', 1, 'โรงงาน', ''), ('prices.kind', 'ราคาหน้าร้าน', 2, 'หน้าร้าน', ''), ('prices.kind', 'ราคาไม่รวมฝา', 3, 'ไม่รวมฝา', '');
+CREATE TRIGGER vocab_prices_kind_ins BEFORE INSERT ON prices WHEN NOT EXISTS (SELECT 1 FROM vocab WHERE kind = 'prices.kind' AND value = NEW.kind) BEGIN SELECT RAISE(ABORT, 'ชนิดราคาไม่อยู่ในรายการ (ราคาโรงงาน / ราคาหน้าร้าน / ราคาไม่รวมฝา)'); END;
+CREATE TRIGGER vocab_price_history_kind_ins BEFORE INSERT ON price_history WHEN NOT EXISTS (SELECT 1 FROM vocab WHERE kind = 'prices.kind' AND value = NEW.kind) BEGIN SELECT RAISE(ABORT, 'ชนิดราคาไม่อยู่ในรายการ (ราคาโรงงาน / ราคาหน้าร้าน / ราคาไม่รวมฝา)'); END;
 
 -- ── เลขเอกสารเรียงต่อกัน (ใบวางบิล) ───────────────────────────────────────────
 CREATE TABLE doc_seq (

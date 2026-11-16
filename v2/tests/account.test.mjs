@@ -323,3 +323,20 @@ test("รายการบิล: ใหม่สุดบน · ค้นช�
   assert.equal(d.bill.paper_no, "4321"); assert.equal(d.bill.src_label, "จากออเดอร์"); assert.ok(d.history.some(x => x.action === "account.link"));
   assert.equal(d.order.id, "O-PB3");
 });
+
+test("ปลดเลขบิลกระดาษ: เหตุผลบังคับ · มีรับชำระอยู่ = ต้องยกเลิกการรับชำระก่อน · ปลดแล้วออฟฟิศยกเลิกบิลได้ · ใบในชีทกลับมานับ", async () => {
+  const { W, t } = await moneyWorld();
+  W.orderBill("PB1", "C1", 50000, "เงินสด");
+  W.acctBill("เก่า-บิลรายวัน-12", "12", "ร้านทดสอบ หนึ่ง", 50000, "ชำระแล้ว", { tab: "บิลรายวัน", acct_kind: "รายวัน", kind: "เงินสด", channel: "เงินสด" });
+  ok(await W.call(t.acct, "account.link", { bill_no: "PB1", version: 1, paper_no: "12", paper_satang: 50000, channel: "เงินสด" }));
+  assert.equal(W.bill("เก่า-บิลรายวัน-12").same_as, "PB1");
+  const v = () => W.bill("PB1").version;
+  assert.equal((await W.call(t.acct, "account.unlink", { bill_no: "PB1", version: v() })).status, 400, "ต้องมีเหตุผล");
+  const paid = await W.call(t.acct, "account.unlink", { bill_no: "PB1", version: v() }, { reason: "ผูกผิดใบ" });
+  assert.equal(paid.status, 400); assert.match(paid.error.message, /ยกเลิกการรับชำระก่อน/);
+  const p = W.one("SELECT * FROM bill_payments WHERE bill_no='PB1'");
+  ok(await W.call(t.acct, "account.pay_cancel", { id: p.id, version: p.version }, { reason: "ลงผิดบิล" }));
+  ok(await W.call(t.acct, "account.unlink", { bill_no: "PB1", version: v() }, { reason: "ผูกผิดใบ" }));
+  assert.equal(W.bill("PB1").paper_no, ""); assert.equal(W.bill("เก่า-บิลรายวัน-12").same_as, "");
+  assert.equal(W.bill("PB1").status, "ค้างชำระ");
+});

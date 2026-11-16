@@ -202,6 +202,32 @@ export function defineAccount(R) {
     },
   });
 
+  // ── ปลดเลขบิลกระดาษ (เหตุผลบังคับ) — ทางออกเมื่อผูกผิดใบแล้วย้อนไม่ได้ / ออฟฟิศต้องยกเลิกบิลจากออเดอร์ (ออฟฟิศยกเลิกบิลที่ผูกเลขแล้วไม่ได้) ──
+  R.define({
+    name: "account.unlink", roles: MONEY_ROLES, write: true, reason: "required", label: "ปลดเลขบิลกระดาษ",
+    input: raw => ({ bill_no: need(raw.bill_no, "บิล", 80), version: int(raw.version, "รุ่นของรายการ", { min: 1 }) }),
+    async load(X, input) {
+      const [[b], pays, twins] = await X.db.reads([
+        ["SELECT * FROM bills WHERE bill_no = ?", input.bill_no],
+        ["SELECT count(*) AS n FROM bill_payments WHERE bill_no = ? AND status = 'ใช้ได้'", input.bill_no],
+        ["SELECT * FROM bills WHERE same_as = ?", input.bill_no],
+      ]);
+      if (!b) throw notFound("ไม่พบบิลนี้");
+      return { b, paid: pays[0].n, twins };
+    },
+    async run(X, input, ctx) {
+      const b = ctx.b;
+      if (b.src !== "v2") throw bad(sourceOf(b).why);
+      if (b.status === "ยกเลิก") throw gone("บิลนี้ถูกยกเลิกแล้ว");
+      if (b.version !== input.version) throw conflict();
+      if (!b.paper_no) throw bad("บิลนี้ยังไม่ได้ผูกเลขกระดาษ");
+      if (ctx.paid) throw bad("บิลนี้มีการรับชำระอยู่ — ยกเลิกการรับชำระก่อน แล้วค่อยปลดเลข");
+      const ops = [{ op: "update", table: "bills", id: b.bill_no, expect: b.version, before: b, set: { paper_no: "", paper_dup_ok: 0 } }];
+      for (const t of ctx.twins) ops.push({ op: "update", table: "bills", id: t.bill_no, expect: t.version, before: t, set: { same_as: "" } });
+      return { label: "ปลดเลข #" + b.paper_no + " · " + b.customer_name, result: { bill_no: b.bill_no }, ops };
+    },
+  });
+
   // ── ยอดกระดาษไม่ตรง → ส่งให้ออฟฟิศเช็ค (ธง — ไม่บล็อกใคร) ─────────────────────────────────
   R.define({
     name: "account.mismatch_report", roles: MONEY_ROLES, write: true, label: "ส่งให้ออฟฟิศเช็คยอด",
