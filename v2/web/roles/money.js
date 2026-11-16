@@ -128,11 +128,12 @@ export function linkSheet(ctx, b, opt) {
     h("div.row", srcPill(b), ui.pill(b.kind, "mute"), h("span.muted.small", "บิลวันที่ " + TH_DAY(b.bill_day) + (b.brand ? " · งาน " + b.brand : ""))),
     h("div.row", h("span.muted.grow", "ยอดในระบบ (ออฟฟิศลงจากออเดอร์)"), h("span.big.md", money(b.total_satang))),
     h("p.small.muted", "ใส่เลขและยอดตามบิลกระดาษ — ระบบเทียบกับยอดในระบบให้ (ไม่ตรง = ไม่ผูก)"),
-    pad.el);
+    msg, pad.el);   // ข้อความ/ทางแก้อยู่เหนือแป้น — เห็นในจอเดียวโดยไม่ต้องเลื่อน
   const chips = h("div.chips", { role: "group", "aria-label": "เงินเข้าทางไหน" }, channels(ctx).map(c => h("button.chip", { type: "button", "aria-pressed": "false", onclick: e => {
     channel = c.value; chips.querySelectorAll(".chip").forEach(x => x.setAttribute("aria-pressed", String(x === e.currentTarget))); msg.replaceChildren(); } }, c.label)));
   if (cash) sh.body.append(h("div.lbl", "บิลเงินสด — เงินเข้าทางไหน (ต้องเลือก)"), chips);
-  sh.body.append(msg, h("p.ref", "รหัสอ้างอิง " + b.bill_no));
+  sh.body.append(h("p.ref", "รหัสอ้างอิง " + b.bill_no));
+  new MutationObserver(() => { if (msg.firstChild) msg.scrollIntoView({ block: "nearest" }); }).observe(msg, { childList: true });
   const btn = h("button.btn.pri.block", { type: "button", onclick: () => ui.busy(btn, save) }, cash ? "ผูกเลข + รับเงิน" : "ผูกเลขบิล");
   sh.foot.append(btn);
   if (o.next) sh.foot.append(h("button.btn.ghost.block", { type: "button", style: { marginTop: "8px" }, onclick: () => { sh.close("skip"); o.next(); } }, "ข้ามไปใบถัดไป"));
@@ -213,6 +214,7 @@ export function paySheet(ctx, bills, opt) {
   sh.body.append(h("div.lbl", "เงินเข้าทางไหน (ต้องเลือก)"), chips, o.hint ? h("p.small.muted", o.hint) : "", msg);
   const btn = h("button.btn.pri.block", { type: "button", onclick: () => ui.busy(btn, () => save()) });
   sh.foot.append(btn);
+  new MutationObserver(() => { if (msg.firstChild) msg.scrollIntoView({ block: "nearest" }); }).observe(msg, { childList: true });
   draw();
   async function save(excess, reason) {
     if (!channel) { msg.replaceChildren(h("p.err", "เลือกว่าเงินเข้าทางไหนก่อน")); return; }
@@ -331,6 +333,7 @@ export function billForm(ctx, opt) {
   const dueBox = h("div.stack", { style: { gap: "6px" } }, h("div.lbl", "กำหนดชำระ"), dueRow);
   const dayRow = chipRow("วันที่บิล", [[todayTh(), "วันนี้"], [addDay(todayTh(), -1), "เมื่อวาน"]].concat(st.day !== todayTh() && st.day !== addDay(todayTh(), -1) ? [[st.day, TH_DAY(st.day)]] : []), () => st.day, v => { st.day = v; if (st.dueN) st.due = addDay(v, Number(st.dueN)); });
   function draw() { chanBox.hidden = st.kind !== "เงินสด"; dueBox.hidden = st.kind !== "เครดิต"; }
+  new MutationObserver(() => { if (msg.firstChild) msg.scrollIntoView({ block: "nearest" }); }).observe(msg, { childList: true });
   box.append(h("div.field", h("div.lbl", "ลูกค้า"), cIn), sug, pad.el, h("div.lbl", "ประเภทบิล (ต้องเลือก)"), kindRow, chanBox, dueBox, h("div.lbl", "วันที่บิล"), dayRow, msg);
   const btn = h("button.btn.pri.block", { type: "button", onclick: () => ui.busy(btn, save) }, edit ? "บันทึกการแก้" : "ลงบิล");
   draw();
