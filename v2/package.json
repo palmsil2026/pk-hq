@@ -1,0 +1,14 @@
+{
+  "name": "pk-v2",
+  "private": true,
+  "description": "โรงขวด P&K v2 — Cloudflare Pages + Pages Functions + D1 · ไม่มี dependency ตอนรันจริง (คำสั่งข้างล่างเป็นทางลัดของนักพัฒนา)",
+  "type": "module",
+  "scripts": {
+    "test": "node --no-warnings --test tests/*.test.mjs",
+    "test:ui": "node --no-warnings tests/ui/run.mjs",
+    "check": "python3 design/gen_tokens.py --check && node tools/gen-reference-sql.mjs --check && node tools/check.mjs",
+    "dev": "node --no-warnings tools/dev-server.mjs",
+    "shots": "node --no-warnings tools/shots.mjs"
+  },
+  "engines": { "node": ">=22" }
+}
