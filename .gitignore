@@ -24,3 +24,4 @@ desktop.ini
 v2/.dev/
 v2/dist/
 .wrangler/
+v2/wrangler.toml
