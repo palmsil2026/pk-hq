@@ -58,7 +58,7 @@ export async function call(action, input, opt) {
   const { res, j } = r;
   if (!j || !j.ok) {
     const err = (j && j.error) || {};
-    throw new ApiError(err.message || "หลังบ้านปฏิเสธ (" + res.status + ")", { status: res.status, code: err.code, needLogin: !!(j && j.needLogin), needPin: !!err.needPin, server: true });
+    throw new ApiError(err.message || "หลังบ้านปฏิเสธ (" + res.status + ")", { status: res.status, code: err.code, needLogin: !!(j && j.needLogin), needPin: !!err.needPin, server: true, info: err });   // info = รายละเอียดจากหลังบ้าน (เช่น need/current) ให้หน้าใช้ต่อ
   }
   return { data: j.data, undo: j.undo || null, replayed: !!j.replayed };
 }

@@ -201,3 +201,6 @@ test("แป้นตัวเลขของแอป: ใส่/ลบ/ตก�
   assert.equal(await v, 5089);
   assert.equal(await p.locator("input").count(), 0);
 });
+
+// ── โมดูล (แชทย่อย) เพิ่มไฟล์เทสต์หน้าจอของตัวเองต่อท้ายตรงนี้ ──
+import "./screen_deliver.mjs";   // ทีมสกรีนสี + ส่งของ

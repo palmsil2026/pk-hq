@@ -6,6 +6,7 @@
 import { compileOps, wrapDb } from "../server/db.mjs";
 import { iso, thaiDay, addDays, specKey, specLabel, newId } from "../server/core.mjs";
 import { importProducts, importMachines } from "../server/import/importers.mjs";
+import { seedScreenDeliver } from "./seed-sd.mjs";   // ข้อมูลสมมติของโมดูลสกรีน + ส่งของ
 
 export const DEMO_STAFF = [
   ["S101", "แอน", "ออฟฟิศ"], ["S102", "ฝน", "ออฟฟิศ"], ["S111", "บอส", "ผลิต"], ["S112", "เก่ง", "ผลิต"], ["S113", "นุ่น", "ผลิต"],
@@ -86,5 +87,6 @@ export async function seedDemo(d1, opt) {
   F.forEach(([kind, team, title, sev], i) => ops.push({ op: "insert", table: "flags", row: { id: "FD" + i, at: at((i + 1) * 2 * H), day: thaiDay(now - (i + 1) * 2 * H), kind, team, title, severity: sev, raised_by: "system", src: undefined } }));
   for (const op of ops) if (op.row && op.row.src === undefined) delete op.row.src;
   await apply(X, ops);
+  await seedScreenDeliver(X, apply, now);   // สกรีน + ส่งของ (tools/seed-sd.mjs)
   return { staff: DEMO_STAFF.length };
 }
