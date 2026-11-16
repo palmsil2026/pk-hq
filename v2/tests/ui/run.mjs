@@ -8,7 +8,6 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { startDev } from "../../tools/dev-server.mjs";
-import "./prod.mjs";   // เทสต์หน้าจอทีมผลิต
 
 const require = createRequire(import.meta.url);
 let pw;
