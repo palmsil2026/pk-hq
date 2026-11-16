@@ -8,6 +8,7 @@ import { iso, thaiDay, addDays, specKey, specLabel, newId } from "../server/core
 import { importProducts, importMachines } from "../server/import/importers.mjs";
 import { seedScreenDeliver } from "./seed-sd.mjs";   // ข้อมูลสมมติของโมดูลสกรีน + ส่งของ
 import { seedProd } from "./seed-prod.mjs";   // ทีมผลิต: ประวัติรอบ · สต๊อก · โมลด์ (ข้อมูลสมมติ)
+import { seedExecAccount } from "./seed-exec-account.mjs";   // ประธาน + บัญชี
 
 export const DEMO_STAFF = [
   ["S101", "แอน", "ออฟฟิศ"], ["S102", "ฝน", "ออฟฟิศ"], ["S111", "บอส", "ผลิต"], ["S112", "เก่ง", "ผลิต"], ["S113", "นุ่น", "ผลิต"],
@@ -90,5 +91,6 @@ export async function seedDemo(d1, opt) {
   await apply(X, ops);
   await seedScreenDeliver(X, apply, now);   // สกรีน + ส่งของ (tools/seed-sd.mjs)
   await seedProd(d1, { now });
+  await seedExecAccount(X, { unconfirmed: ["S113"] });   // ประธาน + บัญชี
   return { staff: DEMO_STAFF.length };
 }

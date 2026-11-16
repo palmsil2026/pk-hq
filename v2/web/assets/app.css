@@ -165,6 +165,7 @@ button.card:hover { border-color: var(--edge); }
 .snack .msg { flex: 1; min-width: 0; font-size: 15px; }
 .snack button { min-height: var(--tap); padding: 0 var(--sp-4); border: 0; border-radius: var(--r-sm); background: none; color: var(--brand-soft); font: 800 16px var(--font-display); }
 @media (min-width: 1100px) { .snack { left: auto; right: var(--sp-6); bottom: var(--sp-6); width: 420px; } }
+@media (min-width: 1100px) { body:has(.sheet.on:not(.modal)) .snack { right: calc(440px + var(--sp-6)); } }   /* แผงขวาเปิดอยู่: แถบข้อความ/ย้อนไม่บังปุ่มหลักของแผง */
 
 /* ── หน้าแรกออฟฟิศ: คิวงาน ─────────────────────────────────────────── */
 .queues { display: grid; grid-template-columns: repeat(auto-fit, minmax(104px, 1fr)); gap: var(--sp-2); }
