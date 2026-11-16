@@ -11,10 +11,11 @@
 //         รอบค้าง (เปิดนานเกิน RUN_STALE_HOURS หรือค้างจากแอปเดิม) ปิดย้อนหลังได้ + เหตุผล + ธง
 // ============================================================
 import { bad, conflict, notFound, need, text, int, oneOf, iso, thaiDay, thaiHm, specKey, specLabel, newId } from "../core.mjs";
-import { readSpec, readWhen, readCrew, crewOps, produceMoves, negativeFlag, stockKey, RUN_KINDS, OPEN_RUN } from "./prodLib.mjs";
+import { readSpec, readWhen, readCrew, crewOps, produceMoves, negativeFlag, stockKey, jobsOps, JOB_OF_RUN, RUN_KINDS, OPEN_RUN } from "./prodLib.mjs";
 
 const ROLES = ["prod"];   // ประธานใช้แอปทีมผลิตได้เอง (as=prod) ตามกติกากลาง
 const q = (n, name) => int(n, name, { min: 0, max: 5000000 });
+const newJob = (id, it, status) => ({ id, order_id: it.order_id, order_item_id: it.id, type: it.type, size: it.size, neck: it.neck, shape: it.shape, color: it.color, spec_key: it.spec_key, target_pcs: it.qty_pcs, status, due_day: it.due_day || "", urgent: it.urgent ? 1 : 0 });
 
 function openRunInfo(run, machineName, crew) {
   return { id: run.id, machine: machineName, label: specLabel(run), started_at: run.started_at, crew: crew || "", version: run.version, status: run.status };
@@ -51,7 +52,7 @@ export function defineProdRuns(R) {
         ["SELECT max(ended_at) AS e FROM machine_runs WHERE machine_id = ? AND status = 'ปิดแล้ว' AND ended_at <> ''", input.machine],
         ["SELECT * FROM production_jobs WHERE id = ?", input.job || "-"],
         ["SELECT i.*, o.status AS order_status, o.due_day, o.urgent FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.id = ?", input.item || "-"],
-        ["SELECT * FROM production_jobs WHERE order_item_id = ? AND status <> 'ยกเลิก'", input.item || "-"],
+        ["SELECT * FROM production_jobs WHERE order_item_id = ? AND status <> 'ยกเลิก' ORDER BY (status = 'เสร็จ'), created_at DESC LIMIT 1", input.item || "-"],
         ["SELECT id, nick FROM staff WHERE status = 'ทำงาน'"],
       ]);
       return { m: m[0], run: runs[0], stop: evs.find(e => e.kind === "จอดเครื่อง"), mold: evs.find(e => e.kind === "เปลี่ยนโมลด์"), types: new Map(types.map(t => [t.code, t.axes])), lastEnd: last[0] && last[0].e, job: jobs[0], item: items[0], itemJob: ijobs[0], nicks: new Map(staff.map(s => [s.nick, s.id])) };
@@ -68,7 +69,7 @@ export function defineProdRuns(R) {
       const start = input.started_at || iso(X.now);
       if (ctx.lastEnd && start < ctx.lastEnd) throw bad("เวลาเริ่มทับรอบก่อนหน้า (ปิดเมื่อ " + thaiHm(Date.parse(ctx.lastEnd)) + ") — เลือกเวลาหลังจากนั้น");
       const ops = [];
-      // ผูกงาน (ไม่บังคับ — ไม่ผูก = ผลิตเข้าสต๊อกแบบแอปเดิม)
+      // ผูกงาน (ไม่บังคับ — ไม่ผูก = ผลิตเข้าสต๊อกแบบแอปเดิม) · งานเริ่ม = ออเดอร์ "กำลังผลิต" (ไหลตามกติกาออฟฟิศ)
       let jobId = null;
       if (input.job) {
         const j = ctx.job;
@@ -76,19 +77,18 @@ export function defineProdRuns(R) {
         if (j.status !== "รอผลิต" && j.status !== "กำลังผลิต") throw conflict("งานนี้ " + j.status + " แล้ว — เลือกงานอื่นหรือผลิตเข้าสต๊อก");
         if (j.spec_key !== spec.spec_key) throw bad("สเปกที่เลือกไม่ตรงกับงาน (" + specLabel(j) + ")");
         jobId = j.id;
-        if (j.status === "รอผลิต") ops.push({ op: "update", table: "production_jobs", id: j.id, expect: j.version, before: j, set: { status: "กำลังผลิต" } });
+        ops.push(...await jobsOps(X, [[j, { status: "กำลังผลิต" }]]));
       } else if (input.item) {
         const it = ctx.item;
         if (!it || it.status !== "ใช้งาน") throw notFound("ไม่พบรายการออเดอร์นี้ (อาจถูกยกเลิก) — โหลดใหม่");
         if (it.spec_key !== spec.spec_key) throw bad("สเปกที่เลือกไม่ตรงกับรายการออเดอร์ (" + specLabel(it) + ")");
-        if (ctx.itemJob) {
-          const j = ctx.itemJob;
-          if (j.status === "เสร็จ") throw conflict("งานนี้ทำครบแล้ว — ผลิตเข้าสต๊อกแทน หรือให้ออฟฟิศเปิดงานใหม่");
-          jobId = j.id;
-          if (j.status === "รอผลิต") ops.push({ op: "update", table: "production_jobs", id: j.id, expect: j.version, before: j, set: { status: "กำลังผลิต" } });
+        if (ctx.itemJob && ctx.itemJob.status !== "เสร็จ") {
+          jobId = ctx.itemJob.id;
+          ops.push(...await jobsOps(X, [[ctx.itemJob, { status: "กำลังผลิต" }]]));
         } else {
+          if (ctx.itemJob) throw conflict("งานนี้ทำครบแล้ว — ผลิตเข้าสต๊อกแทน หรือให้ออฟฟิศเพิ่มจำนวน");
           jobId = "J" + X.newId();
-          ops.push({ op: "insert", table: "production_jobs", row: { id: jobId, order_id: it.order_id, order_item_id: it.id, type: it.type, size: it.size, neck: it.neck, shape: it.shape, color: it.color, spec_key: it.spec_key, target_pcs: it.qty_pcs, status: "กำลังผลิต", due_day: it.due_day || "", urgent: it.urgent ? 1 : 0 } });
+          ops.push(...await jobsOps(X, [], [newJob(jobId, it, "กำลังผลิต")]));
         }
       }
       // เครื่องจอดอยู่ = เปิดรอบใหม่คือเดินเครื่องต่อ (ปิดเรื่องจอดให้เอง)
@@ -109,12 +109,13 @@ export function defineProdRuns(R) {
     input: raw => ({ run: need(raw.run, "รอบ", 40), version: int(raw.version, "รุ่นของรายการ", { min: 1 }), color: need(raw.color, "สีใหม่", 60),
       good: q(raw.good, "ดี (ใบ)"), b: q(raw.b === undefined || raw.b === "" ? 0 : raw.b, "เกรด B (ใบ)"), waste: q(raw.waste === undefined || raw.waste === "" ? 0 : raw.waste, "เสีย (ใบ)"), waste_reason: text(raw.waste_reason, 120), note: text(raw.note, 300) }),
     async load(X, input) {
-      const [r, crew, ax] = await X.db.reads([
+      const [r, job, crew, ax] = await X.db.reads([
         ["SELECT r.*, m.name AS machine_name FROM machine_runs r JOIN machines m ON m.id = r.machine_id WHERE r.id = ?", input.run],
+        [JOB_OF_RUN, input.run],
         ["SELECT name_text, staff_id FROM run_crew WHERE run_id = ? AND status = 'ใช้งาน'", input.run],
         ["SELECT t.axes FROM product_types t JOIN machine_runs r ON r.type = t.code WHERE r.id = ?", input.run],
       ]);
-      return { r: r[0], crew, axes: ax[0] ? ax[0].axes : null };
+      return { r: r[0], crew, axes: ax[0] ? ax[0].axes : null, job: job[0] };
     },
     onUnique: () => conflict("เครื่องนี้เพิ่งมีคนเปิดรอบไปพร้อมกัน — โหลดใหม่"),
     undo: { guard: stockUndoGuard },
@@ -137,6 +138,7 @@ export function defineProdRuns(R) {
         started_at: at, started_day: thaiDay(X.now), status: "กำลังผลิต", opened_by: X.staff.id, chain_id: r.chain_id || r.id, prev_run_id: r.id, src: "v2" } });
       const nick = new Map(ctx.crew.map(c => [c.name_text, c.staff_id]));
       ops.push(...crewOps(id, ctx.crew.map(c => c.name_text), nick));
+      if (ctx.job) ops.push(...await jobsOps(X, [[ctx.job, { good_pcs: ctx.job.made + input.good }]]));
       return { result: { id, closed: r.id }, label: "เปลี่ยนสี " + machine_name + " " + (r.color || "—") + " → " + input.color, ops };
     },
   });
@@ -148,11 +150,12 @@ export function defineProdRuns(R) {
       good: q(raw.good, "ดี (ใบ)"), b: q(raw.b === undefined || raw.b === "" ? 0 : raw.b, "เกรด B (ใบ)"), waste: q(raw.waste === undefined || raw.waste === "" ? 0 : raw.waste, "เสีย (ใบ)"),
       waste_reason: text(raw.waste_reason, 120), note: text(raw.note, 300), ended_at: readWhen(raw.ended_at, X.now, "เวลาปิด") }),
     async load(X, input) {
-      const [r, flags] = await X.db.reads([
+      const [r, flags, job] = await X.db.reads([
         ["SELECT r.*, m.name AS machine_name FROM machine_runs r JOIN machines m ON m.id = r.machine_id WHERE r.id = ?", input.run],
         ["SELECT * FROM flags WHERE dedupe_key = ? AND status = 'เปิด'", "stale:" + input.run],
+        [JOB_OF_RUN, input.run],
       ]);
-      return { r: r[0], flags };
+      return { r: r[0], flags, job: job[0] };
     },
     undo: { guard: stockUndoGuard },
     async run(X, input, ctx) {
@@ -177,6 +180,7 @@ export function defineProdRuns(R) {
       if (late) ops.push({ op: "flag", kind: "รอบค้าง", team: "prod", severity: "ดู", entity: "machine_runs", entity_id: r.id,
         title: "ปิดรอบย้อนหลัง " + machine_name + " · " + specLabel(r), detail: "เริ่ม " + thaiDay(Date.parse(r.started_at)) + " " + thaiHm(Date.parse(r.started_at)) + " · ปิดเวลา " + thaiDay(Date.parse(end)) + " " + thaiHm(Date.parse(end)) + " · เหตุผล: " + X.reason + (legacy ? " · รอบจากแอปเดิม (ไม่แตะสต๊อก)" : ""), dedupe_key: "late:" + r.id });
       for (const f of ctx.flags) ops.push({ op: "update", table: "flags", id: f.id, expect: f.version, before: f, set: { status: "ปิด", resolution: "ปิดรอบแล้ว (" + (X.reason || "ปิดรอบ") + ")", resolved_by: X.staff.id, resolved_at: iso(X.now) } });
+      if (ctx.job) ops.push(...await jobsOps(X, [[ctx.job, { good_pcs: ctx.job.made + input.good }]]));
       return { result: { id: r.id, late, legacy }, label: "ปิดรอบ " + machine_name + " · ดี " + input.good.toLocaleString("en-US") + " ใบ", ops };
     },
   });
@@ -186,11 +190,12 @@ export function defineProdRuns(R) {
     name: "run.fix", roles: ROLES, write: true, gate: true, reason: "required", label: "แก้ยอดรอบ",
     input: raw => ({ run: need(raw.run, "รอบ", 40), version: int(raw.version, "รุ่นของรายการ", { min: 1 }), good: q(raw.good, "ดี (ใบ)"), b: q(raw.b, "เกรด B (ใบ)"), waste: q(raw.waste, "เสีย (ใบ)") }),
     async load(X, input) {
-      const [r, bal] = await X.db.reads([
+      const [r, bal, job] = await X.db.reads([
         ["SELECT r.*, m.name AS machine_name FROM machine_runs r JOIN machines m ON m.id = r.machine_id WHERE r.id = ?", input.run],
         ["SELECT b.grade, b.qty_pcs FROM stock_balance b JOIN machine_runs r ON b.item_key = 'spec:' || r.spec_key WHERE r.id = ?", input.run],
+        [JOB_OF_RUN, input.run],
       ]);
-      return { r: r[0], bal: new Map(bal.map(b => [b.grade, b.qty_pcs])) };
+      return { r: r[0], bal: new Map(bal.map(b => [b.grade, b.qty_pcs])), job: job[0] };
     },
     undo: { guard: stockUndoGuard },
     async run(X, input, ctx) {
@@ -211,6 +216,7 @@ export function defineProdRuns(R) {
           if (nf) ops.push(nf);
         }
       }
+      if (ctx.job && dA) ops.push(...await jobsOps(X, [[ctx.job, { good_pcs: ctx.job.made + dA }]]));
       return { result: { id: r.id }, label: "แก้ยอดรอบ " + machine_name + " · ดี " + input.good.toLocaleString("en-US") + " ใบ", ops };
     },
   });
@@ -220,13 +226,14 @@ export function defineProdRuns(R) {
     name: "run.link", roles: ROLES, write: true, gate: true, label: "ผูกรอบกับงาน",
     input: raw => ({ run: need(raw.run, "รอบ", 40), version: int(raw.version, "รุ่นของรายการ", { min: 1 }), job: text(raw.job, 40), item: text(raw.item, 60) }),
     async load(X, input) {
-      const [r, j, it, ij] = await X.db.reads([
+      const [r, j, it, ij, oj] = await X.db.reads([
         ["SELECT r.*, m.name AS machine_name FROM machine_runs r JOIN machines m ON m.id = r.machine_id WHERE r.id = ?", input.run],
-        ["SELECT * FROM production_jobs WHERE id = ?", input.job || "-"],
+        ["SELECT j.*, coalesce(m.good_pcs, 0) AS made FROM production_jobs j LEFT JOIN job_made m ON m.job_id = j.id WHERE j.id = ?", input.job || "-"],
         ["SELECT i.*, o.due_day, o.urgent FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.id = ?", input.item || "-"],
-        ["SELECT * FROM production_jobs WHERE order_item_id = ? AND status <> 'ยกเลิก'", input.item || "-"],
+        ["SELECT j.*, coalesce(m.good_pcs, 0) AS made FROM production_jobs j LEFT JOIN job_made m ON m.job_id = j.id WHERE j.order_item_id = ? AND j.status <> 'ยกเลิก' ORDER BY (j.status = 'เสร็จ'), j.created_at DESC LIMIT 1", input.item || "-"],
+        [JOB_OF_RUN, input.run],
       ]);
-      return { r: r[0], j: j[0], it: it[0], ij: ij[0] };
+      return { r: r[0], j: j[0], it: it[0], ij: ij[0], oldJob: oj[0] };
     },
     onUnique: () => conflict("มีคนเริ่มงานนี้พร้อมกัน — โหลดใหม่"),
     async run(X, input, ctx) {
@@ -234,28 +241,29 @@ export function defineProdRuns(R) {
       if (!r) throw notFound("ไม่พบรอบนี้");
       if (r.version !== input.version) throw conflict();
       if (r.status !== "กำลังผลิต" && r.status !== "ปิดแล้ว") throw conflict("รอบนี้ " + r.status + " — ผูกงานไม่ได้");
-      const ops = [];
+      const good = r.status === "ปิดแล้ว" ? (r.good_pcs || 0) : 0;   // รอบที่ปิดแล้ว = ย้ายยอดทำแล้วตามไปด้วย
+      const changes = [], fresh = [];
       let jobId = null, what = "ผลิตเข้าสต๊อก";
       if (input.job || input.item) {
-        let j = input.job ? ctx.j : ctx.ij;
+        const j = input.job ? ctx.j : (ctx.ij && ctx.ij.status !== "เสร็จ" ? ctx.ij : null);
         if (input.job && !j) throw notFound("ไม่พบงานนี้");
         if (input.item && !ctx.it) throw notFound("ไม่พบรายการออเดอร์นี้");
         const src = j || ctx.it;
         if (src.spec_key !== r.spec_key) throw bad("สเปกของรอบ (" + specLabel(r) + ") ไม่ตรงกับงาน (" + specLabel(src) + ")");
         if (j) {
-          if (j.status === "ยกเลิก") throw conflict("งานนี้ถูกยกเลิกแล้ว");
-          if (j.status === "รอผลิต") ops.push({ op: "update", table: "production_jobs", id: j.id, expect: j.version, before: j, set: { status: "กำลังผลิต" } });
+          if (j.status === "ยกเลิก" || j.status === "เสร็จ") throw conflict("งานนี้" + j.status + "แล้ว");
           jobId = j.id;
+          if (jobId !== r.job_id) changes.push([j, { status: "กำลังผลิต", good_pcs: j.made + good }]);
         } else {
-          const it = ctx.it;
           jobId = "J" + X.newId();
-          ops.push({ op: "insert", table: "production_jobs", row: { id: jobId, order_id: it.order_id, order_item_id: it.id, type: it.type, size: it.size, neck: it.neck, shape: it.shape, color: it.color, spec_key: it.spec_key, target_pcs: it.qty_pcs, status: "กำลังผลิต", due_day: it.due_day || "", urgent: it.urgent ? 1 : 0 } });
+          fresh.push({ ...newJob(jobId, ctx.it, "กำลังผลิต"), good_pcs: good });
         }
         what = "ผูกกับงาน";
       }
       if ((r.job_id || null) === jobId) throw bad("รอบนี้ผูกอยู่แบบนี้แล้ว");
+      if (ctx.oldJob && good) changes.push([ctx.oldJob, { good_pcs: Math.max(0, ctx.oldJob.made - good) }]);
       const { machine_name, ...old } = r;
-      ops.unshift({ op: "update", table: "machine_runs", id: r.id, expect: r.version, before: old, set: { job_id: jobId } });
+      const ops = [{ op: "update", table: "machine_runs", id: r.id, expect: r.version, before: old, set: { job_id: jobId } }, ...await jobsOps(X, changes, fresh)];
       return { result: { id: r.id, job: jobId }, label: what + " · " + machine_name, ops };
     },
   });

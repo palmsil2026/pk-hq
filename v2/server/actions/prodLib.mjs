@@ -3,6 +3,7 @@
 //  โมดูลอื่นใช้ได้: negativeFlag() (ส่งของ/สกรีนตัดสต๊อกแล้วติดลบ = ธง ไม่บล็อก) · stockKey() · PROD_TYPES · runState()
 // ============================================================
 import { registerTable } from "../db.mjs";
+import { orderStatusOps } from "./office-lib.mjs";   // สถานะออเดอร์ไหลตามงานจริง (โมดูลออฟฟิศเปิดให้ใช้)
 import { bad, text, specKey, specLabel, iso, isIso, thaiDay, thaiHm } from "../core.mjs";
 
 registerTable("run_crew", { pk: "id", void: { status: "ยกเลิก" } });
@@ -71,6 +72,29 @@ export function negativeFlag(itemKey, grade, label, balance, delta, team) {
   return { op: "flag", kind: "สต๊อกติดลบ", team: team || "prod", severity: "ดู", entity: "stock_balance", entity_id: itemKey + "#" + grade,
     title: "สต๊อกติดลบ: " + (label || itemKey) + (grade === "B" ? " (เกรด B)" : ""), detail: "ยอดหลังรายการนี้ " + after.toLocaleString("en-US") + " — ตรวจนับ/หารายการที่ลงขาด", dedupe_key: "neg:" + itemKey + "#" + grade };
 }
+
+/**
+ * ขยับงานผลิต (ยอดทำแล้ว good_pcs / สถานะ) + สถานะออเดอร์ให้ไหลตาม — ใส่ต่อท้าย ops ของตัวเอง
+ *   job = แถวงานเดิม (มี version) · set = ช่องที่จะเปลี่ยน · ยอดทำแล้วคิดจากรอบที่ผูก (view job_made) แล้วเก็บซ้ำในงานให้ออฟฟิศอ่าน
+ */
+export async function jobsOps(X, changes, newRows) {
+  const ops = [], after = [];
+  for (const [job, set] of changes || []) {
+    if (!job) continue;
+    const { made, ...before } = job;
+    const s = {};
+    Object.keys(set).filter(k => set[k] !== before[k]).forEach(k => { s[k] = set[k]; });
+    if (!Object.keys(s).length) continue;
+    ops.push({ op: "update", table: "production_jobs", id: job.id, expect: job.version, before, set: s });
+    after.push({ ...before, ...s });
+  }
+  for (const r of newRows || []) { ops.push({ op: "insert", table: "production_jobs", row: r }); after.push(r); }
+  const orders = [...new Set(after.map(j => j.order_id).filter(Boolean))];
+  if (orders.length) ops.push(...await orderStatusOps(X, orders, { jobs: after }));
+  return ops;
+}
+export const jobOps = (X, job, set) => jobsOps(X, [[job, set]]);
+export const JOB_OF_RUN = "SELECT j.*, coalesce(m.good_pcs, 0) AS made FROM production_jobs j LEFT JOIN job_made m ON m.job_id = j.id WHERE j.id = (SELECT job_id FROM machine_runs WHERE id = ?)";
 
 /** สถานะเครื่องจากรอบ/เหตุการณ์ที่ค้างอยู่ */
 export function runState(m, run, stop, mold, now, staleH) {

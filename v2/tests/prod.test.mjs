@@ -387,3 +387,35 @@ test("รายละเอียดเครื่อง + ตัวเลื�
   const run = (await W.call(W.T.dev, "prod.run", { id: d.runs[0].id }, { as: "prod" })).data;
   assert.equal(run.run.hours, 3); assert.equal(run.moves.length, 2); assert.equal(run.run.opened_by, "เปา");
 });
+
+test("งานจากออฟฟิศ: เปิดรอบ → ออเดอร์กำลังผลิต · ปิดรอบ → ยอดทำแล้วในงาน · ทำครบ → ออเดอร์พร้อมส่ง · ย้อน = สถานะกลับ · ย้ายรอบไปงานอื่นยอดย้ายตาม", async () => {
+  const W = await setup();
+  order(W, "O7", [{ ...SPEC, bags: 5, per: 200 }, { ...SPEC, color: "ฟ้า", bags: 2, per: 200 }], { due: "2026-11-19" });
+  const at = new Date(W.clock.now).toISOString();
+  for (const [id, item, color, n] of [["JA", "O7-1", "ใส", 1000], ["JB", "O7-2", "ฟ้า", 400]]) {
+    const it = { ...SPEC, color };
+    W.d1.raw.prepare("INSERT INTO production_jobs(id,order_id,order_item_id,type,size,neck,shape,color,spec_key,target_pcs,status,src,created_at,updated_at) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?)")
+      .run(id, "O7", item, it.type, it.size, it.neck, it.shape, it.color, specKey(it, "ขนาด,คอขวด,รูปทรง,สี"), n, "รอผลิต", "v2", at, at);
+  }
+  const ord = () => W.one("SELECT status FROM orders WHERE id = 'O7'").status;
+  assert.equal(ord(), "รอผลิต");
+  const r = await W.p("run.open", { machine: "PET1", ...SPEC, crew: ["เปา"], job: "JA" });
+  assert.equal(r.ok, true, JSON.stringify(r.error));
+  assert.equal(ord(), "กำลังผลิต");
+  await W.p("run.close", { run: r.data.id, version: 1, good: 600 });
+  assert.equal(W.one("SELECT good_pcs FROM production_jobs WHERE id = 'JA'").good_pcs, 600);
+  const r2 = await W.p("run.open", { machine: "PET1", ...SPEC, crew: ["เปา"] });
+  await W.p("run.close", { run: r2.data.id, version: 1, good: 500 });
+  const lk = await W.p("run.link", { run: r2.data.id, version: W.one("SELECT version FROM machine_runs WHERE id = ?", r2.data.id).version, job: "JA" });
+  assert.equal(lk.ok, true, JSON.stringify(lk.error));
+  assert.equal(W.one("SELECT good_pcs FROM production_jobs WHERE id = 'JA'").good_pcs, 1100);
+  const dA = await W.p("job.done", { job: "JA" });
+  assert.equal(dA.ok, true, JSON.stringify(dA.error));
+  assert.equal(ord(), "รอผลิต", "อีกงานยังไม่เริ่ม (กติกาสถานะของออฟฟิศ)");
+  const dB = await W.p("job.done", { job: "JB" }, { reason: "ใช้ของในสต๊อก" });
+  assert.equal(dB.ok, true, JSON.stringify(dB.error));
+  assert.equal(ord(), "พร้อมส่ง");
+  assert.equal((await W.call(await W.T.pao(), "undo.run", { id: dB.undo.id }, { as: "prod" })).ok, true);
+  assert.equal(ord(), "รอผลิต");
+  assert.equal(W.one("SELECT status FROM production_jobs WHERE id = 'JB'").status, "รอผลิต");
+});

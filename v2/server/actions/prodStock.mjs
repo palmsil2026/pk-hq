@@ -5,7 +5,7 @@
 //  สต๊อก: สมุด stock_moves (เขียนเพิ่มอย่างเดียว) · เกรด A/B แยก · ติดลบไม่บล็อก แต่ขึ้นธง
 // ============================================================
 import { bad, conflict, notFound, need, text, int, oneOf, iso, thaiDay, specLabel } from "../core.mjs";
-import { readSpec, negativeFlag, stockKey, PROD_TYPES } from "./prodLib.mjs";
+import { readSpec, negativeFlag, stockKey, jobsOps, PROD_TYPES } from "./prodLib.mjs";
 
 const IN_PT = "(" + PROD_TYPES.map(t => "'" + t + "'").join(",") + ")";
 const fmt = n => Number(n || 0).toLocaleString("en-US");
@@ -50,7 +50,7 @@ async function loadJobTarget(X, input) {
   const [j, it, ij, made, runs] = await X.db.reads([
     ["SELECT * FROM production_jobs WHERE id = ?", input.job || "-"],
     ["SELECT i.*, o.due_day, o.urgent FROM order_items i JOIN orders o ON o.id = i.order_id WHERE i.id = ?", input.item || "-"],
-    ["SELECT * FROM production_jobs WHERE order_item_id = ? AND status <> 'ยกเลิก'", input.item || "-"],
+    ["SELECT * FROM production_jobs WHERE order_item_id = ? AND status <> 'ยกเลิก' ORDER BY (status = 'เสร็จ'), created_at DESC LIMIT 1", input.item || "-"],
     ["SELECT good_pcs FROM job_made WHERE job_id = ?", input.job || "-"],
     ["SELECT m.name FROM machine_runs r JOIN machines m ON m.id = r.machine_id WHERE r.job_id = ? AND r.status = 'กำลังผลิต'", input.job || "-"],
   ]);
@@ -92,9 +92,9 @@ export function defineProdStock(R) {
       if (j && j.status !== "รอผลิต" && j.status !== "กำลังผลิต") throw conflict("งานนี้ " + j.status + " แล้ว");
       if (ctx.runs.length) throw conflict("ยังมีรอบเดินอยู่สำหรับงานนี้ (" + ctx.runs.join(", ") + ") — ปิดรอบก่อน", { running: ctx.runs });
       if (made < target && !X.reason) throw bad("ทำได้ " + fmt(made) + " จาก " + fmt(target) + " ใบ — เลือกเหตุผลที่ปิดงานก่อนครบ", { needReason: "job_done" });
-      const ops = j
-        ? [{ op: "update", table: "production_jobs", id: j.id, expect: j.version, before: j, set: { status: "เสร็จ", pending_reason: "", note: X.reason ? (j.note ? j.note + " · " : "") + X.reason : j.note } }]
-        : [{ op: "insert", table: "production_jobs", row: jobFromItem(X, ctx.it, "เสร็จ", { note: X.reason }) }];
+      const ops = j   // งานเสร็จ = ออเดอร์ไหลต่อ (รอสกรีน/พร้อมส่ง) ตามกติกาออฟฟิศ
+        ? await jobsOps(X, [[{ ...j, made: undefined }, { status: "เสร็จ", pending_reason: "", good_pcs: made, note: X.reason ? (j.note ? j.note + " · " : "") + X.reason : j.note }]])
+        : await jobsOps(X, [], [jobFromItem(X, ctx.it, "เสร็จ", { note: X.reason })]);
       return { result: { key: input.job ? "job:" + input.job : "item:" + input.item }, label: "ทำครบแล้ว · " + specLabel(src), ops };
     },
   });

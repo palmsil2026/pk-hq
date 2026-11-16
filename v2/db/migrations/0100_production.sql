@@ -74,8 +74,8 @@ INSERT INTO materials(id, name, unit, pos, note, src, created_at, updated_at) VA
   ('RESIN-PET', 'เม็ดพลาสติก PET', 'กก.', 1, 'รายการตั้งต้น — กระสอบละกี่กิโลยังไม่รู้ (แก้ได้)', 'ref:0100', '2026-11-16T00:00:00.000Z', '2026-11-16T00:00:00.000Z'),
   ('COLOR-MB', 'สีผสมเม็ด', 'กก.', 2, 'รายการตั้งต้น (แก้ได้)', 'ref:0100', '2026-11-16T00:00:00.000Z', '2026-11-16T00:00:00.000Z');
 
--- ── งานผลิต: 1 รายการออเดอร์ = งานเดียว (สองเครื่องกดผูกพร้อมกัน = ไม่เกิดงานซ้ำ) ──
-CREATE UNIQUE INDEX production_jobs_one_item ON production_jobs(order_item_id) WHERE order_item_id IS NOT NULL AND status <> 'ยกเลิก';
+-- ── งานผลิต: 1 รายการออเดอร์ มีงานที่ยังไม่จบได้งานเดียว (สองเครื่องกดผูกพร้อมกัน = ไม่เกิดงานซ้ำ · งานเพิ่มหลังงานแรกเสร็จ = ได้ ตามแบบออฟฟิศ) ──
+CREATE UNIQUE INDEX production_jobs_one_item ON production_jobs(order_item_id) WHERE order_item_id IS NOT NULL AND status IN ('รอผลิต', 'กำลังผลิต');
 -- ยอดทำแล้วของงาน = คิดจากรอบที่ผูกไว้เสมอ (ไม่เก็บตัวนับซ้ำ — สองเครื่องปิดรอบพร้อมกันไม่ชนกัน) · production_jobs.good_pcs ไม่ใช้
 CREATE VIEW job_made AS
   SELECT job_id,
