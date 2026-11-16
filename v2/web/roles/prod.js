@@ -253,7 +253,8 @@ async function closeRunSheet(ctx, runId, opt, done) {
   const startDay = new Date(Date.parse(r.started_at) + 7 * 3600000).toISOString().slice(0, 10);
   let endDay = late ? startDay : thaiToday(), endHm = "";
   const msg = errBox();
-  const pad = countPad({ perBag: r.per_bag });
+  const ok = h("button.btn.pri.block", { type: "button" }, icon("stop", "sm"), "ปิดรอบ");
+  const pad = countPad({ perBag: r.per_bag, onChange: c => put(ok, icon("stop", "sm"), c.good === null ? "ปิดรอบ" : "ปิดรอบ · ดี " + fmt(c.good) + " ใบ") });
   const waste = chipGroup({ label: "สาเหตุของเสีย (ถ้ามี)", items: ctx.reasons("waste").map(v => ({ value: v })), toggle: true });
   const lateWhy = chipGroup({ label: "ทำไมปิดย้อนหลัง (ต้องเลือก)", items: ctx.reasons("late_close").map(v => ({ value: v })) });
   const timeBtn = h("button.btn", { type: "button" });
@@ -273,7 +274,6 @@ async function closeRunSheet(ctx, runId, opt, done) {
   const lateBox = h("div.pf-form", h("div.pf-warn", h("b", "ปิดย้อนหลัง"), h("span", "ใส่เวลาที่ปิดจริง ระบบจะขึ้นธงให้ประธานเห็น")), dayChips.el, timeBtn, lateWhy.el);
   const moreBox = h("details", h("summary.btn.ghost", "ตัวเลือกเพิ่มเติม (ปิดย้อนหลัง · หมายเหตุ)"), h("div.pf-form", late ? null : h("div.stack", h("p.small.muted", "ถ้าลืมกดตอนปิดจริง ใส่เวลาปิดตรงนี้"), dayChips.el, timeBtn), h("div.field", note)));
   put(sh.body, h("div.pf-form", info, pad.el, waste.el, late ? lateBox : null, moreBox));
-  const ok = h("button.btn.pri.block", { type: "button" }, icon("stop", "sm"), "ปิดรอบ");
   add(sh.foot, msg, ok);
   ok.addEventListener("click", () => guarded(ok, async () => {
     msg.textContent = "";
