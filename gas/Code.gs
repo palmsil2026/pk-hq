@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-11-16v2';
+const CODE_VERSION = '2026-11-16v3';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -1900,6 +1900,97 @@ function healthCheck() {
 }
 
 // ═════════════════════════════════════════════════════════════
+//  สะพานแอป v2 — ประธานแก้ทะเบียนพนักงาน (ชีต Staff ของ PKSystem เท่านั้น) · action pkV2Staff
+//  แยกไว้นอกหมวด "สะพานแอป v2" ข้างล่าง เพราะหมวดนั้นอ่านอย่างเดียวล้วน (เทสต์ตรวจข้อความโค้ด) — ส่วนนี้เขียนชีต Staff
+//  ทำไมมาที่ Google ตรง ๆ: PIN ห้ามขึ้น Cloudflare → หน้าเว็บส่ง PIN ใหม่มาที่นี่ (POST) · Cloudflare ได้แค่ "ใบรับ" ที่ลงชื่อแล้ว
+//  ด่าน: ① ตั๋วของคนสั่งตรวจที่นี่เอง (ลายเซ็น · ไม่หมดอายุ · PIN ยังเป็นอันเดิม · ยังทำงานอยู่)
+//        ② แผนกในชีต Staff ตอนนี้ต้องเป็น "บริหาร" (ไม่เชื่อบทบาทที่เขียนในตั๋ว — ถูกถอดสิทธิ์แล้ว = ทำไม่ได้ทันที)
+//        ③ คำขอซ้ำ (rid เดิม) = คืนผลเดิม ไม่เขียนซ้ำ · ถือ lock ตอนเขียน
+//  กันแอบเพิ่มคนผ่านชีต (PALM-WAY §5): ไม่เติมสถานะ/PIN ให้เองเด็ดขาด · เปิดงาน = ต้องมี PIN อยู่แล้ว · คนใหม่ = ประธานตั้ง PIN เอง
+//  ประวัติ: แถวใน ActivityLog ทุกครั้ง (ไม่มี PIN) + ใบรับไปลง audit ฝั่ง v2
+//  ใบรับ = { data: JSON, sig: HMAC(กุญแจ sync, 'staff|' + data) } — ตรงกับ v2/server/actions/exec-staff.mjs
+// ═════════════════════════════════════════════════════════════
+const V2_STAFF_DEPTS = ['ออฟฟิศ', 'ผลิต', 'สกรีน', 'ส่งของ', 'บัญชี', 'บริหาร'];
+const V2_STAFF_STATUS = ['ทำงาน', 'พัก', 'ลาออก'];
+const V2_STAFF_OP_LABEL = { pin: 'ตั้ง PIN ใหม่ (v2)', status: 'เปลี่ยนสถานะพนักงาน (v2)', dept: 'เปลี่ยนแผนก (v2)', create: 'เพิ่มพนักงาน (v2)' };
+function v2StaffSet_(e) {
+  const b = v2Body_(e);
+  if (!b) return { ok: false, error: 'ต้องส่งแบบ POST (เนื้อ JSON)' };
+  const v = v2Verify_(b.ticket);
+  if (!v || v.p.k !== 's') return { ok: false, error: 'ตั๋วใช้ไม่ได้แล้ว — เข้าสู่ระบบใหม่', needLogin: true };
+  const boss = v.row;
+  if (v2Roles_(boss['แผนก']).indexOf('exec') < 0) return { ok: false, error: 'เฉพาะประธาน (แผนก "บริหาร" ในชีต Staff) — สิทธิ์ดูจากชีตตอนนี้ ไม่ใช่จากตั๋ว', forbidden: true };
+  const rid = String(b.rid || '');
+  if (!/^[A-Za-z0-9_-]{8,80}$/.test(rid)) return { ok: false, error: 'คำขอต้องมีรหัสกันกดซ้ำ — โหลดหน้าใหม่' };
+  const op = String(b.op || '');
+  if (!V2_STAFF_OP_LABEL[op]) return { ok: false, error: 'ไม่รู้จักคำสั่ง ' + op };
+  const cache = CacheService.getScriptCache();
+  const ck = 'v2st:' + rid;
+  const hit = cache.get(ck);
+  if (hit) return JSON.parse(hit);
+  const lock = LockService.getScriptLock();
+  if (!lock.tryLock(20000)) return { ok: false, error: 'ระบบคิวแน่น — ลองใหม่อีกครั้ง', retry: true };
+  try {
+    const out = v2StaffWrite_(op, b, boss);
+    if (out.ok) { try { cache.put(ck, JSON.stringify(out), 21600); } catch (e2) {} }
+    return out;
+  } finally { lock.releaseLock(); }
+}
+function v2StaffWrite_(op, b, boss) {
+  const bossId = String(boss['Staff_ID']).trim(), bossNick = String(boss['ชื่อเล่น']).trim();
+  const pin = String(b.pin || '').trim();
+  const pinOk = /^\d{4}$/.test(pin);
+  const stt = readTab('Staff');
+  const all = toObjs(stt.head, stt.rows);   // อ่านในหน่วยความจำเท่านั้น — PIN ไม่ออกจากฟังก์ชันนี้ (ใบรับมีแค่ลายนิ้วมือ)
+  let sid = String(b.sid || '').trim(), patch = {}, detail = '';
+  if (op === 'create') {
+    const name = String(b.name || '').replace(/\s+/g, ' ').trim(), nick = String(b.nick || '').replace(/\s+/g, ' ').trim(), dept = String(b.dept || '').trim();
+    if (!name || !nick) return { ok: false, error: 'ต้องมีชื่อและชื่อเล่น' };
+    if (name.length > 60 || nick.length > 30 || /^[=+\-@]/.test(name) || /^[=+\-@]/.test(nick)) return { ok: false, error: 'ชื่อ/ชื่อเล่นยาวเกินหรือขึ้นต้นด้วยเครื่องหมายที่ไม่อนุญาต' };
+    if (V2_STAFF_DEPTS.indexOf(dept) < 0) return { ok: false, error: 'เลือกแผนก: ' + V2_STAFF_DEPTS.join(' / ') };
+    if (!pinOk) return { ok: false, error: 'PIN ต้องเป็นตัวเลข 4 หลัก' };
+    const dup = all.filter(function (s) { return String(s['ชื่อเล่น']).trim() === nick; })[0];
+    if (dup) return { ok: false, error: 'ชื่อเล่น "' + nick + '" มีแล้ว (' + dup['ชื่อ'] + ') — ใช้ชื่อเล่นอื่น', dupNick: true };
+    sid = seq('STAFF_NEXT', 'S', 3);
+    appendObj('Staff', { 'Staff_ID': sid, 'ชื่อ': name, 'ชื่อเล่น': nick, 'แผนก': dept, 'PIN': pin, 'สถานะ': 'ทำงาน', 'เริ่มงาน': today(), 'หมายเหตุ': 'เพิ่มโดย ' + bossNick + ' (v2)' });
+    detail = nick + ' · ' + dept;
+  } else {
+    const row = all.filter(function (s) { return String(s['Staff_ID']).trim() === sid && sid; })[0];
+    if (!row) return { ok: false, error: 'ไม่พบพนักงานรหัสนี้ในชีต Staff (แถวพิมพ์มือที่ไม่มี Staff_ID ต้องแก้ในชีตก่อน)' };
+    const nick = String(row['ชื่อเล่น']).trim();
+    if (op === 'pin') {
+      if (!pinOk) return { ok: false, error: 'PIN ต้องเป็นตัวเลข 4 หลัก' };
+      patch = { 'PIN': pin, 'Token': '', 'TokenExp': '' };   // PIN เปลี่ยน = แอปเดิมต้องเข้าใหม่ด้วย (ตั๋ว v2 ตายเองจากลายนิ้วมือ)
+      detail = nick + ' (ไม่จด PIN)';
+    } else if (op === 'status') {
+      const st = String(b.status || '').trim();
+      if (V2_STAFF_STATUS.indexOf(st) < 0) return { ok: false, error: 'สถานะต้องเป็น ' + V2_STAFF_STATUS.join(' / ') };
+      if (sid === bossId && st !== 'ทำงาน') return { ok: false, error: 'พักงาน/ลาออกให้ตัวเองไม่ได้ (กันล็อกตัวเองออก) — ให้ประธานอีกคนทำ หรือแก้ในชีต' };
+      if (st === 'ทำงาน' && !String(row['PIN']).trim()) return { ok: false, error: 'ยังไม่มี PIN — ตั้ง PIN ให้ก่อน แล้วค่อยเปิดงาน (ระบบไม่เปิดให้คนที่ไม่มี PIN)', needPin: true };
+      patch = { 'สถานะ': st };
+      if (st !== 'ทำงาน') { patch['Token'] = ''; patch['TokenExp'] = ''; }   // พัก/ลาออก = หลุดจากแอปเดิมทันที
+      detail = nick + ' → ' + st;
+    } else if (op === 'dept') {
+      const dept = String(b.dept || '').trim();
+      if (V2_STAFF_DEPTS.indexOf(dept) < 0) return { ok: false, error: 'เลือกแผนก: ' + V2_STAFF_DEPTS.join(' / ') };
+      if (sid === bossId && dept !== 'บริหาร') return { ok: false, error: 'ย้ายแผนกตัวเองออกจากบริหารไม่ได้ (กันล็อกตัวเองออก)' };
+      patch = { 'แผนก': dept };
+      detail = nick + ': ' + String(row['แผนก'] || '-') + ' → ' + dept;
+    }
+    if (!updateWhere('Staff', 'Staff_ID', sid, patch)) return { ok: false, error: 'บันทึกชีต Staff ไม่สำเร็จ (ไม่พบแถว)' };
+  }
+  appendObj('ActivityLog', { 'เมื่อ': now(), 'ใคร': String(boss['ชื่อ'] || bossNick), 'ช่องทาง': 'v2', 'การกระทำ': V2_STAFF_OP_LABEL[op], 'อ้างอิง': sid, 'รายละเอียด': detail });
+  dirty_('Staff');
+  const fresh = v2StaffRow_(sid, '');
+  const curPin = String(fresh['PIN']).trim();
+  const data = v2AsciiJson_({
+    v: 1, rid: String(b.rid), op: op, sid: sid, name: String(fresh['ชื่อ'] || ''), nick: String(fresh['ชื่อเล่น']).trim(), dept: String(fresh['แผนก'] || ''),
+    status: String(fresh['สถานะ'] || '').trim(), roles: v2Roles_(fresh['แผนก']), pf: curPin ? v2PinFp_(sid, curPin) : '', at: Date.now(), by: bossId, byNick: bossNick,
+  });
+  return { ok: true, receipt: { data: data, sig: v2Hmac_(v2Key_('sync'), 'staff|' + data) }, sid: sid };
+}
+
+// ═════════════════════════════════════════════════════════════
 //  สะพานแอป v2 (Cloudflare Pages + D1 — โค้ดอยู่ v2/ ของ repo นี้ · สเปก docs/app-v2/README.md §3)
 //  Google = สะพานเท่านั้น: ① ตรวจ PIN แล้วออก "ตั๋ว" (PIN ไม่เคยออกจาก Google) ② ส่งข้อมูลชีตแบบอ่านอย่างเดียวให้ v2 นำเข้า
 //  ⚠️ หมวดนี้ "อ่านอย่างเดียว" กับชีทบัญชี (ACCOUNTING_SHEET_ID) และชีต AppSheet เดิมทุกไฟล์ — ห้ามมีคำสั่งเขียนใด ๆ
@@ -2101,6 +2192,7 @@ function v2Dispatch_(e) {
     if (a === 'pkV2Ticket') return v2Ticket_(e);
     if (a === 'pkV2Renew') return v2Renew_(e);
     if (a === 'pkV2Export') return v2Export_(e);
+    if (a === 'pkV2Staff') return v2StaffSet_(e);   // ประธานแก้ทะเบียนพนักงาน (เขียนชีต Staff — โค้ดอยู่นอกหมวดอ่านอย่างเดียวนี้)
     return { ok: false, error: 'ไม่รู้จัก action: ' + a };
   } catch (err) {
     return { ok: false, error: 'สะพาน v2 ผิดพลาด: ' + String(err && err.message || err) };

@@ -170,11 +170,16 @@ function scenario(G) {
   c("pkStaffCards");
   return out;
 }
-const norm = s => JSON.parse(JSON.stringify(s).replace(/2026-09-13a|2026-11-16v2/g, "<VER>"));
+// เลขรุ่น (CODE_VERSION) ของสองฝั่งต่างกันเสมอ — แทนด้วยป้ายเดียวกันก่อนเทียบ (อ่านจากโค้ดจริง ไม่ต้องแก้เทสต์ทุกครั้งที่ขยับรุ่น)
+const verOf = src => (/const CODE_VERSION = '([^']+)'/.exec(src || "") || [])[1] || "<none>";
+const esc = s => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+let VER_RE = /2026-09-13a/g;
+const norm = s => JSON.parse(JSON.stringify(s).replace(VER_RE, "<VER>"));
 
 test("action เดิมทุกตัวได้ผลเหมือนรุ่นใน main (คำตอบ + ชีตหลังจบ ตรงกันทุกช่อง)", t => {
   const base = baseline();
   if (!base) { t.skip("ไม่มี origin/main ในเครื่อง (git fetch --depth=1 origin main)"); return; }
+  VER_RE = new RegExp([verOf(base), verOf(SRC)].map(esc).join("|"), "g");
   const A = loadGas(base, { now: T0 }), B = loadGas(SRC, { now: T0 });
   seedGas(A); seedGas(B);
   const ra = scenario(A), rb = scenario(B);

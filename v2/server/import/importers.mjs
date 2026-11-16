@@ -276,54 +276,9 @@ export async function importLegacyOrders(X, page) {
 // ── รอบผลิตเก่า (Stock Management › ProductionLog) — ย้ายไปโมดูลทีมผลิต (หัวคอลัมน์จริง · ข้ามเที่ยงคืน/พิมพ์ผิด · ซิงก์ซ้ำได้) ──
 //    ดู server/actions/prodLegacy.mjs
 
-// ── บิลจากชีท "ระบบบัญชี" (อ่านอย่างเดียว · ชีทบัญชีเป็นตัวจริง) ─────────────────────────
-//   เหมือน importLegacyAccounting() ใน gas/Code.gs: Bill_No = 'เก่า-<แท็บ>-<เลข>' · แท็บลูกหนี้ใช้ "ยอดค้าง"+"สถานะ" · ระวัง "ค้างจ่าย" มีคำว่า "จ่าย"
-const SYNC_FIELDS = ["bill_day", "customer_name", "total_satang", "kind", "status", "pay_channel", "paid_day", "note"];
-export async function importAcct(X, page) {
-  const st = S(), ops = [], problems = [];
-  const h = page.head, tab = page.tab;
-  if (h.indexOf("รายชื่อลูกค้า") >= 0) return importCustomers(X, page, "acct:customers");
-  const c = n => h.indexOf(n);
-  const isAR = c("ยอดค้าง") >= 0;
-  const yHint = (/(\d{4})/.exec(tab) || [])[1];
-  const g = (r, n) => { const i = c(n); return i < 0 ? "" : String(r[i] == null ? "" : r[i]).trim(); };
-  const rows = page.rows.filter(r => g(r, "เลขที่บิล") && g(r, "ชื่อลูกค้า") && g(r, "เลขที่บิล") !== "เลขที่บิล");
-  const ids = rows.map(r => "เก่า-" + tab + "-" + g(r, "เลขที่บิล"));
-  const cur = await byIds(X, "bills", "bill_no", ids);
-  const idx = await customerIndex(X);
-  for (let i = 0; i < rows.length; i++) {
-    const r = rows[i], id = ids[i];
-    const day = thaiDate(g(r, c("วันที่") >= 0 ? "วันที่" : h[0]), yHint);
-    if (!day) { problems.push(tab + " บิล " + g(r, "เลขที่บิล") + ": วันที่อ่านไม่ได้ (\"" + g(r, "วันที่") + "\") — ข้าม"); st.skipped++; continue; }
-    let row;
-    if (isAR) {
-      const owe = satangOf(g(r, "ยอดค้าง"));
-      if (!owe) { st.skipped++; continue; }
-      const s = g(r, "สถานะ");
-      const paid = s.indexOf("ค้าง") < 0 && (s.indexOf("จ่าย") >= 0 || s.indexOf("ชำระ") >= 0 || s.indexOf("เก็บ") >= 0);
-      row = { bill_day: day, customer_name: g(r, "ชื่อลูกค้า"), total_satang: owe, kind: "เครดิต", status: paid ? "ชำระแล้ว" : "ค้างชำระ", pay_channel: g(r, "ช่องทางชำระ"),
-        paid_day: paid ? day : "", note: [g(r, "หมายเหตุ"), paid ? "วันที่ชำระจริงไม่มีในชีท (ใช้วันที่บิล)" : ""].filter(Boolean).join(" · ") };
-    } else {
-      const cash = satangOf(g(r, "เงินสด")) || 0, credit = satangOf(g(r, "เครดิต")) || 0;
-      if (!cash && !credit) { st.skipped++; continue; }
-      row = { bill_day: day, customer_name: g(r, "ชื่อลูกค้า"), total_satang: cash + credit, kind: credit ? "เครดิต" : "เงินสด", status: credit ? "ค้างชำระ" : "ชำระแล้ว",
-        pay_channel: g(r, "ช่องทางชำระ"), paid_day: credit ? "" : day, note: g(r, "หมายเหตุ") };
-    }
-    const b = cur.get(id);
-    if (!b) {
-      const name = row.customer_name;
-      const hit = name === "สด" || name === "สดเซล" ? null : matchCustomer(name, idx);
-      ops.push({ op: "insert", table: "bills", undo: false, row: { bill_no: id, ...row, customer_id: hit ? hit.id : null, paid_satang: row.status === "ชำระแล้ว" ? row.total_satang : 0, src: "acct:" + tab } });
-      st.inserted++;
-    } else if (String(b.src).indexOf("acct:") === 0) {
-      const set = {};
-      for (const f of SYNC_FIELDS) if (String(b[f] ?? "") !== String(row[f] ?? "")) set[f] = row[f];
-      if (set.status) set.paid_satang = set.status === "ชำระแล้ว" ? row.total_satang : 0;
-      if (Object.keys(set).length) { ops.push({ op: "update", table: "bills", id, expect: b.version, before: b, set, undo: false }); st.updated++; } else st.skipped++;
-    } else st.skipped++;   // บิลที่ v2 ลงเอง — ไม่แตะเด็ดขาด
-  }
-  return { ops, stats: st, problems };
-}
+// ── บิลจากชีท "ระบบบัญชี" — ย้ายไป ./acct.mjs (โมดูลบัญชีดูแล: เลขกระดาษ · บิลซ้ำกับในแอป · บิลที่หายจากชีท) ──
+export { importAcct } from "./acct.mjs";
+import { importAcct } from "./acct.mjs";
 
 export const SOURCES = {
   "ref:products": { label: "ทะเบียนสินค้า (ใน repo)", local: true, run: importProducts },

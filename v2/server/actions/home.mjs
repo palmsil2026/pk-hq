@@ -113,35 +113,5 @@ export function defineHomes(R) {
     },
   });
 
-  R.define({
-    name: "home.account", roles: ["account", "exec"],
-    async run(X) {
-      const today = thaiDay(X.now), week = addDays(today, 7);
-      const [owe, due, unpaired, inToday] = await X.db.reads([
-        ["SELECT count(*) AS n, coalesce(sum(total_satang - paid_satang), 0) AS satang FROM bills WHERE status = 'ค้างชำระ'"],
-        ["SELECT count(*) AS n FROM bills WHERE status = 'ค้างชำระ' AND due_day <> '' AND due_day <= ?", week],
-        ["SELECT count(*) AS n FROM bills WHERE status <> 'ยกเลิก' AND src = 'v2' AND paper_no = ''"],
-        ["SELECT channel, sum(amount_satang) AS satang FROM bill_payments WHERE status = 'ใช้ได้' AND day = ? GROUP BY channel", today],
-      ]);
-      return {
-        asOf: iso(X.now), today,
-        owing: { n: owe[0].n, satang: owe[0].satang, period: "ทั้งหมดที่ยังค้าง ณ " + today },
-        dueThisWeek: due[0].n, unpaired: unpaired[0].n,
-        moneyIn: { day: today, byChannel: inToday },
-      };
-    },
-  });
-
-  R.define({
-    name: "home.exec", roles: ["exec"],
-    async run(X) {
-      const today = thaiDay(X.now);
-      const [flags, made, running] = await X.db.reads([
-        ["SELECT id, at, kind, severity, team, title, detail, entity, entity_id, version FROM flags WHERE status = 'เปิด' ORDER BY severity = 'ด่วน' DESC, at DESC LIMIT 30"],
-        ["SELECT coalesce(sum(good_pcs), 0) AS good, coalesce(sum(grade_b_pcs), 0) AS b, coalesce(sum(waste_pcs), 0) AS waste FROM machine_runs WHERE ended_day = ? AND status = 'ปิดแล้ว'", today],
-        ["SELECT (SELECT count(*) FROM machine_runs WHERE status = 'กำลังผลิต') AS running, (SELECT count(*) FROM machines WHERE kind IN ('เป่า','ฉีด') AND status = 'ใช้งาน') AS total"],
-      ]);
-      return { asOf: iso(X.now), today, flags, made: { ...made[0], period: "รอบที่ปิดวันนี้ (" + today + ")" }, machines: running[0] };
-    },
-  });
+  // home.account → server/actions/account.mjs · home.exec → server/actions/exec.mjs (โมดูลประธาน+บัญชีดูแล — งานที่รอตรวจ/เรื่องที่ต้องตัดสินใจ)
 }
