@@ -34,7 +34,8 @@ function build() {
   return "// ⚠️ สร้างโดย v2/tools/gen-reference-data.mjs — ห้ามแก้มือ (แก้ต้นทางแล้วรันใหม่ · CI ตรวจว่าตรง)\n" +
     "// ที่มา: docs/products/products-master.csv · v2/db/reference/factory.json\n" +
     "export const PRODUCTS = " + JSON.stringify(products, null, 1) + ";\n" +
-    "export const MACHINES = " + JSON.stringify(factory.machines, null, 1) + ";\n";
+    "export const MACHINES = " + JSON.stringify(factory.machines, null, 1) + ";\n" +
+    "export const FLOOR = " + JSON.stringify({ canvas: factory.canvas, buildings: factory.buildings, views: factory.views, areas: factory.areas }, null, 1) + ";\n";   // ผัง: อาคาร · มุมมอง · ห้อง (โมดูลผลิต)
 }
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {
   const body = build();

@@ -10,6 +10,7 @@ import { defineImport } from "./import.mjs";
 import { defineOffice } from "./office.mjs";
 import { defineScreen } from "./screen.mjs";   // 0300 สกรีน + ส่งของ
 import { defineDeliver } from "./deliver.mjs"; // 0300 สกรีน + ส่งของ
+import { defineProduction } from "./prod.mjs";   // 0100 ทีมผลิต
 
 export function buildRegistry(extra) {
   const R = createRegistry();
@@ -17,7 +18,7 @@ export function buildRegistry(extra) {
   defineHomes(R);
   defineImport(R);
   // ── โมดูล (แชทย่อย) เพิ่มต่อท้ายตรงนี้ ──
-  // defineProduction(R);   // 0100 ทีมผลิต
+  defineProduction(R);     // 0100 ทีมผลิต
   defineOffice(R);         // 0200 ออฟฟิศ
   defineScreen(R);       // 0300 สกรีน + ส่งของ
   defineDeliver(R);      // 0300 สกรีน + ส่งของ

@@ -152,12 +152,13 @@ export async function importMachines(X) {
   const st = S(), ops = [];
   const cur = await byIds(X, "machines", "id", MACHINES.map(m => m.id));
   for (const m of MACHINES) {
-    const row = { id: m.id, name: m.name, kind: m.kind, plant: m.plant, pos_x: m.pos_x, pos_y: m.pos_y, w: m.w, h: m.h, makes: m.makes, rating: m.rating, legacy_name: m.legacy_name, note: m.note, src: "ref:factory" };
+    const row = { id: m.id, name: m.name, kind: m.kind, plant: m.plant, pos_x: m.pos_x, pos_y: m.pos_y, w: m.w, h: m.h, makes: m.makes, rating: m.rating, legacy_name: m.legacy_name, note: m.note, src: "ref:factory",
+      map_label: m.map_label || "", sub: m.sub || "", tracked: m.tracked ? 1 : 0 };   // 3 ช่องหลัง = ผังจริง (โมดูลผลิต 0100)
     const c = cur.get(m.id);
     if (!c) { ops.push({ op: "insert", table: "machines", row, undo: false }); st.inserted++; continue; }
     const set = fill(c, row);
     // ตำแหน่งในผังของเครื่องที่ยังไม่มีใครย้ายในแอป (src ยังเป็นทะเบียน) = ตามทะเบียน
-    if (c.src === "ref:factory") for (const k of ["pos_x", "pos_y", "w", "h", "plant"]) if (c[k] !== row[k]) set[k] = row[k];
+    if (c.src === "ref:factory") for (const k of ["pos_x", "pos_y", "w", "h", "plant", "name", "kind", "map_label", "sub", "tracked"]) if (c[k] !== row[k]) set[k] = row[k];
     if (Object.keys(set).length) { ops.push({ op: "update", table: "machines", id: m.id, expect: c.version, before: c, set, undo: false }); st.updated++; } else st.skipped++;
   }
   return { ops, stats: st, problems: [] };
