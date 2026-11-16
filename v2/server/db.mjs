@@ -64,6 +64,8 @@ export function guardSql(existsSql, args, tag) {
  *   move    {op, item_key, label, grade, qty_pcs, move_type, ref_entity, ref_id, reason}   ← ลงสมุดสต๊อก (ยอดคงเหลือขยับเองด้วย trigger)
  *   unmove  {op, item_key, grade, qty_pcs, ref_entity, ref_id}                          ← กลับทิศแถวสมุดที่ตรงกัน (ใช้ตอนย้อน)
  *   flag    {op, kind, title, detail, entity, entity_id, team, severity, dedupe_key}    ← ธงให้คนตรวจ (ไม่บล็อกงาน)
+ *   raw     {op, sql, args}                     ← คำสั่งเขียนตรง (นำเข้า/UPSERT) — ทำให้ทั้งคำขอ "ย้อนไม่ได้"
+ *   note    {op, entity, entity_id, before, after} ← แถว audit อย่างเดียว
  */
 export function compileOps(X, ops) {
   const at = iso(X.now), day = thaiDay(X.now), by = X.staff ? X.staff.id : "system";
@@ -120,6 +122,13 @@ export function compileOps(X, ops) {
       const args = [id, at, day, o.kind, o.severity || "ดู", o.team || "", o.entity || "", String(o.entity_id || ""), o.title, o.detail || "", by, o.dedupe_key || null, X.reqKey || "", at, at];
       const sql = `INSERT INTO flags(id, at, day, kind, severity, team, entity, entity_id, title, detail, raised_by, dedupe_key, req_key, created_at, updated_at) SELECT ?,?,?,?,?,?,?,?,?,?,?,?,?,?,?`;
       stmts.push(o.dedupe_key ? [sql + ` WHERE NOT EXISTS (SELECT 1 FROM flags WHERE dedupe_key = ? AND status = 'เปิด')`, ...args, o.dedupe_key] : [sql, ...args]);
+    } else if (o.op === "raw") {
+      // คำสั่งเขียนตรง (ใช้กับงานนำเข้า: UPSERT ตารางแผนที่/บทบาท) — ย้อนไม่ได้ · ห้าม DELETE
+      if (/^\s*DELETE\b/i.test(o.sql)) throw new Error("ห้าม DELETE");
+      stmts.push([o.sql, ...(o.args || [])]);
+      undoable = false;
+    } else if (o.op === "note") {
+      audits.push({ entity: o.entity, entity_id: String(o.entity_id || ""), before: o.before || "", after: o.after || "" });   // แถว audit อย่างเดียว (สรุปงาน)
     } else {
       throw new Error("ไม่รู้จัก op: " + o.op);
     }
