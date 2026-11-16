@@ -3,7 +3,7 @@
 //  หมายเหตุการค้า ("เงินไม่ดี") ขึ้นเด่นทุกที่ที่เห็นลูกค้า · เงินในหน้าลูกค้าบอกช่วงเวลาเสมอ · รหัสอยู่บรรทัดอ้างอิงที่เดียว
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { put, n0, baht, thDayLong, seg, nameKey } from "../parts/kit.js";
+import { put, add, n0, baht, thDayLong, seg, nameKey } from "../parts/kit.js";
 import { customerPicker, findCustomers, custPills, custTag, similarCustomers, splitBrand } from "../parts/customer-picker.js";
 import { orderCard } from "../parts/order-card.js";
 import { labelOf } from "../parts/spec-picker.js";
@@ -20,7 +20,7 @@ export function customersView(ctx, view, n) {
   const chips = seg(FILTERS, filter, v => { filter = v || "all"; draw(); }, { label: "กรองลูกค้า" });
   const listBox = h("div.stack.orders"), panel = h("aside.md-detail", h("p.panel-empty", "แตะลูกค้าเพื่อดูรายละเอียด"));
   const count = h("div.lbl");
-  view.append(h("div.row", h("div.cpick.grow", h("div.inp", icon("search", "sm"), search)),
+  add(view, h("div.row", h("div.cpick.grow", h("div.inp", icon("search", "sm"), search)),
     h("button.btn", { type: "button", onclick: () => editCustomer(ctx, null, cat, list, c => { reload(); open(c.id); }) }, icon("plus", "sm"), "ลูกค้าใหม่")),
   chips, h("div.md", h("div.stack", count, listBox), panel));
   let cat = null;
@@ -34,7 +34,7 @@ export function customersView(ctx, view, n) {
     ui.renderList(listBox, rows.slice(0, 150), c => c.id, c => h("button.card", { type: "button", "aria-current": c.id === sel ? "true" : null, onclick: () => open(c.id) },
       h("div.row", h("span.name.grow", c.name)), h("div.small.muted", [custTag(c) || "ยังไม่มีสาย/อำเภอ", c.last_day ? "สั่งล่าสุด " + thDayLong(c.last_day) : "ยังไม่เคยสั่ง"].join(" · ")),
       custPills(c).length ? h("div.row", custPills(c)) : null, c.note ? h("div.small", { style: { color: "var(--warn-ink)" } }, icon("alert", "sm"), " " + c.note) : null), ui.empty("ไม่พบลูกค้า", q ? "ลองพิมพ์สั้นลง หรือกด \"ลูกค้าใหม่\"" : ""));
-    if (rows.length > 150) listBox.append(h("p.hint", "แสดง 150 รายแรก — พิมพ์ค้นเพื่อหาที่เหลือ"));
+    if (rows.length > 150) add(listBox, h("p.hint", "แสดง 150 รายแรก — พิมพ์ค้นเพื่อหาที่เหลือ"));
   }
   function open(id) {
     sel = id;
@@ -63,13 +63,13 @@ export function showCustomer(ctx, id, host, opt) {
     const c = d.customer;
     if (S) S.title = c.name;
     const kv = h("dl.kv2");
-    const add = (k, v) => { if (v) kv.append(h("dt", k), h("dd", v)); };
-    add("สาย/อำเภอ", [c.route_code ? "สาย " + c.route_code : "", c.district ? "อ." + c.district : "", c.subdistrict ? "ต." + c.subdistrict : ""].filter(Boolean).join(" · ") || "ยังไม่ระบุ");
-    if (c.phone) kv.append(h("dt", "เบอร์"), h("dd", h("a", { href: "tel:" + c.phone.replace(/[^\d+]/g, "") }, icon("phone", "sm"), " " + c.phone)));
-    add("ที่อยู่", c.address);
-    if (c.map_url && /^https?:\/\//.test(c.map_url)) kv.append(h("dt", "แผนที่"), h("dd", h("a", { href: c.map_url, target: "_blank", rel: "noopener" }, icon("pin", "sm"), " เปิดแผนที่")));
-    add("เครดิต", c.credit_days ? c.credit_days + " วัน" : "");
-    if (d.aliases.length) add("ชื่ออื่นที่เคยใช้", d.aliases.join(" · "));
+    const kvAdd = (k, v) => { if (v) add(kv, h("dt", k), h("dd", v)); };
+    kvAdd("สาย/อำเภอ", [c.route_code ? "สาย " + c.route_code : "", c.district ? "อ." + c.district : "", c.subdistrict ? "ต." + c.subdistrict : ""].filter(Boolean).join(" · ") || "ยังไม่ระบุ");
+    if (c.phone) add(kv, h("dt", "เบอร์"), h("dd", h("a", { href: "tel:" + c.phone.replace(/[^\d+]/g, "") }, icon("phone", "sm"), " " + c.phone)));
+    kvAdd("ที่อยู่", c.address);
+    if (c.map_url && /^https?:\/\//.test(c.map_url)) add(kv, h("dt", "แผนที่"), h("dd", h("a", { href: c.map_url, target: "_blank", rel: "noopener" }, icon("pin", "sm"), " เปิดแผนที่")));
+    kvAdd("เครดิต", c.credit_days ? c.credit_days + " วัน" : "");
+    if (d.aliases.length) kvAdd("ชื่ออื่นที่เคยใช้", d.aliases.join(" · "));
     const owe = d.owing.n ? h("div.icard", h("div.row", icon("coin", "sm"), h("b.grow", "ค้างชำระ " + d.owing.n + " บิล" + (d.owing.overdue ? " · เลยกำหนด " + d.owing.overdue : "")), h("b", "฿" + baht(d.owing.satang))),
       h("span.small.muted", d.owing.period)) : null;
     const actions = [h("button.btn.pri", { type: "button", onclick: () => { if (S) S.close(); ctx.go("new/cust:" + c.id); } }, icon("plus", "sm"), "ลงออเดอร์ให้ร้านนี้"),
@@ -106,21 +106,21 @@ async function editCustomer(ctx, c, cat, list, done) {
   const warn = () => {
     put(warnBox);
     const sp = splitBrand(f.name);
-    if (sp) warnBox.append(h("div.sim", h("b", "มีชื่องานปนในชื่อลูกค้า"), h("span", "ชื่อลูกค้าควรเป็น \"" + sp[0] + "\" — ชื่องานใส่ในออเดอร์")));
+    if (sp) add(warnBox, h("div.sim", h("b", "มีชื่องานปนในชื่อลูกค้า"), h("span", "ชื่อลูกค้าควรเป็น \"" + sp[0] + "\" — ชื่องานใส่ในออเดอร์")));
     const sim = similarCustomers(list.filter(x => !c || x.id !== c.id), f.name);
-    if (sim.length) warnBox.append(h("div.sim", h("b", "มีชื่อคล้ายในทะเบียน"), h("span", sim.map(x => x.name + (custTag(x) ? " (" + custTag(x) + ")" : "")).join(" · "))));
+    if (sim.length) add(warnBox, h("div.sim", h("b", "มีชื่อคล้ายในทะเบียน"), h("span", sim.map(x => x.name + (custTag(x) ? " (" + custTag(x) + ")" : "")).join(" · "))));
   };
   const routes = (cat && cat.routes) || [];
   const rSeg = seg(routes.map(r => [r.code, r.code]), f.route_code, v => { f.route_code = v; }, { label: "สายส่ง", allowNone: true });
   const stSeg = seg([["ใช้งาน", "ใช้งาน"], ["พัก", "พัก"], ["เลิกกิจการ", "เลิกกิจการ"]], f.status, v => { f.status = v || "ใช้งาน"; }, { label: "สถานะ" });
   const credit = h("button.qbtn", { type: "button", onclick: async () => { const v = await ui.numpadSheet({ title: "เครดิต (วัน)", unit: "วัน", value: f.credit_days || "" }); if (v !== undefined) { f.credit_days = v || 0; credit.querySelector("b").textContent = f.credit_days ? f.credit_days + " วัน" : "เงินสด/ไม่มี"; } } },
     h("small", "เครดิต"), h("b", f.credit_days ? f.credit_days + " วัน" : "เงินสด/ไม่มี"));
-  S.body.append(inp("name", "ชื่อร้าน/ลูกค้า", { maxlength: 120 }), warnBox, inp("district", "อำเภอ", { maxlength: 60 }), inp("subdistrict", "ตำบล", { maxlength: 60 }),
+  add(S.body, inp("name", "ชื่อร้าน/ลูกค้า", { maxlength: 120 }), warnBox, inp("district", "อำเภอ", { maxlength: 60 }), inp("subdistrict", "ตำบล", { maxlength: 60 }),
     routes.length ? h("div.lbl", "สายส่ง") : null, routes.length ? rSeg : null, inp("phone", "เบอร์โทร", { type: "tel", maxlength: 40 }), inp("address", "ที่อยู่", { maxlength: 300 }),
     inp("map_url", "ลิงก์แผนที่", { type: "url", maxlength: 400, placeholder: "https://maps…" }), h("div.qrow", credit), inp("note", "หมายเหตุการค้า (เช่น เงินไม่ดีให้สั่งทางออฟฟิศ)", { maxlength: 300 }),
     c ? h("div.lbl", "สถานะ") : null, c ? stSeg : null);
   warn();
-  S.foot.append(h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"), h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
+  add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"), h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
     const input = { ...f, route_code: f.route_code || "", credit_days: Number(f.credit_days) || 0 };
     const r = c ? await write(ctx, "office.customer_update", { id: c.id, version: c.version, ...input }, { label: "แก้ข้อมูลลูกค้า" })
       : await write(ctx, "office.customer_create", input, { label: "เพิ่มลูกค้า " + f.name });
@@ -137,9 +137,9 @@ function mergeSheet(ctx, c, list, done) {
   const S = ui.sheet({ title: "รวม \"" + c.name + "\" กับรายอื่น", modal: true, foot: true });
   const sim = similarCustomers(list.filter(x => x.id !== c.id), c.name);
   const picker = customerPicker(ctx, { customers: list.filter(x => x.id !== c.id), onPick: x => { into = x; } });
-  S.body.append(h("p.muted", "ออเดอร์และบิลของ \"" + c.name + "\" จะย้ายไปอยู่กับรายหลัก · ชื่อนี้จะจำไว้เป็นชื่ออื่น (นำเข้ารอบหน้าจับคู่ถูก) · ย้อนได้"),
+  add(S.body, h("p.muted", "ออเดอร์และบิลของ \"" + c.name + "\" จะย้ายไปอยู่กับรายหลัก · ชื่อนี้จะจำไว้เป็นชื่ออื่น (นำเข้ารอบหน้าจับคู่ถูก) · ย้อนได้"),
     sim.length ? h("div.chips", sim.map(x => h("button.chip", { type: "button", onclick: () => { into = x; picker.set(x); } }, x.name))) : null, picker);
-  S.foot.append(h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"), h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
+  add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"), h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
     if (!into || into.isNew) { ui.toast("เลือกรายหลักจากทะเบียนก่อน", "warn"); return; }
     const r = await write(ctx, "office.customer_merge", { id: c.id, version: c.version, into: into.id }, { label: "รวมลูกค้า" });
     if (r) { forget("office.customers"); S.close("ok"); done(); }

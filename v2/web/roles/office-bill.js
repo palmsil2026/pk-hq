@@ -4,7 +4,7 @@
 //  บิลที่ออฟฟิศออก = ค้างชำระ (รับเงิน/ผูกเลขบิลกระดาษ = งานฝ่ายบัญชี) · ห้ามเขียนชีทบัญชี (ไม่มีทางเขียนอยู่แล้ว)
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { put, n0, baht, thDayLong, pricePad, dateSheet, shareText, seg, todayTh } from "../parts/kit.js";
+import { put, add, n0, baht, thDayLong, pricePad, dateSheet, shareText, seg, todayTh } from "../parts/kit.js";
 import { write, blockedSheet } from "./office-data.js";
 const { h, icon } = ui;
 
@@ -36,9 +36,9 @@ export function billSheet(ctx, d, opt) {
     const t = lines.reduce((s, l) => s + (l.price === null ? 0 : l.qty * l.price), 0) + (block ? od.block_fee_satang : 0);
     total.textContent = "฿" + baht(t);
   }
-  S.body.append(h("div.lbl", "ประเภทบิล (ต้องเลือก)"), kinds, dueRow, h("div.lbl", "รายการในบิล"), rows, blockChip, h("label.field", h("span.lbl", "หมายเหตุบนบิล"), noteIn),
+  add(S.body, h("div.lbl", "ประเภทบิล (ต้องเลือก)"), kinds, dueRow, h("div.lbl", "รายการในบิล"), rows, blockChip, h("label.field", h("span.lbl", "หมายเหตุบนบิล"), noteIn),
     h("div.row", h("span.muted.grow", "ยอดบิล"), total), msg);
-  S.foot.append(h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
+  add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
     h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
       if (!kind) { msg.textContent = "เลือกก่อนว่าเป็นบิลเงินสดหรือบิลเครดิต"; return; }
       if (kind === "เครดิต" && !due) { msg.textContent = "เลือกกำหนดชำระ"; return; }
@@ -59,7 +59,7 @@ export function billSheet(ctx, d, opt) {
 export async function billDoc(ctx, billNo, opt) {
   const o = opt || {};
   const S = ui.sheet({ title: "บิล", foot: true });
-  S.body.append(ui.skeleton(2));
+  add(S.body, ui.skeleton(2));
   let d;
   try { d = await ctx.api.read("office.bill", { bill_no: billNo }); }
   catch (e) { put(S.body, ui.errorBox("โหลดบิลไม่สำเร็จ: " + e.message)); return; }
@@ -69,7 +69,7 @@ export async function billDoc(ctx, billNo, opt) {
   put(S.body, h("div.row", ui.statusPill(ctx.vocab, "bills.status", b.status), b.paper_no ? ui.pill("เลขบิลกระดาษ " + b.paper_no, "mute") : ui.pill("ยังไม่ผูกเลขบิลกระดาษ", "warn")),
     h("div.doc-wrap", doc), h("p.ref", "รหัสอ้างอิง " + b.bill_no));
   const canCancel = b.src === "v2" && b.status === "ค้างชำระ" && !b.paid_satang && !b.paper_no && !b.stmt_no;
-  S.foot.append(h("div.acts",
+  add(S.foot, h("div.acts",
     h("button.btn.pri", { type: "button", onclick: () => printDoc(doc) }, icon("print", "sm"), "พิมพ์ / PDF"),
     h("button.btn", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => { const f = await docImage(d); downloadFile(f); }) }, icon("image", "sm"), "บันทึกเป็นรูป"),
     h("button.btn", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => { const f = await docImage(d); await shareText(docText(d), [f]); }) }, icon("share", "sm"), "แชร์ไลน์"),

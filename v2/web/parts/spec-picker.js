@@ -6,7 +6,7 @@
 //  cat = ผลจาก office.form { types[{code, axes[], count_unit, piece_unit, sizes[{size, per_bag, min}]}], values{แกน:[{value}]}, prices[], products[] }
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { put, n0, baht, pricePad } from "./kit.js";
+import { put, add, n0, baht, pricePad } from "./kit.js";
 const { h, icon } = ui;
 
 export const AXES = [["ขนาด", "size"], ["คอขวด", "neck"], ["รูปทรง", "shape"], ["สี", "color"], ["สีสกรีน", "screen_color"], ["พร้อมฝาสี", "cap_color"]];
@@ -45,21 +45,21 @@ export function axisSheet(opt) {
   return new Promise(resolve => {
     let result;
     const S = ui.sheet({ title: o.title, modal: true, onClose: () => resolve(result) });
-    if (o.step) S.body.append(h("span.step", o.step));
+    if (o.step) add(S.body, h("span.step", o.step));
     const multi = !!o.multi;
     let picked = multi ? String(o.value || "").split(/\s*\+\s*/).filter(Boolean) : [];
     const grid = h("div.axgrid", { role: "group", "aria-label": o.title });
     const other = h("input", { type: "text", maxlength: 60, placeholder: "พิมพ์ " + o.title, "aria-label": o.title + " (พิมพ์เอง)", hidden: true });
     const done = v => { result = v; S.close("ok"); };
     const vals = o.values || [];
-    if (o.soft) grid.append(h("button.soft", { type: "button", "aria-pressed": String(!o.value), onclick: () => done("") }, o.soft));
-    vals.forEach(v => grid.append(h("button", { type: "button", "aria-pressed": String(multi ? picked.includes(v.value) : v.value === o.value), onclick: e => {
+    if (o.soft) add(grid, h("button.soft", { type: "button", "aria-pressed": String(!o.value), onclick: () => done("") }, o.soft));
+    vals.forEach(v => add(grid, h("button", { type: "button", "aria-pressed": String(multi ? picked.includes(v.value) : v.value === o.value), onclick: e => {
       if (!multi) return done(v.value);
       picked = picked.includes(v.value) ? picked.filter(x => x !== v.value) : [...picked, v.value];
       e.currentTarget.setAttribute("aria-pressed", String(picked.includes(v.value)));
       okBtn.textContent = picked.length ? "ใช้ " + picked.length + " สี" : "ไม่สกรีน";
     } }, v.value, v.hint ? h("small", v.hint) : null)));
-    grid.append(h("button.soft", { type: "button", onclick: () => { other.hidden = false; other.focus(); } }, "อื่น ๆ (พิมพ์เอง)"));
+    add(grid, h("button.soft", { type: "button", onclick: () => { other.hidden = false; other.focus(); } }, "อื่น ๆ (พิมพ์เอง)"));
     const okBtn = h("button.btn.pri.block", { type: "button", onclick: () => {
       const typed = other.value.trim();
       if (multi) done([...picked, ...(typed ? [typed] : [])].join(" + "));
@@ -68,8 +68,8 @@ export function axisSheet(opt) {
     other.addEventListener("keydown", e => { if (e.key === "Enter") okBtn.click(); });
     other.addEventListener("input", () => { if (!multi) okBtn.hidden = !other.value.trim(); });
     if (!multi) okBtn.hidden = true;
-    S.body.append(grid, other, okBtn);
-    if (o.skipText) S.body.append(h("button.btn.ghost", { type: "button", onclick: () => done(o.value || "") }, o.skipText));
+    add(S.body, grid, other, okBtn);
+    if (o.skipText) add(S.body, h("button.btn.ghost", { type: "button", onclick: () => done(o.value || "") }, o.skipText));
   });
 }
 
@@ -170,10 +170,10 @@ export function specLine(ctx, cat, item, opt) {
     const qbtn = (label, value, unset, onClick) => h("button.qbtn" + (unset ? ".unset" : ""), { type: "button", onclick: onClick }, h("small", label), h("b", value));
     const qrow = h("div.qrow");
     if (t) {
-      if (c.per) qrow.append(qbtn("จำนวนถุง (" + c.per + " ใบ/ถุง)", it.bags ? n0(it.bags) + " ถุง" : "ใส่จำนวน", !it.bags && !it.extra_pcs, () => pickQty("bags")),
+      if (c.per) add(qrow, qbtn("จำนวนถุง (" + c.per + " ใบ/ถุง)", it.bags ? n0(it.bags) + " ถุง" : "ใส่จำนวน", !it.bags && !it.extra_pcs, () => pickQty("bags")),
         qbtn("เศษ (" + c.unit + ")", it.extra_pcs ? n0(it.extra_pcs) : "—", false, () => pickQty("extra")));
-      else qrow.append(qbtn("จำนวน (" + c.unit + ")", it.qty_pcs ? n0(it.qty_pcs) : "ใส่จำนวน", !it.qty_pcs, () => pickQty()));
-      qrow.append(qbtn("ราคา/" + c.unit + (lp !== null ? " (ตั้ง ฿" + baht(lp) + ")" : ""), it.price_satang === null || it.price_satang === undefined ? "ไม่ใส่" : "฿" + baht(it.price_satang), false, pickPrice));
+      else add(qrow, qbtn("จำนวน (" + c.unit + ")", it.qty_pcs ? n0(it.qty_pcs) : "ใส่จำนวน", !it.qty_pcs, () => pickQty()));
+      add(qrow, qbtn("ราคา/" + c.unit + (lp !== null ? " (ตั้ง ฿" + baht(lp) + ")" : ""), it.price_satang === null || it.price_satang === undefined ? "ไม่ใส่" : "฿" + baht(it.price_satang), false, pickPrice));
     }
     const notes = [];
     if (t && c.qty) notes.push(h("div.qsum", c.per && it.bags ? n0(it.bags) + " ถุง × " + c.per + (it.extra_pcs ? " + " + n0(it.extra_pcs) : "") + " = " : "", h("b", n0(c.qty) + " " + c.unit),

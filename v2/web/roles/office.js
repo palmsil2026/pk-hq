@@ -5,7 +5,7 @@
 //  แถวออเดอร์ไม่โชว์ยอดเงิน (สินค้าคร่าว ๆ บรรทัดละรายการ + วันส่ง + ชื่องาน) · ไม่มีรหัสระบบบนจอ
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { put, useCss, n0, thDayLong, addDay, todayTh, dueWords, seg, baht } from "../parts/kit.js";
+import { put, add, useCss, n0, thDayLong, addDay, todayTh, dueWords, seg, baht } from "../parts/kit.js";
 import { orderCard } from "../parts/order-card.js";
 import { orderFormView } from "./office-order-form.js";
 import { openOrderIn } from "./office-order-detail.js";
@@ -52,7 +52,7 @@ export default {
       const reload = async () => { try { data = await ctx.api.read("office.home"); ctx.api.viewCache.set("office.home", data); draw({ fresh: true }); } catch (e) { ui.toast(e.message, "bad"); } };
       const M = master(ctx, reload);
       const head = h("div.row"), queues = h("div.queues.big", { role: "group", "aria-label": "คิวงาน" }), lbl = h("div.lbl"), list = h("div.stack.orders"), note = h("div");
-      view.append(head, queues, h("div.md", h("div.stack", lbl, note, list), M.panel));
+      add(view, head, queues, h("div.md", h("div.stack", lbl, note, list), M.panel));
       const draw = st => {
         const d = data;
         put(head, h("span.muted.grow", "วันนี้ " + thDayLong(d.today) + " · ลงวันนี้ " + n0(d.takenToday) + " ใบ"), st && !st.fresh ? ui.stamp(st.at, st.updating) : null);
@@ -82,7 +82,7 @@ export default {
       const groups = seg([["open", "ยังไม่จบ"], ["done", "ส่งแล้ว"], ["cancel", "ยกเลิก"], ["all", "ทั้งหมด"]], group, v => { group = v || "open"; load(); }, { label: "กลุ่มออเดอร์" });
       const list = h("div.stack.orders"), lbl = h("div.lbl"), moreBtn = h("button.btn", { type: "button", hidden: true, onclick: e => ui.busy(e.currentTarget, () => load(true)) }, "โหลดเพิ่ม");
       const status = h("div");
-      view.append(h("div.cpick", h("div.inp", icon("search", "sm"), search)), groups, status, h("div.md", h("div.stack", lbl, list, moreBtn), M.panel));
+      add(view, h("div.cpick", h("div.inp", icon("search", "sm"), search)), groups, status, h("div.md", h("div.stack", lbl, list, moreBtn), M.panel));
       async function load(more) {
         const my = ++seq;
         if (!more) { next = null; put(list, ui.skeleton(3)); }
@@ -121,7 +121,7 @@ export default {
           if (!rows.length) continue;
           const routes = {};
           rows.forEach(o => { (routes[o.route_code || "ไม่มีสาย"] = routes[o.route_code || "ไม่มีสาย"] || []).push(o); });
-          list.append(h("section" + (k === "late" ? ".late" : ""), h("div.lbl", label + " · " + rows.length + " ร้าน"),
+          add(list, h("section" + (k === "late" ? ".late" : ""), h("div.lbl", label + " · " + rows.length + " ร้าน"),
             ...Object.keys(routes).sort().map(r => h("div.stack", h("div.small.muted", r === "ไม่มีสาย" ? "ยังไม่มีสาย" : "สาย " + r), h("div.stack.orders", routes[r].map(o => orderCard(ctx, o, x => M.open(x.id, list), { today, maxItems: 3 })))))));
         }
         put(box, h("div.row", h("span.big.md", n0(ready)), h("span.muted.grow", "ร้านพร้อมส่ง · ทั้งหมดในคิว " + n0(open.length) + " ร้าน"), st.fresh ? null : ui.stamp(st.at, st.updating)),

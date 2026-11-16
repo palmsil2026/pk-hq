@@ -21,13 +21,13 @@ export function forget(action) { delete mem["office." + action]; }
 /** แผ่นบอกว่าทำไมบันทึกไม่ได้ (ข้อความจากหลังบ้านบอกเหตุ + ต้องทำอะไร) */
 export function blockedSheet(message, title) {
   const S = ui.sheet({ title: title || "บันทึกไม่ได้", modal: true, foot: true });
-  S.body.append(h("div.banner.t-warn", icon("lock"), h("span", message)));
-  S.foot.append(h("button.btn.pri.block", { type: "button", onclick: () => S.close("ok") }, "เข้าใจแล้ว"));
+  add(S.body, h("div.banner.t-warn", icon("lock"), h("span", message)));
+  add(S.foot, h("button.btn.pri.block", { type: "button", onclick: () => S.close("ok") }, "เข้าใจแล้ว"));
   return S.done;
 }
 
 /**
- * write(ctx, action, input, { label, confirm, reasonKind, after(r) })
+ * write(ctx, action, input, { label, confirm, reasonKind, after(r), noUndoBar })
  *   คืนผล (r = { data, undo }) หรือ null (ยกเลิก/ไม่สำเร็จ — บอกผู้ใช้แล้ว)
  */
 export async function write(ctx, action, input, o) {
@@ -41,7 +41,8 @@ export async function write(ctx, action, input, o) {
   try {
     const r = await withReason(ctx, rs => ctx.api.write(action, input, { reason: rs || reason || undefined }), opt.reasonKind || "order_edit", opt.reasonTitle);
     if (!r) return null;
-    if (r.undo) ui.undoBar(r.undo.label || opt.label || "บันทึกแล้ว", async () => { await ctx.api.write("undo.run", { id: r.undo.id }); if (opt.after) opt.after(null, true); });
+    if (r.undo && opt.noUndoBar) { /* ผู้เรียกวางปุ่มย้อนเองในการ์ด (ไม่ให้แถบทับปุ่มในแผ่น) */ }
+    else if (r.undo) ui.undoBar(r.undo.label || opt.label || "บันทึกแล้ว", async () => { await ctx.api.write("undo.run", { id: r.undo.id }); if (opt.after) opt.after(null, true); });
     else ui.toast("บันทึกแล้ว" + (opt.label ? " · " + opt.label : ""));
     if (opt.after) opt.after(r);
     return r;

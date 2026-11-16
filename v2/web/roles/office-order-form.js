@@ -6,7 +6,7 @@
 //  กดนอกการ์ดยืนยัน = กลับไปแก้ (ไม่ล้างฟอร์ม) · ร่างที่กรอกค้างจำไว้ (ออกไปหน้าอื่นแล้วกลับมายังอยู่)
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { put, n0, baht, thDayLong, todayTh, seg, weekRow, shareText, itemBadge } from "../parts/kit.js";
+import { put, add, n0, baht, thDayLong, todayTh, seg, weekRow, shareText, itemBadge } from "../parts/kit.js";
 import { customerPicker, custTag } from "../parts/customer-picker.js";
 import { specLine, calcLine, labelOf, listPriceOf } from "../parts/spec-picker.js";
 import { orderText } from "../parts/order-card.js";
@@ -26,7 +26,7 @@ export async function orderFormView(ctx, view, n) {
   const arg = n.arg || "";
   const edit = /^edit:/.test(arg) ? arg.slice(5) : "";
   const preCust = /^cust:/.test(arg) ? arg.slice(5) : "";
-  view.append(ui.skeleton(3));
+  add(view, ui.skeleton(3));
   let cat, customers;
   try { [cat, customers] = await Promise.all([cached(ctx, "office.form"), cached(ctx, "office.customers")]); }
   catch (e) { put(view, ui.errorBox("โหลดข้อมูลฟอร์มไม่สำเร็จ: " + e.message, () => ctx.refresh())); return; }
@@ -135,7 +135,8 @@ function render(ctx, view, cat, customers) {
     const ok = F.items.filter(i => i.type && calcLine(i, cat).qty > 0);
     const pcs = ok.reduce((s, i) => s + calcLine(i, cat).qty, 0);
     const money = ok.length && ok.every(i => i.price_satang !== null && i.price_satang !== undefined) ? ok.reduce((s, i) => s + calcLine(i, cat).qty * i.price_satang, 0) : null;
-    put(sum, h("b", ok.length ? "รวม " + n0(pcs) + " ใบ/ชิ้น" : "ยังไม่มีสินค้า"), h("small", ok.length + " รายการ" + (money !== null ? " · ฿" + baht(money) : " · ยังไม่ใส่ราคาครบ") + (F.customer ? " · " + F.customer.name : "")));
+    const units = [...new Set(ok.map(i => calcLine(i, cat).unit))];
+    put(sum, h("b", ok.length ? "รวม " + n0(pcs) + " " + (units.length === 1 ? units[0] : "ใบ/ชิ้น") : "ยังไม่มีสินค้า"), h("small", ok.length + " รายการ" + (money !== null ? " · ฿" + baht(money) : " · ยังไม่ใส่ราคาครบ") + (F.customer ? " · " + F.customer.name : "")));
   }
   const saveBtn = h("button.btn.pri", { type: "button", onclick: () => review() }, editing ? "บันทึกการแก้ไข" : "บันทึก");
   const resetBtn = editing ? h("button.btn.ghost", { type: "button", onclick: () => { history.back(); } }, "เลิกแก้") : h("button.btn.ghost", { type: "button", onclick: e => {
@@ -176,17 +177,17 @@ function render(ctx, view, cat, customers) {
     const qToggle = editing ? null : h("button.chip", { type: "button", "aria-pressed": String(queue), onclick: e => { queue = !queue; e.currentTarget.setAttribute("aria-pressed", String(queue)); } }, "ส่งเข้าคิวผลิตเลย");
     const rows = p.items.map(it => { const x = { ...it, piece_unit: calcLine(it, cat).unit, per_bag: calcLine(it, cat).per }; return h("div.icard", h("div.row", h("b.grow", labelOf(it)), itemBadge(x)),
       h("div.small.muted", [it.screen_color ? "สกรีน" + it.screen_color : "", it.cap_color ? "ฝา" + it.cap_color : "", it.price_satang !== null ? "฿" + baht(it.price_satang) + "/" + x.piece_unit : "ไม่ใส่ราคา"].filter(Boolean).join(" · "))); });
-    S.body.append(h("div.dhead", h("b.name", c.name), h("span.small.muted", c.isNew ? "ลูกค้าใหม่ · " + ([c.district ? "อ." + c.district : "", c.phone].filter(Boolean).join(" · ") || "ยังไม่ระบุอำเภอ") : custTag(c))),
+    add(S.body, h("div.dhead", h("b.name", c.name), h("span.small.muted", c.isNew ? "ลูกค้าใหม่ · " + ([c.district ? "อ." + c.district : "", c.phone].filter(Boolean).join(" · ") || "ยังไม่ระบุอำเภอ") : custTag(c))),
       c.note ? h("div.cust-note", icon("alert", "sm"), h("span", "หมายเหตุการค้า: " + c.note)) : null, ...rows,
       h("dl.kv2", h("dt", "วันส่ง"), h("dd", (p.due_day ? thDayLong(p.due_day) : "ยังไม่กำหนด") + (p.urgent ? " · ด่วน" : "")), h("dt", "ประเภท"), h("dd", [p.purchase_type, p.price_mode ? "ราคา" + p.price_mode : ""].filter(Boolean).join(" · ")),
         p.brand ? [h("dt", "งาน"), h("dd", p.brand)] : null, p.pay_status ? [h("dt", "เงิน"), h("dd", p.pay_status)] : null, p.design_status ? [h("dt", "แบบ"), h("dd", p.design_status)] : null,
         p.block_fee_satang ? [h("dt", "ค่าบล็อก"), h("dd", "฿" + baht(p.block_fee_satang))] : null, p.note ? [h("dt", "หมายเหตุ"), h("dd", p.note)] : null),
       qToggle ? h("div", qToggle, h("p.hint", hold ? "รอโอนเงิน/รอแบบ — ตั้งให้ยังไม่ส่งเข้าคิว (ส่งทีหลังจากหน้ารายละเอียด)" : "ปิด = ลงไว้ก่อน ยังไม่ให้ทีมผลิตเห็น")) : null);
     const okBtn = h("button.btn.pri", { type: "button" }, editing ? "ยืนยันบันทึกการแก้ไข" : "ยืนยันบันทึก");
-    S.foot.append(h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("back") }, "กลับไปแก้"), okBtn));
+    add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("back") }, "กลับไปแก้"), okBtn));
     okBtn.addEventListener("click", () => ui.busy(okBtn, async () => {
       const input = editing ? { id: F.id, version: F.version, ...p } : { ...p, queue };
-      const r = await write(ctx, editing ? "office.order_update" : "office.order_create", input, { label: (editing ? "แก้ออเดอร์ " : "ลงออเดอร์ ") + c.name });
+      const r = await write(ctx, editing ? "office.order_update" : "office.order_create", input, { label: (editing ? "แก้ออเดอร์ " : "ลงออเดอร์ ") + c.name, noUndoBar: true });
       if (!r) return;
       forget("office.customers");
       const savedId = editing ? F.id : r.data.id;
@@ -198,7 +199,11 @@ function render(ctx, view, cat, customers) {
         h("pre.slip", text));
       put(S.foot, h("div.acts", h("button.btn.pri", { type: "button", onclick: () => shareText(text) }, icon("share", "sm"), "แชร์ไลน์"),
         h("button.btn", { type: "button", onclick: () => { S.close("ok"); ctx.go("orders/" + savedId); } }, "ดูรายละเอียด"),
-        editing ? null : h("button.btn", { type: "button", onclick: () => S.close("next") }, icon("plus", "sm"), "ลงใบต่อไป")));
+        editing ? null : h("button.btn", { type: "button", onclick: () => S.close("next") }, icon("plus", "sm"), "ลงใบต่อไป"),
+        r.undo ? h("button.btn.ghost", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
+          try { await ctx.api.write("undo.run", { id: r.undo.id }); ui.toast("ย้อนแล้ว — " + r.undo.label); S.close("undo"); }
+          catch (err) { ui.toast(err.message, "bad"); }
+        }) }, icon("undo", "sm"), editing ? "ย้อนการแก้ไข" : "ย้อน (ไม่เอาใบนี้)") : null));
       view.dataset.formDirty = "";
       ctx.api.store.set(DRAFT, null);
       const was = F;

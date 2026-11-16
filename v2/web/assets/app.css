@@ -162,6 +162,7 @@ button.card:hover { border-color: var(--edge); }
 /* ── แถบ "ย้อน" หลังบันทึก · ข้อความสั้น ───────────────────────────────── */
 .snack { position: fixed; z-index: 50; left: var(--sp-3); right: var(--sp-3); bottom: calc(var(--nav-h) + var(--sp-3) + env(safe-area-inset-bottom)); display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-2) var(--sp-2) var(--sp-2) var(--sp-4); border-radius: var(--r-md); background: var(--ink); color: var(--bg); box-shadow: var(--elev-3); transform: translateY(16px); opacity: 0; transition: transform var(--dur-2) var(--ease-out), opacity var(--dur-2); }
 .snack.on { transform: none; opacity: 1; }
+.snack:not(.on) { pointer-events: none; }   /* ซ่อนอยู่ต้องไม่บังการแตะปุ่มข้างใต้ (เพิ่มโดยแชทออฟฟิศ) */
 .snack .msg { flex: 1; min-width: 0; font-size: 15px; }
 .snack button { min-height: var(--tap); padding: 0 var(--sp-4); border: 0; border-radius: var(--r-sm); background: none; color: var(--brand-soft); font: 800 16px var(--font-display); }
 @media (min-width: 1100px) { .snack { left: auto; right: var(--sp-6); bottom: var(--sp-6); width: 420px; } }

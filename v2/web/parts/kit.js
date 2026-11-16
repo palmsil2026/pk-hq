@@ -8,6 +8,8 @@ const { h, icon } = ui;
 
 /** แทนที่ลูกทั้งหมดของ el — ข้าม null/false (DOM replaceChildren(null) พิมพ์คำว่า "null" บนจอ) */
 export const put = (el, ...kids) => el.replaceChildren(...kids.flat(9).filter(k => k !== null && k !== undefined && k !== false && k !== ""));
+/** เติมลูกต่อท้าย — ข้าม null/false แบบเดียวกับ put (append(null) ก็พิมพ์ "null") */
+export const add = (el, ...kids) => el.append(...kids.flat(9).filter(k => k !== null && k !== undefined && k !== false && k !== ""));
 const loaded = new Set();
 /** ใส่ไฟล์ CSS ครั้งเดียว (ชิ้นส่วนแต่ละตัวพก CSS ของตัวเอง — ไม่ต้องแก้ app.css กลาง) */
 export function useCss(href) {
@@ -87,7 +89,7 @@ export function seg(options, value, onChange, opt) {
   const o = opt || {};
   const box = h("div.chips.seg", { role: "group", "aria-label": o.label || null });
   const draw = v => box.querySelectorAll(".chip").forEach(b => b.setAttribute("aria-pressed", String(b.dataset.v === v)));
-  options.forEach(([v, label]) => box.append(h("button.chip", { type: "button", dataset: { v }, "aria-pressed": String(v === value), onclick: () => {
+  options.forEach(([v, label]) => add(box, h("button.chip", { type: "button", dataset: { v }, "aria-pressed": String(v === value), onclick: () => {
     const nv = o.allowNone && v === box.dataset.cur ? "" : v;
     box.dataset.cur = nv; draw(nv); onChange(nv);
   } }, label)));
@@ -112,9 +114,9 @@ export function pricePad(opt) {
     };
     const b = (label, k, cls, aria) => h("button" + (cls || ""), { type: "button", "aria-label": aria || null, onclick: () => key(k) }, label);
     const pad = h("div.numpad", ["1", "2", "3", "4", "5", "6", "7", "8", "9"].map(d => b(d, d)), b(".", ".", "", "จุดทศนิยม"), b("0", "0"), b(icon("del"), "del", "", "ลบ"));
-    S.body.append(h("div.numdisp", h("span.k", o.label || "บาท/" + (o.unit || "ใบ")), out), pad);
-    if (o.list !== null && o.list !== undefined) S.body.append(h("button.btn", { type: "button", onclick: () => { result = o.list; S.close("ok"); } }, "ใช้ราคาตั้ง ฿" + baht(o.list) + "/" + (o.unit || "ใบ")));
-    S.body.append(h("div.btns", h("button.btn", { type: "button", onclick: () => { result = null; S.close("ok"); } }, "ไม่ใส่ราคา"),
+    add(S.body, h("div.numdisp", h("span.k", o.label || "บาท/" + (o.unit || "ใบ")), out), pad);
+    if (o.list !== null && o.list !== undefined) add(S.body, h("button.btn", { type: "button", onclick: () => { result = o.list; S.close("ok"); } }, "ใช้ราคาตั้ง ฿" + baht(o.list) + "/" + (o.unit || "ใบ")));
+    add(S.body, h("div.btns", h("button.btn", { type: "button", onclick: () => { result = null; S.close("ok"); } }, "ไม่ใส่ราคา"),
       h("button.btn.pri", { type: "button", onclick: () => {
         if (v === "" || v === ".") { result = null; S.close("ok"); return; }
         result = Math.round(Number(v) * 100); S.close("ok");
@@ -143,8 +145,8 @@ export function dateSheet(opt) {
           type: "button", disabled: o.min && d < o.min ? true : null, "aria-label": thDayLong(d), "aria-pressed": String(d === o.value),
           onclick: () => { result = d; S.close("ok"); } }, String(Number(d.slice(8))))));
     };
-    S.body.append(head, grid);
-    if (o.allowNone) S.body.append(h("button.btn", { type: "button", onclick: () => { result = ""; S.close("ok"); } }, o.noneText || "ยังไม่กำหนด"));
+    add(S.body, head, grid);
+    if (o.allowNone) add(S.body, h("button.btn", { type: "button", onclick: () => { result = ""; S.close("ok"); } }, o.noneText || "ยังไม่กำหนด"));
     draw();
   });
 }

@@ -5,7 +5,7 @@
 //  customers = แถวจาก office.customers { id, name, route_code, district, note, open_n, owe_n, overdue_n, last_day, needs_review }
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { put, nameKey, lev, thDayLong } from "./kit.js";
+import { put, add, nameKey, lev, thDayLong } from "./kit.js";
 const { h, icon } = ui;
 
 const tagOf = c => [c.route_code ? "สาย " + c.route_code : "", c.district ? "อ." + c.district : ""].filter(Boolean).join(" · ");
@@ -49,10 +49,10 @@ export function customerPicker(ctx, opt) {
     clearBtn.hidden = !input.value;
     put(tag);
     if (!cur) return;
-    if (cur.isNew) tag.append(ui.pill("ลูกค้าใหม่", "brand", "plus"), h("span", [cur.district ? "อ." + cur.district : "ยังไม่ระบุอำเภอ", cur.phone].filter(Boolean).join(" · ")),
+    if (cur.isNew) add(tag, ui.pill("ลูกค้าใหม่", "brand", "plus"), h("span", [cur.district ? "อ." + cur.district : "ยังไม่ระบุอำเภอ", cur.phone].filter(Boolean).join(" · ")),
       h("button.btn.ghost", { type: "button", onclick: () => openNew(cur.name) }, "แก้"));
-    else tag.append(ui.pill("ทะเบียน", "ok", "check"), h("span", tagOf(cur) || "ยังไม่มีสาย/อำเภอ"), ...custPills(cur));
-    if (cur.note) tag.append(h("div.cust-note", { style: { flexBasis: "100%" } }, icon("alert", "sm"), h("span", "หมายเหตุการค้า: " + cur.note)));
+    else add(tag, ui.pill("ทะเบียน", "ok", "check"), h("span", tagOf(cur) || "ยังไม่มีสาย/อำเภอ"), ...custPills(cur));
+    if (cur.note) add(tag, h("div.cust-note", { style: { flexBasis: "100%" } }, icon("alert", "sm"), h("span", "หมายเหตุการค้า: " + cur.note)));
   };
   const pick = c => { cur = c; if (c) input.value = c.name; paint(); if (o.onPick) o.onPick(c); };
   const render = show => {
@@ -123,17 +123,17 @@ export function newCustomerSheet(ctx, name, opt) {
     const check = () => {
       put(warn);
       const sp = splitBrand(nameIn.value);
-      if (sp) warn.append(h("div.sim", h("b", "ดูเหมือนมีชื่องานปนอยู่"), h("span", "ชื่อลูกค้าควรเป็น \"" + sp[0] + "\" ส่วน \"" + sp[1] + "\" ไปอยู่ช่องชื่องาน/แบรนด์"),
+      if (sp) add(warn, h("div.sim", h("b", "ดูเหมือนมีชื่องานปนอยู่"), h("span", "ชื่อลูกค้าควรเป็น \"" + sp[0] + "\" ส่วน \"" + sp[1] + "\" ไปอยู่ช่องชื่องาน/แบรนด์"),
         h("div", h("button.btn", { type: "button", onclick: () => { nameIn.value = sp[0]; brand = sp[1]; ui.toast("ย้าย \"" + sp[1] + "\" ไปช่องชื่องานแล้ว"); check(); } }, "แยกให้เลย"))));
       const sim = similarCustomers(o.customers, sp ? sp[0] : nameIn.value);   // เทียบชื่อที่ตัดชื่องานออกแล้ว
-      if (sim.length) warn.append(h("div.sim", h("b", "มีชื่อคล้ายในทะเบียน"), h("span", "ถ้าเป็นร้านเดียวกัน แตะเลือกแทน ไม่ต้องเพิ่มใหม่"),
+      if (sim.length) add(warn, h("div.sim", h("b", "มีชื่อคล้ายในทะเบียน"), h("span", "ถ้าเป็นร้านเดียวกัน แตะเลือกแทน ไม่ต้องเพิ่มใหม่"),
         h("div.chips", sim.map(c => h("button.chip", { type: "button", onclick: () => { result = { pick: c }; S.close("ok"); } }, c.name + (tagOf(c) ? " · " + tagOf(c) : ""))))));
     };
     nameIn.addEventListener("input", check);
-    S.body.append(h("label.field", h("span.lbl", "ชื่อร้าน/ลูกค้า (ไม่ใส่ชื่องาน)"), nameIn), warn,
+    add(S.body, h("label.field", h("span.lbl", "ชื่อร้าน/ลูกค้า (ไม่ใส่ชื่องาน)"), nameIn), warn,
       h("div.lbl", "อำเภอ"), dChips, otherIn, (o.routes || []).length ? h("div.lbl", "สายส่ง (ถ้ารู้)") : null, (o.routes || []).length ? rChips : null,
       h("label.field", h("span.lbl", "เบอร์โทร"), phoneIn), msg);
-    S.foot.append(h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("cancel") }, "กลับ"),
+    add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("cancel") }, "กลับ"),
       h("button.btn.pri", { type: "button", onclick: () => {
         const nm = nameIn.value.replace(/\s+/g, " ").trim();
         if (!nm) { msg.textContent = "ใส่ชื่อร้านก่อน"; return; }

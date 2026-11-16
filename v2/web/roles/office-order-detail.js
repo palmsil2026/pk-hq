@@ -4,7 +4,7 @@
 //  ปุ่มที่กดไม่ได้ = บอกเหตุผลในจอเดียว (ไม่ซ่อนเงียบ) · รหัสอยู่บรรทัด "รหัสอ้างอิง" จาง ๆ ที่เดียว
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { put, n0, baht, thDayLong, qtyWords, itemBadge, shareText, dueWords } from "../parts/kit.js";
+import { put, add, n0, baht, thDayLong, qtyWords, itemBadge, shareText, dueWords } from "../parts/kit.js";
 import { orderText, MONEY_PILL } from "../parts/order-card.js";
 import { custTag } from "../parts/customer-picker.js";
 import { write, isWide } from "./office-data.js";
@@ -51,22 +51,22 @@ export function showOrder(ctx, id, host, opt) {
         prog.length ? h("div.prog", prog) : null, it.price_reason ? h("div.hint", "เหตุผลราคา: " + it.price_reason) : null);
     }), d.cancelled_items.length ? h("div.small.muted", "ยกเลิกแล้ว: " + d.cancelled_items.map(i => i.label + " " + n0(i.qty_pcs)).join(" · ")) : null);
     const kv = h("dl.kv2");
-    const add = (k, v) => { if (v !== "" && v !== null && v !== undefined) kv.append(h("dt", k), h("dd", v)); };
-    add("ลงเมื่อ", thDayLong(od.order_day) + (od.taker ? " · " + od.taker : ""));
-    add("กำหนดส่ง", od.due_day ? thDayLong(od.due_day) : "ยังไม่กำหนด");
-    add("ประเภทซื้อ", [od.purchase_type, od.price_mode ? "ราคา" + od.price_mode : ""].filter(Boolean).join(" · "));
-    add("ค่าบล็อก", od.block_fee_satang ? "฿" + baht(od.block_fee_satang) : "");
-    add("ยอดตามราคาที่ลง", od.total_satang !== null ? "฿" + baht(od.total_satang) : "");
-    add("หมายเหตุ", od.note);
-    add("เหตุผลยกเลิก/ปิด", od.cancel_reason);
-    if (od.src !== "v2") add("ที่มา", "ประวัติจากแอปเดิม");
+    const kvAdd = (k, v) => { if (v !== "" && v !== null && v !== undefined) add(kv, h("dt", k), h("dd", v)); };
+    kvAdd("ลงเมื่อ", thDayLong(od.order_day) + (od.taker ? " · " + od.taker : ""));
+    kvAdd("กำหนดส่ง", od.due_day ? thDayLong(od.due_day) : "ยังไม่กำหนด");
+    kvAdd("ประเภทซื้อ", [od.purchase_type, od.price_mode ? "ราคา" + od.price_mode : ""].filter(Boolean).join(" · "));
+    kvAdd("ค่าบล็อก", od.block_fee_satang ? "฿" + baht(od.block_fee_satang) : "");
+    kvAdd("ยอดตามราคาที่ลง", od.total_satang !== null ? "฿" + baht(od.total_satang) : "");
+    kvAdd("หมายเหตุ", od.note);
+    kvAdd("เหตุผลยกเลิก/ปิด", od.cancel_reason);
+    if (/^legacy/.test(od.src)) kvAdd("ที่มา", "ประวัติจากแอปเดิม (AppSheet)"); else if (od.src === "demo") kvAdd("ที่มา", "ข้อมูลตัวอย่าง");
     // ── บิล ──
     const billBox = h("div.stack");
-    if (d.bill) billBox.append(h("div.icard", h("div.row", icon("bill", "sm"), h("b.grow", "บิล" + d.bill.kind + " · " + d.bill.status), h("b", "฿" + baht(d.bill.total_satang))),
+    if (d.bill) add(billBox, h("div.icard", h("div.row", icon("bill", "sm"), h("b.grow", "บิล" + d.bill.kind + " · " + d.bill.status), h("b", "฿" + baht(d.bill.total_satang))),
       h("div.small.muted", ["ออก " + thDayLong(d.bill.bill_day), d.bill.due_day && d.bill.kind === "เครดิต" ? "ครบกำหนด " + thDayLong(d.bill.due_day) : "", d.bill.paper_no ? "เลขบิลกระดาษ " + d.bill.paper_no : "ยังไม่ผูกเลขบิลกระดาษ"].filter(Boolean).join(" · ")),
       h("div.acts", h("button.btn", { type: "button", onclick: () => billDoc(ctx, d.bill.bill_no, { onChanged: changed }) }, icon("print", "sm"), "ดู/พิมพ์บิล"))));
     // ── ปุ่มงาน ──
-    const btn = (label, ic, fn, cls) => h("button.btn" + (cls || ""), { type: "button", onclick: e => ui.busy(e.currentTarget, fn) }, ic ? icon(ic, "sm") : null, label);
+    const btn = (label, ic, fn, cls) => h("button.btn" + (cls || ""), { type: "button", onclick: () => { fn(); } }, ic ? icon(ic, "sm") : null, label);   // ปุ่มเปิดแผ่น — ปุ่มบันทึกจริงอยู่ในแผ่น (มี ⏳ + กันกดซ้ำ)
     const main = [];
     if (can.queue) main.push(btn("ส่งเข้าคิวผลิต", "play", () => queueSheet(ctx, d, changed), ".pri"));
     else if (can.pickup && (od.status === "พร้อมส่ง" || od.status === "ส่งบางส่วน")) main.push(btn("ลูกค้ามารับ", "hand", () => pickupSheet(ctx, d, changed), ".pri"));
@@ -89,7 +89,7 @@ export function showOrder(ctx, id, host, opt) {
         x.reason ? h("span.chg", "เหตุผล: " + x.reason) : null))));
     const actions = [main.length ? h("div.acts", main) : null, second.length ? h("div.acts", second) : null, why.length ? h("p.hint", why.join(" · ")) : null, undo].filter(Boolean);
     put(box, head, note, h("div.lbl", "สินค้า " + d.items.length + " รายการ"), items, kv, billBox, ...(sheet ? [] : actions), hist, h("p.ref", "รหัสอ้างอิง " + od.id));
-    if (sheet) put(sheet.foot, ...actions);
+    if (sheet) put(sheet.foot, h("div.stack", { style: { gap: "8px" } }, actions));
   }
   load();
   return { reload: load, close: () => sheet && sheet.close() };
@@ -101,14 +101,14 @@ async function queueSheet(ctx, d, done) {
   const od = d.order, src = {};
   const S = ui.sheet({ title: "ส่งเข้าคิว", modal: true, foot: true });
   if (od.pay_status === "รอโอนเงิน" || od.design_status === "รอแบบ" || od.design_status === "แก้ไขแบบ")
-    S.body.append(h("div.banner.t-warn", icon("alert"), h("span", "ออเดอร์นี้ " + [od.pay_status === "รอโอนเงิน" ? "ยังรอโอนเงิน" : "", /แบบ/.test(od.design_status) ? od.design_status : ""].filter(Boolean).join(" · ") + " — แน่ใจว่าให้เริ่มผลิตแล้ว")));
+    add(S.body, h("div.banner.t-warn", icon("alert"), h("span", "ออเดอร์นี้ " + [od.pay_status === "รอโอนเงิน" ? "ยังรอโอนเงิน" : "", /แบบ/.test(od.design_status) ? od.design_status : ""].filter(Boolean).join(" · ") + " — แน่ใจว่าให้เริ่มผลิตแล้ว")));
   d.items.forEach(it => {
     src[it.id] = "ผลิต";
     const segs = h("div.chips", [["ผลิต", "ผลิตใหม่"], ["สต๊อก", "ใช้ของในสต๊อก" + (it.stock_a ? " (มี " + n0(it.stock_a) + ")" : "")]].map(([v, l]) =>
       h("button.chip", { type: "button", "aria-pressed": String(v === "ผลิต"), onclick: e => { src[it.id] = v; segs.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === e.currentTarget))); } }, l)));
-    S.body.append(h("div.icard", h("div.row", h("b.grow", it.label), itemBadge(it)), segs, it.screen_color ? h("span.small.muted", "สกรีน" + it.screen_color + " → เข้าคิวทีมสกรีนด้วย") : null));
+    add(S.body, h("div.icard", h("div.row", h("b.grow", it.label), itemBadge(it)), segs, it.screen_color ? h("span.small.muted", "สกรีน" + it.screen_color + " → เข้าคิวทีมสกรีนด้วย") : null));
   });
-  S.foot.append(h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
+  add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
     h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
       const r = await write(ctx, "office.order_queue", { id: od.id, version: od.version, sources: src }, { label: "ส่งเข้าคิว " + od.customer_text, after: () => done() });
       if (r) S.close("ok");
@@ -119,7 +119,7 @@ async function queueSheet(ctx, d, done) {
 async function pickupSheet(ctx, d, done) {
   const od = d.order, q = {};
   const S = ui.sheet({ title: "ลูกค้ามารับที่โรงงาน", modal: true, foot: true });
-  S.body.append(h("p.muted", "ระบบตัดสต๊อกและนับเป็นส่งแล้วให้ — ส่งเป็นงวดได้ (รับบางส่วนก่อน)"));
+  add(S.body, h("p.muted", "ระบบตัดสต๊อกและนับเป็นส่งแล้วให้ — ส่งเป็นงวดได้ (รับบางส่วนก่อน)"));
   d.items.forEach(it => {
     const left = Math.max(0, it.qty_pcs - it.delivered - it.on_truck);
     q[it.id] = left;
@@ -128,9 +128,9 @@ async function pickupSheet(ctx, d, done) {
       if (v === null || v === undefined) return;
       q[it.id] = v; b.querySelector("b").textContent = n0(v) + " " + it.piece_unit;
     } }, h("small", "รับครั้งนี้"), h("b", n0(left) + " " + it.piece_unit));
-    S.body.append(h("div.icard", h("div.row", h("b.grow", it.label), itemBadge(it)), h("div.small.muted", "ส่งแล้ว " + n0(it.delivered) + " · ค้าง " + n0(left) + " · สต๊อก A " + n0(it.stock_a)), b));
+    add(S.body, h("div.icard", h("div.row", h("b.grow", it.label), itemBadge(it)), h("div.small.muted", "ส่งแล้ว " + n0(it.delivered) + " · ค้าง " + n0(left) + " · สต๊อก A " + n0(it.stock_a)), b));
   });
-  S.foot.append(h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
+  add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
     h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
       const lines = Object.entries(q).filter(([, v]) => v > 0).map(([item_id, qty_pcs]) => ({ item_id, qty_pcs }));
       if (!lines.length) { ui.toast("ใส่จำนวนที่รับก่อน", "warn"); return; }
