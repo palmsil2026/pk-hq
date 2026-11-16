@@ -155,3 +155,20 @@ test("ซิงก์ผ่านหน้าประธาน (import.run acct
   assert.equal(b(W, "เก่า-ลูกหนี้-0002").acct_kind, "ลูกหนี้"); assert.equal(b(W, "เก่า-ลูกหนี้-0002").paper_no, "0002");
   assert.equal(W.one("SELECT count(*) n FROM acct_seen").n, 6);
 });
+
+test("Worker นาฬิกาปลุก (v2/cron/acct-sync.mjs): โหลดได้ · scheduled เรียกซิงก์จริงผ่าน waitUntil · เปิดลิงก์ตรง ๆ ไม่มีข้อมูล", async () => {
+  const { W, gasFetch } = await setup();
+  const mod = (await import("../cron/acct-sync.mjs")).default;
+  W.clock.now = Date.now();   // Worker ใช้นาฬิกาจริง — ให้ GAS จำลองเวลาตรงกัน (ลายเซ็นคำขออายุ 5 นาที)
+  const real = globalThis.fetch;
+  globalThis.fetch = gasFetch;
+  try {
+    const waits = [];
+    await mod.scheduled({ cron: "0 13 * * *" }, W.env, { waitUntil: p => waits.push(p) });
+    await Promise.all(waits);
+  } finally { globalThis.fetch = real; }
+  assert.equal(W.one("SELECT count(*) n FROM bills").n, 6);
+  const res = await mod.fetch(new Request("https://pk-v2-cron.test/"));
+  const j = await res.json();
+  assert.equal(j.ok, true); assert.ok(!JSON.stringify(j).includes("satang"));
+});

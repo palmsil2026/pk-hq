@@ -100,3 +100,10 @@ jobs:
           PK_SYNC_KEY: ${{ secrets.PK_SYNC_KEY }}
           DEPLOY_BRANCH: ${{ github.ref_name }}
         run: bash v2/tools/deploy-cf.sh
+      - name: นาฬิกาปลุกซิงก์ชีทบัญชีวันละครั้ง (Worker pk-v2-cron · 20:00 ไทย · ไม่มี PK_SYNC_KEY = ข้าม)
+        if: steps.has.outputs.go == '1'
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          PK_SYNC_KEY: ${{ secrets.PK_SYNC_KEY }}
+        run: bash v2/tools/deploy-cron.sh
