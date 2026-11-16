@@ -7,6 +7,8 @@ import { createRegistry } from "../app.mjs";
 import { defineFoundation } from "./foundation.mjs";
 import { defineHomes } from "./home.mjs";
 import { defineImport } from "./import.mjs";
+import { defineScreen } from "./screen.mjs";   // 0300 สกรีน + ส่งของ
+import { defineDeliver } from "./deliver.mjs"; // 0300 สกรีน + ส่งของ
 
 export function buildRegistry(extra) {
   const R = createRegistry();
@@ -16,7 +18,8 @@ export function buildRegistry(extra) {
   // ── โมดูล (แชทย่อย) เพิ่มต่อท้ายตรงนี้ ──
   // defineProduction(R);   // 0100 ทีมผลิต
   // defineOffice(R);       // 0200 ออฟฟิศ
-  // defineScreenDelivery(R); // 0300 สกรีน + ส่งของ
+  defineScreen(R);       // 0300 สกรีน + ส่งของ
+  defineDeliver(R);      // 0300 สกรีน + ส่งของ
   // defineExecAccount(R);  // 0400 ประธาน + บัญชี
   if (typeof extra === "function") extra(R);   // เทสต์ใส่ action ตัวอย่างเพิ่มได้
   return R;
