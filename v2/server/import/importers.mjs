@@ -22,7 +22,7 @@ async function loadMap(X, source, keys) {
   const m = new Map();
   for (const part of chunk([...new Set(keys)], 90)) {
     if (!part.length) continue;
-    (await X.db.all(`SELECT source_key, entity_id, hash FROM import_map WHERE source = ? AND source_key IN (${part.map(() => "?").join(",")})`, source, ...part)).forEach(r => m.set(r.source_key, r));
+    (await X.db.all(`SELECT source_key, entity_id, hash, last_at FROM import_map WHERE source = ? AND source_key IN (${part.map(() => "?").join(",")})`, source, ...part)).forEach(r => m.set(r.source_key, r));
   }
   return m;
 }
@@ -163,7 +163,41 @@ export async function importMachines(X) {
   return { ops, stats: st, problems: [] };
 }
 
-// ── ออเดอร์เก่า (ชีต "Order" ของ AppSheet) — ประวัติ ────────────────────────────────
+// ── ออเดอร์เก่า (ชีต "Order" ของ AppSheet) — ประวัติ · ซิงก์ทางเดียวเป็นรอบ ๆ ได้ ─────────────────────
+//   แอปเดิมยังมีคนลงทุกวัน → รันซ้ำทุกวัน: แถวใหม่ = เพิ่ม · แถวเดิมที่เนื้อเปลี่ยน = ตามทั้งใบ (หัว + รายการ + ลูกค้า)
+//   · ออเดอร์ที่มีคนแก้ในแอปใหม่แล้ว (updated_at หลังรอบนำเข้าล่าสุด) = ไม่ทับ + บอกในผลนำเข้า (แก้ใน v2 ชนะ)
+//   · ไม่สร้างงานผลิต/สกรีน · ไม่แตะสต๊อก · ไม่เขียนกลับชีตเดิม · src = legacy:order
+//   · เริ่มกลางชีตได้ (cursor = แถวที่ n) — รอบเร็วรายวันอ่านเฉพาะหาง ๆ ชีต รอบเต็มเป็นครั้งคราว (แถวเก่าที่ถูกแก้)
+function legacyOrderRows(r, g, id, X, ctx) {
+  const day = thaiDate(g(r, "วันที่สั่งซื้อ"));
+  const n = parseLegacyNote(g(r, "หมายเหตุ"));
+  const status = g(r, "สถานะ") === "ยกเลิก" ? "ยกเลิก" : "ส่งแล้ว";   // แบบเดียวกับ importLegacyOrders ใน gas/Code.gs (ประวัติ)
+  const sp = splitCustomerText(g(r, "ลูกค้า"));
+  const type = g(r, "ประเภทสินค้า"), size = g(r, "ขนาด");
+  const it = { type, size, neck: g(r, "คอขวด"), shape: g(r, "รูปทรง"), color: g(r, "สี") };
+  const bags = intOf(g(r, "จำนวน (ถุง)")) || 0, extra = intOf(g(r, "และซื้อย่อย (ใบ)")) || 0, piece = intOf(g(r, "จำนวน (ชิ้น)")) || 0;
+  let total = intOf(g(r, "รวมทั้งหมด (ใบ)")) || 0;
+  let per = ctx.sizes.get(type + "|" + size) || 0;
+  if (!total) total = piece || (bags && per ? bags * per + extra : extra);
+  // ตัวเลขต้นทางไม่ลงตัว (ถุง × ใบต่อถุง ≠ รวม) = เก็บรวมตามจริง ไม่เดา · ถุงไปอยู่ในหมายเหตุรายการ
+  let itBags = bags, itNote = "";
+  if (bags && per && total !== bags * per + extra) { itNote = "ต้นทาง: " + bags + " ถุง + " + extra + " ใบ (รวมที่จดไว้ " + total + ")"; itBags = 0; per = 0; }
+  if (bags && !per) { itNote = "ต้นทาง: " + bags + " ถุง (ไม่รู้ใบต่อถุง)"; itBags = 0; }
+  const priceSatang = satangOf(g(r, "ราคาต่อหน่วย"));
+  const order = {
+    order_day: day, customer_text: g(r, "ลูกค้า"), brand: g(r, "แบรนด์") || sp.brand,
+    taker_staff_id: ctx.staffByNick.get(g(r, "ผู้รับออเดอร์")) || null, taker_text: g(r, "ผู้รับออเดอร์"),
+    due_day: thaiDate(g(r, "ส่งภายในวันที่")), status, purchase_type: ["ขายราคาโรงงาน", "ขายหน้าร้าน"].includes(g(r, "ประเภทการซื้อ")) ? g(r, "ประเภทการซื้อ") : "",
+    pay_status: n.pay || "", design_status: n.design || "", block_fee_satang: n.blockFeeBaht ? n.blockFeeBaht * 100 : null, urgent: n.urgent ? 1 : 0,
+    has_screen: g(r, "สีสกรีน") ? 1 : 0, screen_team: g(r, "ทีมสกรีน"), done_bags: n.doneBags || null, pending_bags: n.pendingBags || null,
+    pending_reason: n.pendingReason || "", finished_day: n.finished || "", delivered_day: status === "ส่งแล้ว" ? n.finished || "" : "",
+    total_satang: priceSatang !== null && total ? Math.round(priceSatang * total) : null,
+    note: [n.rest, sp.note].filter(Boolean).join(" · "),
+  };
+  const item = { ...it, screen_color: g(r, "สีสกรีน"), cap_color: g(r, "พร้อมฝาสี"), spec_key: specKey(it, ctx.types.get(type)), label: specLabel(it),
+    bags: itBags, per_bag: itBags ? per : 0, extra_pcs: itBags ? extra : 0, qty_pcs: total, price_satang: priceSatang, note: itNote };
+  return { day, sp, order, item };
+}
 export async function importLegacyOrders(X, page) {
   const st = S(), ops = [], problems = [];
   const h = page.head, c = n => h.indexOf(n);
@@ -172,64 +206,63 @@ export async function importLegacyOrders(X, page) {
   const ids = rows.map(r => "เก่า-" + g(r, "ID"));
   const map = await loadMap(X, "legacy:order", ids);
   const cur = await byIds(X, "orders", "id", ids);
+  const curItems = await byIds(X, "order_items", "id", ids.map(id => id + "-1"));
   const idx = await customerIndex(X);
-  const sizes = new Map((await X.db.all("SELECT type, size, per_bag FROM type_sizes")).map(s => [s.type + "|" + s.size, s.per_bag]));
-  const types = new Map((await X.db.all("SELECT code, axes FROM product_types")).map(t => [t.code, t.axes]));
-  const staffByNick = new Map((await X.db.all("SELECT id, nick FROM staff")).map(s => [s.nick, s.id]));
+  const ctx = {
+    sizes: new Map((await X.db.all("SELECT type, size, per_bag FROM type_sizes")).map(s => [s.type + "|" + s.size, s.per_bag])),
+    types: new Map((await X.db.all("SELECT code, axes FROM product_types")).map(t => [t.code, t.axes])),
+    staffByNick: new Map((await X.db.all("SELECT id, nick FROM staff")).map(s => [s.nick, s.id])),
+  };
   const hashes = await Promise.all(rows.map(rowHash));
   let unmatched = 0;
+  const customerOf = (text, sp) => {
+    const hit = matchCustomer(sp.name, idx);
+    if (!hit) {
+      const id = "C" + newId("", X.now);
+      ops.push({ op: "insert", table: "customers", row: { id, name: sp.name, name_key: nameKey(sp.name), needs_review: 1, src: "legacy:order" }, undo: false });
+      idx.byKey.set(nameKey(sp.name), id);
+      unmatched++;
+      return id;
+    }
+    if (hit.how !== "ตรงตัว" || nameKey(text) !== nameKey(sp.name)) {
+      ops.push({ op: "raw", sql: "INSERT INTO customer_aliases(alias_key, alias, customer_id, src, created_at) VALUES (?,?,?,?,?) ON CONFLICT(alias_key) DO NOTHING", args: [nameKey(text), text, hit.id, "legacy:order", iso(X.now)] });
+    }
+    return hit.id;
+  };
   for (let i = 0; i < rows.length; i++) {
     const r = rows[i], id = ids[i];
     const m = map.get(id);
     if (m && m.hash === hashes[i]) { st.skipped++; continue; }
-    const day = thaiDate(g(r, "วันที่สั่งซื้อ"));
-    if (!day) { problems.push("ออเดอร์ " + g(r, "ID") + ": วันที่สั่งซื้ออ่านไม่ได้ (\"" + g(r, "วันที่สั่งซื้อ") + "\") — ข้าม"); st.skipped++; continue; }
-    const n = parseLegacyNote(g(r, "หมายเหตุ"));
-    const status = g(r, "สถานะ") === "ยกเลิก" ? "ยกเลิก" : "ส่งแล้ว";   // แบบเดียวกับ importLegacyOrders ใน gas/Code.gs (ประวัติ)
+    const L = legacyOrderRows(r, g, id, X, ctx);
+    if (!L.day) { problems.push("ออเดอร์ " + g(r, "ID") + ": วันที่สั่งซื้ออ่านไม่ได้ (\"" + g(r, "วันที่สั่งซื้อ") + "\") — ข้าม"); st.skipped++; continue; }
     const o = cur.get(id);
     if (o) {
-      // ต้นทางเปลี่ยน (แอปเดิมยังใช้ทุกวัน) — อัปเดตเฉพาะออเดอร์ที่ยังเป็นของนำเข้า ไม่มีใครแก้ใน v2
-      if (o.src === "legacy:order" && o.status !== status) { ops.push({ op: "update", table: "orders", id, expect: o.version, before: o, set: { status, note: n.rest }, undo: false }); st.updated++; } else st.skipped++;
+      // แถวเดิมในแอปเดิมถูกแก้ → ตามทั้งใบ · เว้นแต่มีคนแก้ในแอปใหม่หลังรอบนำเข้าล่าสุด (แก้ใน v2 ชนะ ไม่ทับ)
+      const touched = o.src !== "legacy:order" || (m && o.updated_at > m.last_at);
+      if (touched) {
+        problems.push("ออเดอร์ " + g(r, "ID") + " (" + (o.customer_text || "") + "): แอปเดิมแก้ แต่มีคนแก้ในแอปใหม่แล้ว — ไม่ทับ ตรวจสองที่ให้ตรงกันเอง");
+        st.skipped++;
+        ops.push({ op: "raw", sql: "UPDATE import_map SET hash = ? WHERE source = ? AND source_key = ?", args: [hashes[i], "legacy:order", id] });   // ไม่ขยับ last_at — แก้ใน v2 ยังชนะต่อไป
+        continue;
+      }
+      const set = {};
+      const want = { ...L.order };
+      if (nameKey(o.customer_text) !== nameKey(want.customer_text)) want.customer_id = customerOf(want.customer_text, L.sp);
+      for (const k of Object.keys(want)) if (String(want[k] ?? "") !== String(o[k] ?? "")) set[k] = want[k];
+      if (Object.keys(set).length) ops.push({ op: "update", table: "orders", id, expect: o.version, before: o, set, undo: false });
+      const ci = curItems.get(id + "-1");
+      if (ci) {
+        const iset = {};
+        for (const k of Object.keys(L.item)) if (String(L.item[k] ?? "") !== String(ci[k] ?? "")) iset[k] = L.item[k];
+        if (Object.keys(iset).length) ops.push({ op: "update", table: "order_items", id: ci.id, expect: ci.version, before: ci, set: iset, undo: false });
+      }
+      if (Object.keys(set).length || ops.some(x => x.table === "order_items" && x.id === id + "-1")) st.updated++; else st.skipped++;
       ops.push(mapSql(X, "legacy:order", id, "orders", id, hashes[i]));
       continue;
     }
-    const sp = splitCustomerText(g(r, "ลูกค้า"));
-    let hit = matchCustomer(sp.name, idx);
-    let custId = hit && hit.id;
-    if (!custId) {
-      custId = "C" + newId("", X.now);
-      ops.push({ op: "insert", table: "customers", row: { id: custId, name: sp.name, name_key: nameKey(sp.name), needs_review: 1, src: "legacy:order" }, undo: false });
-      idx.byKey.set(nameKey(sp.name), custId);
-      unmatched++;
-    } else if (hit.how !== "ตรงตัว" || nameKey(g(r, "ลูกค้า")) !== nameKey(sp.name)) {
-      ops.push({ op: "raw", sql: "INSERT INTO customer_aliases(alias_key, alias, customer_id, src, created_at) VALUES (?,?,?,?,?) ON CONFLICT(alias_key) DO NOTHING", args: [nameKey(g(r, "ลูกค้า")), g(r, "ลูกค้า"), custId, "legacy:order", iso(X.now)] });
-    }
-    const type = g(r, "ประเภทสินค้า"), size = g(r, "ขนาด");
-    const it = { type, size, neck: g(r, "คอขวด"), shape: g(r, "รูปทรง"), color: g(r, "สี") };
-    const bags = intOf(g(r, "จำนวน (ถุง)")) || 0, extra = intOf(g(r, "และซื้อย่อย (ใบ)")) || 0, piece = intOf(g(r, "จำนวน (ชิ้น)")) || 0;
-    let total = intOf(g(r, "รวมทั้งหมด (ใบ)")) || 0;
-    let per = sizes.get(type + "|" + size) || 0;
-    if (!total) total = piece || (bags && per ? bags * per + extra : extra);
-    // ตัวเลขต้นทางไม่ลงตัว (ถุง × ใบต่อถุง ≠ รวม) = เก็บรวมตามจริง ไม่เดา · ถุงไปอยู่ในหมายเหตุรายการ
-    let itBags = bags, itNote = "";
-    if (bags && per && total !== bags * per + extra) { itNote = "ต้นทาง: " + bags + " ถุง + " + extra + " ใบ (รวมที่จดไว้ " + total + ")"; itBags = 0; per = 0; }
-    if (bags && !per) { itNote = "ต้นทาง: " + bags + " ถุง (ไม่รู้ใบต่อถุง)"; itBags = 0; }
-    const priceSatang = satangOf(g(r, "ราคาต่อหน่วย"));
-    ops.push({ op: "insert", table: "orders", undo: false, row: {
-      id, order_day: day, customer_id: custId, customer_text: g(r, "ลูกค้า"), brand: g(r, "แบรนด์") || sp.brand,
-      taker_staff_id: staffByNick.get(g(r, "ผู้รับออเดอร์")) || null, taker_text: g(r, "ผู้รับออเดอร์"),
-      due_day: thaiDate(g(r, "ส่งภายในวันที่")), status, purchase_type: ["ขายราคาโรงงาน", "ขายหน้าร้าน"].includes(g(r, "ประเภทการซื้อ")) ? g(r, "ประเภทการซื้อ") : "",
-      pay_status: n.pay || "", design_status: n.design || "", block_fee_satang: n.blockFeeBaht ? n.blockFeeBaht * 100 : null, urgent: n.urgent ? 1 : 0,
-      has_screen: g(r, "สีสกรีน") ? 1 : 0, screen_team: g(r, "ทีมสกรีน"), done_bags: n.doneBags || null, pending_bags: n.pendingBags || null,
-      pending_reason: n.pendingReason || "", finished_day: n.finished || "", delivered_day: status === "ส่งแล้ว" ? n.finished || "" : "",
-      total_satang: priceSatang !== null && total ? Math.round(priceSatang * total) : null,
-      note: [n.rest, sp.note].filter(Boolean).join(" · "), src: "legacy:order",
-    } });
-    ops.push({ op: "insert", table: "order_items", undo: false, row: {
-      id: id + "-1", order_id: id, line_no: 1, ...it, screen_color: g(r, "สีสกรีน"), cap_color: g(r, "พร้อมฝาสี"),
-      spec_key: specKey(it, types.get(type)), label: specLabel(it), bags: itBags, per_bag: itBags ? per : 0, extra_pcs: itBags ? extra : 0, qty_pcs: total,
-      price_satang: priceSatang, note: itNote, src: "legacy:order",
-    } });
+    const custId = customerOf(L.order.customer_text, L.sp);
+    ops.push({ op: "insert", table: "orders", undo: false, row: { id, ...L.order, customer_id: custId, src: "legacy:order" } });
+    ops.push({ op: "insert", table: "order_items", undo: false, row: { id: id + "-1", order_id: id, line_no: 1, ...L.item, src: "legacy:order" } });
     ops.push(mapSql(X, "legacy:order", id, "orders", id, hashes[i]));
     st.inserted++;
   }

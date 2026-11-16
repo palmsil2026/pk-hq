@@ -66,6 +66,7 @@ export function guardSql(existsSql, args, tag) {
  *   flag    {op, kind, title, detail, entity, entity_id, team, severity, dedupe_key}    ← ธงให้คนตรวจ (ไม่บล็อกงาน)
  *   raw     {op, sql, args}                     ← คำสั่งเขียนตรง (นำเข้า/UPSERT) — ทำให้ทั้งคำขอ "ย้อนไม่ได้"
  *   note    {op, entity, entity_id, before, after} ← แถว audit อย่างเดียว
+ *   guard   {op, sql, args}                      ← ด่าน: SELECT ต้องเจอแถว ไม่งั้นล้มทั้งชุด (409) — ย้อนได้ตามปกติ
  */
 export function compileOps(X, ops) {
   const at = iso(X.now), day = thaiDay(X.now), by = X.staff ? X.staff.id : "system";
@@ -127,6 +128,10 @@ export function compileOps(X, ops) {
       if (/^\s*DELETE\b/i.test(o.sql)) throw new Error("ห้าม DELETE");
       stmts.push([o.sql, ...(o.args || [])]);
       undoable = false;
+    } else if (o.op === "guard") {
+      // ด่านเงื่อนไขใน batch เดียวกัน (ไม่ทำให้ย้อนไม่ได้): "ต้องยังมีแถวตาม sql" ไม่งั้นล้มทั้งชุด → 409 (ใช้ plan.conflictMessage บอกเหตุ) — เพิ่มโดยโมดูลออฟฟิศ
+      if (!o.sql || !/^\s*SELECT\b/i.test(o.sql)) throw new Error("guard ต้องเป็น SELECT");
+      stmts.push(guardSql(o.sql, o.args || [], "c"));
     } else if (o.op === "note") {
       audits.push({ entity: o.entity, entity_id: String(o.entity_id || ""), before: o.before || "", after: o.after || "" });   // แถว audit อย่างเดียว (สรุปงาน)
     } else {
