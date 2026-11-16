@@ -142,7 +142,7 @@ test("ทีมผลิต: เปิดมาเห็นแผนผัง ·
   // ครั้งต่อไป: คนล่าสุด (เก่ง) ขึ้นแป้น PIN ให้เลย
   await p.locator(".floor .mc", { hasText: "PET 2" }).first().click();
   await p.locator(".sheet button", { hasText: "แจ้งปัญหาเครื่องนี้" }).click();
-  await p.locator(".sheet.modal .chip", { hasText: "รอวัตถุดิบ" }).click();
+  await p.locator(".sheet.modal .chip", { hasText: "รอพรีฟอร์ม/วัตถุดิบ" }).click();
   await p.locator(".sheet.modal .btn.pri", { hasText: "แจ้งปัญหา" }).click();
   await p.waitForSelector(".sheet.on.modal h2:has-text('เก่ง')");
 });
