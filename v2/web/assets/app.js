@@ -9,7 +9,7 @@ import * as api from "./api.js";
 import * as ui from "./ui.js";
 const { h, icon } = ui;
 
-export const WEB_VERSION = "2026-11-16i";   // ขยับทุกครั้งที่แก้หน้าเว็บ v2 (ต้องตรงกับ version.json)
+export const WEB_VERSION = "2026-11-17a";   // ขยับทุกครั้งที่แก้หน้าเว็บ v2 (ต้องตรงกับ version.json)
 const ROLE_FILES = { office: "office", prod: "prod", screen: "screen", deliver: "deliver", account: "account", exec: "exec" };
 const ROLE_TH = { office: "ออฟฟิศ", prod: "ทีมผลิต", screen: "ทีมสกรีนสี", deliver: "ส่งของ", account: "บัญชี", exec: "ประธาน" };
 
@@ -131,10 +131,15 @@ function relogin(msg) { api.logout(); login(msg); }
 // ไปหน้าในแอป (เก็บประวัติให้ ← กลับได้จริง)
 export function go(key) { S.depth++; history.pushState({ d: S.depth }, "", "#/" + key); route(); }
 async function route() {
-  const key = (location.hash.replace(/^#\/?/, "") || S.mod.nav[0].key).split("/")[0];
-  const n = S.mod.nav.find(x => x.key === key) || S.mod.nav[0];
+  const parts = (location.hash.replace(/^#\/?/, "") || S.mod.nav[0].key).split("/");
+  const key = parts[0];
+  // หน้าย่อยที่ไม่อยู่ในเมนู (เช่น #/new = ลงออเดอร์) — บทบาทประกาศใน mod.pages { key: { title, nav } } · ส่วนท้ายของ # ส่งให้หน้าเป็น n.arg
+  const page = S.mod.pages && S.mod.pages[key];
+  const n = Object.assign({}, S.mod.nav.find(x => x.key === key) || (page ? { key, label: page.title, title: page.title } : S.mod.nav[0]));
+  n.arg = parts.length > 1 && (S.mod.nav.some(x => x.key === key) || page) ? decodeURIComponent(parts.slice(1).join("/")) : "";
   S.route = n.key;
-  S.els.nav.querySelectorAll("a").forEach(a => (a.dataset.key === n.key ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
+  const navKey = page ? page.nav || "" : n.key;
+  S.els.nav.querySelectorAll("a").forEach(a => (a.dataset.key === navKey ? a.setAttribute("aria-current", "page") : a.removeAttribute("aria-current")));
   S.els.titleEl.textContent = n.title || n.label;
   S.els.back.hidden = !(history.state && history.state.d > 0);
   const view = h("div.stack");
@@ -185,7 +190,7 @@ async function checkVersion() {
 //   ctx.save(action, input, {label, reason, confirm}) = บันทึก + แถบย้อน · ทีมผลิตถามใครบันทึก + PIN เอง
 export const ctx = {
   api, ui, h, icon, go, pinGate,
-  get role() { return S.role; }, get me() { return S.me || api.store.get("me"); }, get vocab() { return (S.me || api.store.get("me") || {}).vocab || {}; },
+  get role() { return S.role; }, get route() { return S.route; }, get me() { return S.me || api.store.get("me"); }, get vocab() { return (S.me || api.store.get("me") || {}).vocab || {}; },
   reasons(kind) { return ((this.vocab["reason." + kind]) || []).map(v => v.value); },
   async load(view, key, action, render, input) {
     const ck = S.role + "." + key;
