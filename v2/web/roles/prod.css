@@ -1,0 +1,146 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ทีมผลิต — แผนผังโรงงาน · แผ่นเครื่อง · ฟอร์มรอบ (ใช้ token จาก tokens.css · สีชนิดเครื่อง/สีขวดเป็นสีตกแต่ง ข้อความยังเป็น --ink เสมอ)
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  --k-inj: #ECE8F6; --k-scr: #F8EEDD; --k-util: #E2EEF6; --k-pwr: #F7E4E4; --k-office: #F7EBC4; --k-other: var(--surface-2);
+  --bc-blue: #3566B0; --bc-clear: #C3D2DC; --bc-green: #3F8F5E; --bc-sky: #5FAED6; --bc-sea: #2B8C9E; --bc-navy: #2C4F82;
+  --bc-milk: #D8D1C6; --bc-lime: #93C27F; --bc-black: #3A3536; --bc-pink: #D98BB0; --bc-other: #B79A9C;
+  --floor-bg: var(--surface-2); --zone-line: color-mix(in oklab, var(--ink) 30%, transparent);
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --k-inj: #2E2A3D; --k-scr: #3A2D1C; --k-util: #1D2C36; --k-pwr: #3B2325; --k-office: #4A3A14;
+    --bc-blue: #5C8AD6; --bc-clear: #8FA3AF; --bc-green: #5FB07E; --bc-sky: #77C0E3; --bc-sea: #45A9BA; --bc-navy: #5A7FB5;
+    --bc-milk: #B5AEA4; --bc-lime: #9DCB89; --bc-black: #7D7576; --bc-pink: #C77FA2; --bc-other: #9C8486;
+  }
+}
+:root[data-theme="dark"] {
+  --k-inj: #2E2A3D; --k-scr: #3A2D1C; --k-util: #1D2C36; --k-pwr: #3B2325; --k-office: #4A3A14;
+  --bc-blue: #5C8AD6; --bc-clear: #8FA3AF; --bc-green: #5FB07E; --bc-sky: #77C0E3; --bc-sea: #45A9BA; --bc-navy: #5A7FB5;
+  --bc-milk: #B5AEA4; --bc-lime: #9DCB89; --bc-black: #7D7576; --bc-pink: #C77FA2; --bc-other: #9C8486;
+}
+
+/* ── สรุปบนสุด ── */
+.pf-sum { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2) var(--sp-3); }
+.pf-sum .big { color: var(--ok); }
+.pf-sum .of { font: 700 20px/1.2 var(--font-display); color: var(--ink-2); }
+.pf-sum .pills { display: flex; flex-wrap: wrap; gap: 6px; }
+.pf-sum button.pill { min-height: var(--tap); cursor: pointer; }
+
+/* ── แผนผัง (SVG) ── */
+.pf-bar { display: flex; flex-wrap: wrap; align-items: center; gap: var(--sp-2); }
+.pf-bar .zoom { margin-left: auto; display: flex; gap: 4px; }
+.pf-bar .zoom .btn { min-width: var(--tap); padding: 0; font-size: 20px; }
+.chip { min-width: var(--tap); }
+.mapwrap { overflow: auto; border: 1px solid var(--line); border-radius: var(--r-lg); background: var(--floor-bg);
+  background-image: linear-gradient(color-mix(in oklab, var(--ink) 5%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in oklab, var(--ink) 5%, transparent) 1px, transparent 1px);
+  background-size: 22px 22px; max-height: 76dvh; overscroll-behavior: contain; touch-action: pan-x pan-y pinch-zoom; }
+svg.pmap { display: block; width: 100%; height: auto; }
+@media (min-width: 1100px) { svg.pmap.fitv { max-height: 72dvh; } }   /* จอคอม: เห็นทั้งโรงในจอเดียว (ซูมแล้วค่อยเลื่อน) */
+.pmap text { font-family: var(--font-body); fill: var(--ink); pointer-events: none; }
+.pmap .lb { font-family: var(--font-display); font-weight: 700; }
+.pmap .sb { fill: var(--ink-2); }
+.pmap .bt { font-family: var(--font-display); font-weight: 800; fill: var(--ink-2); }
+.pmap .hall { fill: none; stroke: var(--ink); stroke-width: 3.5; opacity: .45; }
+.pmap rect { stroke: color-mix(in oklab, var(--ink) 40%, transparent); stroke-width: 1.5; }
+.pmap .it { cursor: pointer; outline: none; }
+.pmap .it:hover rect.box { stroke: var(--brand); }
+.pmap .it:focus-visible rect.box { stroke: var(--focus); stroke-width: 5; }
+.pmap rect.k-blow { fill: var(--surface); stroke-width: 2.2; }
+.pmap rect.k-inj { fill: var(--k-inj); } .pmap rect.k-scr { fill: var(--k-scr); } .pmap rect.k-util { fill: var(--k-util); }
+.pmap rect.k-pwr { fill: var(--k-pwr); } .pmap rect.k-oth { fill: var(--k-other); } .pmap rect.k-office { fill: var(--k-office); }
+.pmap rect.k-room, .pmap rect.k-ext { fill: transparent; stroke: var(--zone-line); stroke-dasharray: 7 6; }
+.pmap rect.s-run { fill: var(--ok-soft); stroke: var(--ok); stroke-width: 3; }
+.pmap rect.s-stop, .pmap rect.s-mold { fill: var(--warn-soft); stroke: var(--warn); stroke-width: 3; }
+.pmap rect.s-stale { fill: var(--ok-soft); stroke: var(--warn); stroke-width: 3; stroke-dasharray: 9 5; }
+.pmap rect.sel { stroke: var(--brand) !important; stroke-width: 5 !important; }
+.pmap .l-run { fill: var(--ok); } .pmap .l-off { fill: var(--surface); stroke: var(--edge); stroke-width: 2; }
+.pmap .l-stop { fill: var(--warn); } .pmap .wd { fill: var(--warn); stroke: var(--surface); stroke-width: 2; }
+@media (prefers-reduced-motion: no-preference) { .pmap .l-run { animation: pf-pulse 2.4s ease-in-out infinite; } }
+@keyframes pf-pulse { 50% { opacity: .55; } }
+.pf-legend { display: flex; flex-wrap: wrap; gap: 6px 14px; font-size: 13.5px; color: var(--ink-2); }
+.pf-legend span { display: inline-flex; align-items: center; gap: 6px; }
+.pf-legend i { width: 16px; height: 12px; border-radius: 3px; border: 1px solid var(--edge); display: inline-block; }
+
+/* ── การ์ดเครื่อง (ใต้ผัง · ถาดยังไม่ได้วาง) ── */
+.pf-tiles { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: var(--sp-2); }
+@media (min-width: 1100px) { .pf-tiles { grid-template-columns: repeat(auto-fill, minmax(190px, 1fr)); } }
+.pf-tile { display: grid; gap: 3px; text-align: left; min-height: 72px; padding: var(--sp-2) var(--sp-3); border: 1.5px solid var(--line); border-radius: var(--r-md); background: var(--surface); color: var(--ink); position: relative; }
+.pf-tile .r1 { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.pf-tile .nm { font: 700 16px/1.2 var(--font-display); white-space: nowrap; }
+.pf-tile .st { margin-left: auto; font: 600 12.5px/1.2 var(--font-display); white-space: nowrap; }
+.pf-tile .wh { font-size: 13.5px; color: var(--ink-2); overflow-wrap: anywhere; line-height: 1.35; }
+.pf-tile.s-run { border-color: var(--ok); background: var(--ok-soft); } .pf-tile.s-run .st { color: var(--ok-ink); }
+.pf-tile.s-stop, .pf-tile.s-mold { border-color: var(--warn); background: var(--warn-soft); } .pf-tile.s-stop .st, .pf-tile.s-mold .st { color: var(--warn-ink); }
+.pf-tile.s-stale { border-color: var(--warn); border-style: dashed; } .pf-tile.s-stale .st { color: var(--warn-ink); }
+.lampd { width: 12px; height: 12px; border-radius: 50%; flex: none; border: 2px solid var(--edge); }
+.s-run .lampd, .lampd.on { background: var(--ok); border-color: var(--ok); }
+.s-stop .lampd, .s-mold .lampd { background: var(--warn); border-color: var(--warn); border-radius: 2px; }
+.s-stale .lampd { background: var(--ok); border-color: var(--warn); }
+
+/* ── แผ่นเครื่อง ── */
+.pf-now { display: grid; gap: var(--sp-2); padding: var(--sp-3); border-radius: var(--r-md); background: var(--surface-2); }
+.pf-now .spec { font: 700 18px/1.35 var(--font-display); overflow-wrap: anywhere; }
+.sw { display: inline-block; width: 12px; height: 12px; border-radius: 50%; border: 1px solid var(--edge); vertical-align: -1px; margin-right: 6px; flex: none; }
+.pf-sec { display: grid; gap: var(--sp-2); }
+.pf-sec h3 { font: 700 15.5px/1.3 var(--font-display); display: flex; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.pf-sec h3 small { font: 500 13px var(--font-body); color: var(--ink-2); }
+.tl { position: relative; height: 22px; border-radius: 6px; background: var(--sunken); overflow: hidden; border: 0; margin: 0; padding: 0; display: block; }
+.tl i { position: absolute; top: 0; bottom: 0; border-radius: 2px; }
+.tl i.stop { background: repeating-linear-gradient(45deg, var(--warn) 0 4px, transparent 4px 8px); opacity: .85; }
+.tl .now { position: absolute; top: -2px; bottom: -2px; width: 2px; background: var(--brand); }
+.ticks { position: relative; height: 16px; font-size: 11.5px; color: var(--ink-2); }
+.ticks span { position: absolute; transform: translateX(-50%); }
+.ticks span:first-child { transform: none; } .ticks span:last-child { transform: translateX(-100%); }
+.pf-runs { display: grid; }
+.pf-runs .r { display: grid; grid-template-columns: 92px minmax(0, 1fr) auto; gap: 2px 10px; padding: 8px 0; border-top: 1px solid var(--line); font-size: 14px; align-items: start; }
+.pf-runs .r:first-child { border-top: 0; }
+.pf-runs .tm { color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.pf-runs .q { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pf-runs .q small { display: block; color: var(--ink-2); font-size: 12.5px; }
+.pf-runs .ev { grid-column: 1 / -1; color: var(--warn-ink); font-size: 13px; }
+.pf-runs button.r { width: 100%; background: none; border-left: 0; border-right: 0; border-bottom: 0; text-align: left; color: var(--ink); min-height: var(--tap); }
+.seg { display: inline-flex; border: 1.5px solid var(--edge); border-radius: var(--r-md); overflow: hidden; }
+.seg button { min-height: var(--tap); min-width: var(--tap); padding: 0 14px; border: 0; background: var(--surface); font: 600 14px var(--font-display); color: var(--ink); }
+.seg button[aria-pressed="true"] { background: var(--brand); color: var(--on-brand); }
+table.pf-t { width: 100%; border-collapse: collapse; font-size: 13.5px; table-layout: auto; }
+.pf-t th { font: 600 12px/1.3 var(--font-display); color: var(--ink-2); text-align: right; padding: 4px 0 4px 6px; border-bottom: 1px solid var(--line); }
+.pf-t th:first-child, .pf-t td:first-child { text-align: left; padding-left: 0; }
+.pf-t td { padding: 6px 0 6px 6px; border-bottom: 1px solid var(--line); text-align: right; vertical-align: top; font-variant-numeric: tabular-nums; }
+.pf-t td:first-child { overflow-wrap: anywhere; }
+.pf-t tr:last-child td { border-bottom: 0; }
+dl.pf-kv { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 6px 14px; margin: 0; font-size: 14.5px; }
+.pf-kv dt { color: var(--ink-2); } .pf-kv dd { margin: 0; overflow-wrap: anywhere; }
+.pf-missing { border: 1.5px dashed var(--zone-line); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); font-size: 14px; color: var(--ink-2); }
+.pf-missing b { color: var(--ink); font-family: var(--font-display); }
+.pf-warn { background: var(--warn-soft); color: var(--ink); border-radius: var(--r-md); padding: var(--sp-2) var(--sp-3); display: grid; gap: var(--sp-2); font-size: 14.5px; }
+.pf-warn b { color: var(--warn-ink); font-family: var(--font-display); }
+.pf-acts { display: grid; gap: var(--sp-2); }
+.pf-acts .row2 { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-2); }
+
+/* ── ฟอร์ม ── */
+.pf-form { display: grid; gap: var(--sp-3); }
+.pf-form .lbl { display: flex; align-items: baseline; gap: 6px; }
+.pf-form .chips .chip { display: inline-flex; align-items: center; }
+.pf-form .chip small { margin-left: 6px; font: 500 12px var(--font-body); color: var(--ink-2); }
+.pf-form .chip[aria-pressed="true"] small { color: inherit; }
+.pf-picked { font: 700 16px/1.4 var(--font-display); overflow-wrap: anywhere; }
+.cnt { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: var(--sp-2); }
+.cnt button { display: grid; gap: 2px; justify-items: start; min-height: 64px; padding: 6px 10px; border: 1.5px solid var(--edge); border-radius: var(--r-md); background: var(--surface); color: var(--ink); text-align: left; }
+.cnt button span { font: 600 13px var(--font-display); color: var(--ink-2); }
+.cnt button b { font: 800 22px/1.15 var(--font-display); font-variant-numeric: tabular-nums; }
+.cnt button[aria-pressed="true"] { border-color: var(--focus); box-shadow: 0 0 0 3px var(--brand-soft); }
+.cnt-note { font-size: 14px; color: var(--ink-2); min-height: 1.4em; }
+.pf-days { display: flex; gap: 6px; overflow-x: auto; padding-bottom: 4px; scrollbar-width: thin; }
+.pf-days .chip { flex: none; }
+.pf-prog { height: 8px; border-radius: 4px; background: var(--sunken); overflow: hidden; }
+.pf-prog i { display: block; height: 100%; background: var(--ok); border-radius: 4px; }
+.pf-stock .q { text-align: right; }
+.pf-stock .q b { font: 800 20px/1.1 var(--font-display); font-variant-numeric: tabular-nums; }
+.pf-badges { display: flex; flex-wrap: wrap; gap: 6px; }
+@media (min-width: 1100px) {
+  .pf-floor { display: grid; gap: var(--sp-4); }
+  .pf-cols { display: grid; grid-template-columns: repeat(auto-fill, minmax(420px, 1fr)); gap: var(--sp-3); align-items: start; }
+}
+/* แผ่นล่างเปิดอยู่ = ย้ายแถบ "ย้อน" ขึ้นบน ไม่ให้บังปุ่มหลักของแผ่น */
+body:has(.sheet.on) .snack { bottom: auto; top: calc(var(--sp-3) + env(safe-area-inset-top)); }

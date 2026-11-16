@@ -8,6 +8,7 @@ import { test, before, after } from "node:test";
 import assert from "node:assert/strict";
 import { createRequire } from "node:module";
 import { startDev } from "../../tools/dev-server.mjs";
+import "./prod.mjs";   // เทสต์หน้าจอทีมผลิต
 
 const require = createRequire(import.meta.url);
 let pw;
@@ -120,32 +121,7 @@ test("ประธาน: ปิดเรื่อง → แผ่นยืน�
   assert.equal(S.d1.one("SELECT count(*) n FROM flags WHERE title = ?", title).n, 1);
 });
 
-test("ทีมผลิต: เปิดมาเห็นแผนผัง · แตะเครื่อง = แผ่นล่าง · แจ้งปัญหา = ต้องมีเหตุผล → ใครบันทึก (คนล่าสุดขึ้นให้) + PIN → ลงชื่อคนที่กด", async () => {
-  const p = await page();
-  await login(p, "prod", "บอส");
-  assert.equal(await p.locator("h1").innerText(), "แผนผังโรงงาน");
-  await p.locator(".floor .mc", { hasText: "PET 1" }).first().click();
-  await p.waitForSelector(".sheet.on");
-  assert.match(await p.locator(".sheet").innerText(), /เดินอยู่/);
-  await p.locator(".sheet button", { hasText: "แจ้งปัญหาเครื่องนี้" }).click();
-  await p.waitForSelector(".sheet.on.modal .chip");
-  await p.locator(".sheet.modal .btn.pri", { hasText: "แจ้งปัญหา" }).click();
-  assert.match(await p.locator(".sheet.modal p.err").innerText(), /เลือกเหตุผล/);
-  await p.locator(".sheet.modal .chip", { hasText: "ไฟดับ" }).click();
-  await p.locator(".sheet.modal .btn.pri", { hasText: "แจ้งปัญหา" }).click();
-  await p.waitForSelector(".sheet.on.modal h2:has-text('ใครบันทึก?'), .sheet.on.modal .person");
-  await p.locator(".sheet.modal .person", { hasText: "เก่ง" }).click();
-  for (const d of "1234") await p.locator(".sheet.modal .numpad button", { hasText: new RegExp("^" + d + "$") }).click();
-  await p.waitForSelector(".snack.on button:has-text('ย้อน')");
-  const a = S.d1.one("SELECT staff_id, staff_name, reason, role FROM audit_log WHERE action = 'flag.raise' ORDER BY id DESC LIMIT 1");
-  assert.equal(a.staff_name, "เก่ง", "คนบันทึก = คนที่ใส่ PIN ตอนกด ไม่ใช่คนที่ตั้งเครื่อง"); assert.equal(a.reason, "ไฟดับ"); assert.equal(a.role, "prod");
-  // ครั้งต่อไป: คนล่าสุด (เก่ง) ขึ้นแป้น PIN ให้เลย
-  await p.locator(".floor .mc", { hasText: "PET 2" }).first().click();
-  await p.locator(".sheet button", { hasText: "แจ้งปัญหาเครื่องนี้" }).click();
-  await p.locator(".sheet.modal .chip", { hasText: "รอพรีฟอร์ม/วัตถุดิบ" }).click();
-  await p.locator(".sheet.modal .btn.pri", { hasText: "แจ้งปัญหา" }).click();
-  await p.waitForSelector(".sheet.on.modal h2:has-text('เก่ง')");
-});
+// ทีมผลิต (แผนผัง · รอบเครื่อง · แจ้งปัญหา) → tests/ui/prod.mjs
 
 test("เงิน: โหลดไม่สำเร็จ = ไม่โชว์ ฿0 หรือยอดเก่า (โชว์ — + บอกตรง ๆ) · รายการอื่นโชว์ของรอบก่อนพร้อมเวลา", async () => {
   const p = await page();

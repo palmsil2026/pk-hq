@@ -61,7 +61,7 @@ export function defineProdRead(R) {
           today: madeBy[m.id] || { good: 0, b: 0 }, stuck };
       });
       const prodM = list.filter(m => m.runnable);
-      const counted = prodM.filter(m => m.tracked || m.state !== "ว่าง");
+      const counted = prodM.filter(m => m.tracked || m.state === "เดิน");   // ตัวหาร = เครื่องที่นับ (12) + เครื่องอื่นที่กำลังเดินจริง
       return {
         asOf: iso(X.now), today, layout: FLOOR, staleHours: staleH,
         summary: {
