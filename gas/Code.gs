@@ -26,7 +26,7 @@
  *  - ⚠️ ห้ามเรียก rowsToObjs('Staff') ตรง ๆ — ใช้ staffPublic() เท่านั้น (กัน PIN หลุด)
  */
 
-const CODE_VERSION = '2026-09-13a';
+const CODE_VERSION = '2026-11-16v2';
 // ชีต "ระบบบัญชี" ตัวเป็น ๆ ที่ฝ่ายบัญชีจดทุกวัน — อ่านอย่างเดียว ไม่เคยเขียนกลับ
 // (เดิมชี้ไป snapshot 30 ส.ค. → ยอดค้างอยู่ที่วันนั้น ไม่ตามของจริง)
 const ACCOUNTING_SHEET_ID = '1OXqLgj4xUNJTXE6g5fPI4fPVRx599pLpzZU6EV9VDxE';
@@ -1315,6 +1315,7 @@ function ACTIONS() {
 function doGet(e) {
   const p = (e && e.parameter) || {};
   const a = p.action || '';
+  if (a.indexOf('pkV2') === 0) return jsonOut(v2Dispatch_(e));   // สะพานแอป v2 (Cloudflare) — แยกทางเดินจาก action เดิมทั้งหมด (ดูหมวด "สะพานแอป v2" ท้ายไฟล์)
   try {
     const spec = ACTIONS()[a];
     if (!spec) return jsonOut({ ok: false, error: 'ไม่รู้จัก action: ' + a });
@@ -1896,4 +1897,226 @@ function rotateExecKey() {
 function healthCheck() {
   Logger.log('P&K System ' + CODE_VERSION + ' · PK_SHEET_ID=' + (prop('PK_SHEET_ID') ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง — รัน setupPkSystem()'));
   Logger.log('PK_KEY=' + (prop('PK_KEY') ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง') + ' · PK_EXEC_KEY=' + (prop('PK_EXEC_KEY') ? 'ตั้งแล้ว' : 'ยังไม่ตั้ง'));
+}
+
+// ═════════════════════════════════════════════════════════════
+//  สะพานแอป v2 (Cloudflare Pages + D1 — โค้ดอยู่ v2/ ของ repo นี้ · สเปก docs/app-v2/README.md §3)
+//  Google = สะพานเท่านั้น: ① ตรวจ PIN แล้วออก "ตั๋ว" (PIN ไม่เคยออกจาก Google) ② ส่งข้อมูลชีตแบบอ่านอย่างเดียวให้ v2 นำเข้า
+//  ⚠️ หมวดนี้ "อ่านอย่างเดียว" กับชีทบัญชี (ACCOUNTING_SHEET_ID) และชีต AppSheet เดิมทุกไฟล์ — ห้ามมีคำสั่งเขียนใด ๆ
+//     (เทสต์ v2/tests/gas-bridge.test.mjs ตั้งชีตพวกนั้นเป็นอ่านอย่างเดียว เขียนเมื่อไหร่ = แดง)
+//  action เดิมทุกตัวไม่ถูกแตะ — doGet ส่ง action ที่ขึ้นต้น pkV2 มาที่นี่ก่อนถึงโค้ดเดิม (เทสต์เทียบผลกับรุ่นใน main ทุกตัว)
+//
+//  กุญแจ (Script Properties — สร้างเองครั้งแรก ไม่ต้องตั้งมือ):
+//    PK_V2_SECRET = กุญแจแม่ (อยู่ใน Google เท่านั้น) → แตกเป็น 3 ดอก:
+//      ticket = ลงชื่อตั๋ว (ต้องใส่ใน Cloudflare secret PK_TICKET_KEY)
+//      sync   = ลงชื่อการส่งข้อมูลนำเข้า (Cloudflare secret PK_SYNC_KEY)
+//      pin    = ลายนิ้วมือ PIN (ไม่ออกจาก Google — Cloudflare เก็บได้แค่ลายนิ้วมือ เดา PIN กลับไม่ได้)
+//    รัน v2ShowKeys() ใน editor ครั้งเดียว → ก๊อป 2 ดอกแรกไปใส่ Cloudflare (ดู v2/README.md "สิ่งที่คุณปาล์มต้องทำเอง")
+//    สงสัยว่าหลุด → v2RotateKeys() = ตั๋วทุกใบตายทันที ทุกคนใส่ PIN ใหม่ + ใส่ 2 ดอกใหม่ใน Cloudflare
+//  ตั๋ว: pk1.<base64url JSON {v,k,sid,n,r,pf,iat,exp}>.<base64url HMAC-SHA256> — ตรงกับ v2/server/ticket.mjs
+// ═════════════════════════════════════════════════════════════
+const V2_TICKET_DAYS = 30;                 // ตั๋วประจำเครื่อง
+const V2_GATE_MIN = 5;                     // ตั๋ว PIN-ตอนบันทึก (ทีมผลิต)
+const V2_DEPT_ROLE = { 'ออฟฟิศ': 'office', 'ผลิต': 'prod', 'สกรีน': 'screen', 'ส่งของ': 'deliver', 'บัญชี': 'account', 'บริหาร': 'exec' };
+// แท็บของ PKSystem ที่ส่งออกได้ — ไม่มี Staff (มี PIN) · ไม่มี Settings/ActivityLog (ไม่จำเป็นต่อ v2)
+const V2_PK_TABS = ['Customers', 'Products', 'Materials', 'Orders', 'Production', 'ScreenJobs', 'Deliveries', 'Bills', 'Statements', 'StockMoves', 'ProductionLogs', 'Machines', 'PriceHistory'];
+const V2_EXPORT_MAX = 500;
+
+function v2Secret_() {
+  const sp = PropertiesService.getScriptProperties();
+  let s = sp.getProperty('PK_V2_SECRET');
+  if (s) return s;
+  const lock = LockService.getScriptLock();
+  lock.waitLock(10000);   // สองคำขอแรกพร้อมกัน ต้องได้กุญแจดอกเดียวกัน
+  try {
+    s = sp.getProperty('PK_V2_SECRET');
+    if (!s) { s = Utilities.getUuid() + Utilities.getUuid(); sp.setProperty('PK_V2_SECRET', s); }
+  } finally { lock.releaseLock(); }
+  return s;
+}
+function v2B64u_(x) { return Utilities.base64EncodeWebSafe(x).replace(/=+$/, ''); }
+function v2Hmac_(key, text) { return v2B64u_(Utilities.computeHmacSha256Signature(text, key, Utilities.Charset.UTF_8)); }
+function v2Key_(name) { return v2Hmac_(v2Secret_(), 'pk-v2|' + name + '|v1'); }
+function v2Same_(a, b) { a = String(a); b = String(b); let d = a.length ^ b.length; for (let i = 0; i < a.length; i++) d |= a.charCodeAt(i) ^ (b.charCodeAt(i) || 0); return d === 0; }
+function v2AsciiJson_(o) { return JSON.stringify(o).replace(/[\u007f-￿]/g, function (c) { return '\\u' + ('000' + c.charCodeAt(0).toString(16)).slice(-4); }); }
+function v2PinFp_(sid, pin) { return v2Hmac_(v2Key_('pin'), 'pf|' + sid + '|' + pin).slice(0, 22); }
+function v2Roles_(dept) {
+  const out = [];
+  String(dept || '').split(/[,\/\s]+/).forEach(function (d) { const r = V2_DEPT_ROLE[d.trim()]; if (r && out.indexOf(r) < 0) out.push(r); });
+  return out;
+}
+// แถวพนักงานจากชีต Staff (อ่านตรง — ใช้ PIN ในหน่วยความจำเท่านั้น ไม่ส่งออก)
+function v2StaffRow_(sid, nick) {
+  const st = readTab('Staff');
+  const rows = toObjs(st.head, st.rows);
+  const sidS = String(sid || '').trim(), nickS = String(nick || '').trim();
+  return rows.filter(function (s) { return sidS ? String(s['Staff_ID']).trim() === sidS : (nickS && String(s['ชื่อเล่น']).trim() === nickS); })[0] || null;
+}
+function v2Issue_(row, kind) {
+  const now = Date.now();
+  const body = v2B64u_(v2AsciiJson_({
+    v: 1, k: kind, sid: String(row['Staff_ID']).trim(), n: String(row['ชื่อเล่น']).trim(), r: v2Roles_(row['แผนก']),
+    pf: v2PinFp_(String(row['Staff_ID']).trim(), String(row['PIN']).trim()), iat: now,
+    exp: now + (kind === 'g' ? V2_GATE_MIN * 60000 : V2_TICKET_DAYS * 864e5),
+  }));
+  return { ticket: 'pk1.' + body + '.' + v2Hmac_(v2Key_('ticket'), 'pk1.' + body), exp: now + (kind === 'g' ? V2_GATE_MIN * 60000 : V2_TICKET_DAYS * 864e5) };
+}
+function v2Body_(e) {
+  try { return e && e.postData && e.postData.contents ? JSON.parse(e.postData.contents) : null; } catch (err) { return null; }
+}
+
+// ① PIN → ตั๋ว (POST เท่านั้น — PIN ไม่อยู่ใน URL) · ผิด 5 ครั้ง = ล็อก 10 นาที (กติกาเดียวกับ login เดิม)
+function v2Ticket_(e) {
+  const b = v2Body_(e);
+  if (!b) return { ok: false, error: 'ต้องส่ง PIN แบบ POST (เนื้อ JSON)' };
+  const pin = String(b.pin || '').trim();
+  const kind = b.kind === 'g' ? 'g' : 's';
+  if (!pin || (!b.sid && !b.nick)) return { ok: false, error: 'ต้องเลือกชื่อและใส่ PIN' };
+  const cache = CacheService.getScriptCache();
+  const fkey = 'v2lf:' + String(b.sid || b.nick);
+  const fails = Number(cache.get(fkey) || 0);
+  if (fails >= 5) return { ok: false, error: 'ใส่ PIN ผิดเกิน 5 ครั้ง — รอ 10 นาทีแล้วลองใหม่', locked: true };
+  const row = v2StaffRow_(b.sid, b.nick);
+  if (!row || String(row['สถานะ']).trim() !== 'ทำงาน' || !String(row['PIN']).trim() || !String(row['Staff_ID']).trim()) {
+    cache.put(fkey, String(fails + 1), 600);
+    return { ok: false, error: row && String(row['สถานะ']).trim() !== 'ทำงาน' ? 'บัญชีนี้ถูกพักการใช้งาน' : 'ชื่อหรือ PIN ไม่ถูกต้อง', pinWrong: true };
+  }
+  if (!v2Same_(String(row['PIN']).trim(), pin)) {
+    cache.put(fkey, String(fails + 1), 600);
+    return { ok: false, error: 'PIN ไม่ถูกต้อง', pinWrong: true, left: Math.max(0, 4 - fails) };
+  }
+  cache.remove(fkey);
+  const t = v2Issue_(row, kind);
+  return { ok: true, ticket: t.ticket, exp: t.exp, staff: { id: String(row['Staff_ID']).trim(), nick: String(row['ชื่อเล่น']).trim(), roles: v2Roles_(row['แผนก']) } };
+}
+
+// ตรวจตั๋วด้วยชีต Staff ปัจจุบัน (ใช้ตอนต่ออายุ — PIN เปลี่ยน/พัก = ต่อไม่ได้)
+function v2Verify_(token) {
+  const m = /^pk1\.([A-Za-z0-9_-]{20,3000})\.([A-Za-z0-9_-]{43})$/.exec(String(token || ''));
+  if (!m || !v2Same_(v2Hmac_(v2Key_('ticket'), 'pk1.' + m[1]), m[2])) return null;
+  let p;
+  try { p = JSON.parse(Utilities.newBlob(Utilities.base64DecodeWebSafe(m[1] + '==='.slice((m[1].length + 3) % 4))).getDataAsString()); } catch (err) { return null; }
+  if (!p || p.v !== 1 || !(Number(p.exp) > Date.now())) return null;
+  const row = v2StaffRow_(p.sid, '');
+  if (!row || String(row['สถานะ']).trim() !== 'ทำงาน' || !String(row['PIN']).trim()) return null;
+  if (!v2Same_(v2PinFp_(String(p.sid), String(row['PIN']).trim()), p.pf)) return null;
+  return { p: p, row: row };
+}
+// ② ต่ออายุตั๋วประจำเครื่อง (หน้าเว็บเรียกเองเบื้องหลังเมื่อเหลือ < 7 วัน — ใช้ทุกวัน = ไม่ต้องใส่ PIN ใหม่)
+function v2Renew_(e) {
+  const b = v2Body_(e) || {};
+  const v = v2Verify_(b.ticket);
+  if (!v || v.p.k !== 's') return { ok: false, error: 'ตั๋วใช้ไม่ได้แล้ว — เข้าสู่ระบบใหม่', needLogin: true };
+  const t = v2Issue_(v.row, 's');
+  return { ok: true, ticket: t.ticket, exp: t.exp };
+}
+
+// ③ ส่งข้อมูลชีตแบบอ่านอย่างเดียว ทีละหน้า — คำขอต้องลงชื่อด้วยกุญแจ sync (อายุ 5 นาที) · คำตอบลงชื่อกลับ (Cloudflare ตรวจว่ามาจาก GAS จริง)
+//   source: 'staff' · 'pk:<แท็บ>' · 'acct' · 'legacy:order' · 'legacy:customer' · 'legacy:stock:<แท็บ>'
+//   cursor: เลขแถวข้อมูลที่เริ่ม (0 = แถวแรกหลังหัว) · acct ใช้ '<ลำดับแท็บ>:<แถว>'
+function v2Export_(e) {
+  const p = (e && e.parameter) || {};
+  const source = String(p.source || ''), cursor = String(p.cursor || '0'), limit = String(p.limit || '300'), ts = String(p.ts || '');
+  if (!/^\d{13}$/.test(ts) || Math.abs(Date.now() - Number(ts)) > 300000) return { ok: false, error: 'คำขอหมดอายุ/เวลาไม่ตรง (เกิน 5 นาที)' };
+  if (!v2Same_(v2Hmac_(v2Key_('sync'), ['pkV2Export', source, cursor, limit, ts].join('|')), String(p.sig || ''))) return { ok: false, error: 'ลายเซ็นคำขอไม่ถูกต้อง' };
+  const n = Math.max(1, Math.min(V2_EXPORT_MAX, Number(limit) || 300));
+  let out;
+  if (source === 'staff') out = v2ExportStaff_();
+  else if (source.indexOf('pk:') === 0) {
+    const t = source.slice(3);
+    if (V2_PK_TABS.indexOf(t) < 0) return { ok: false, error: 'แท็บนี้ส่งออกไม่ได้: ' + t };
+    out = v2Page_(book().getSheetByName(t), 0, Number(cursor) || 0, n);
+  } else if (source === 'acct') out = v2ExportAcct_(cursor, n);
+  else if (source === 'legacy:order') { const ss = SpreadsheetApp.openById(LEGACY_ORDER_SHEET_ID); out = v2Page_(ss.getSheets()[0], 0, Number(cursor) || 0, n); }
+  else if (source === 'legacy:customer') {
+    const ss = SpreadsheetApp.openById(LEGACY_CUSTOMER_SHEET_ID);
+    let hit = null;
+    ss.getSheets().forEach(function (sh) { if (!hit) { const h = v2FindHead_(sh, ['เส้นทาง-2', 'ลูกค้า']); if (h >= 0) hit = { sh: sh, h: h }; } });
+    if (!hit) return { ok: false, error: 'ไม่พบแท็บทะเบียนลูกค้า (หัว "เส้นทาง-2")' };
+    out = v2Page_(hit.sh, hit.h, Number(cursor) || 0, n);
+  } else if (source.indexOf('legacy:stock:') === 0) {
+    const id = prop('LEGACY_STOCK_SHEET_ID');
+    if (!id) return { ok: false, error: 'ยังไม่ได้ตั้ง Script Property LEGACY_STOCK_SHEET_ID (ชีต Stock Management)' };
+    const sh = SpreadsheetApp.openById(id).getSheetByName(source.slice(13));
+    if (!sh) return { ok: false, error: 'ไม่พบแท็บ ' + source.slice(13) + ' ในชีต Stock Management' };
+    out = v2Page_(sh, 0, Number(cursor) || 0, n);
+  } else return { ok: false, error: 'ไม่รู้จักแหล่งข้อมูล: ' + source };
+  out.source = source;
+  out.at = Date.now();
+  const data = JSON.stringify(out);
+  return { ok: true, data: data, sig: v2Hmac_(v2Key_('sync'), data) };
+}
+function v2FindHead_(sh, must) {
+  const last = Math.min(sh.getLastRow(), 10), cols = sh.getLastColumn();
+  if (last < 1 || cols < 1) return -1;
+  const v = sh.getRange(1, 1, last, cols).getValues();
+  for (let i = 0; i < v.length; i++) {
+    const row = v[i].map(function (x) { return String(x).trim(); });
+    if (must.every(function (m) { return row.indexOf(m) >= 0; })) return i;
+  }
+  return -1;
+}
+// อ่านหนึ่งหน้าของแท็บ: หัวอยู่แถว headIdx (0 = แถวแรก) · ข้อมูลเริ่มถัดจากหัว + cursor · อ่านแค่ช่วงที่ต้องใช้ (getValues ครั้งเดียว)
+function v2Page_(sh, headIdx, cursor, n) {
+  if (!sh) return { tab: '', head: [], rows: [], cursor: cursor, next: null, total: 0 };
+  const lastRow = sh.getLastRow(), cols = sh.getLastColumn();
+  const head = cols ? sh.getRange(headIdx + 1, 1, 1, cols).getValues()[0].map(function (x) { return String(x).trim(); }) : [];
+  const total = Math.max(0, lastRow - headIdx - 1);
+  const from = headIdx + 2 + cursor;
+  const take = Math.max(0, Math.min(n, lastRow - from + 1));
+  const rows = take ? sh.getRange(from, 1, take, cols).getValues().map(function (r) { return r.map(fmtCell); }) : [];
+  return { tab: sh.getName(), head: head, rows: rows, cursor: cursor, next: cursor + take < total ? cursor + take : null, total: total };
+}
+// พนักงาน: ไม่มี PIN ไม่มี Token — มีลายนิ้วมือ (pf) แทน · แถวที่ยังไม่มี Staff_ID/PIN ส่งไปเป็นไม่มีลายนิ้วมือ (เข้า v2 ไม่ได้)
+function v2ExportStaff_() {
+  const st = readTab('Staff');
+  const rows = toObjs(st.head, st.rows).filter(function (s) { return String(s['Staff_ID']).trim() && String(s['ชื่อเล่น']).trim(); }).map(function (s) {
+    const sid = String(s['Staff_ID']).trim(), pin = String(s['PIN']).trim();
+    return [sid, String(s['ชื่อ'] || ''), String(s['ชื่อเล่น']).trim(), String(s['แผนก'] || ''), String(s['สถานะ'] || ''), String(s['เริ่มงาน'] || ''), pin ? v2PinFp_(sid, pin) : ''];
+  });
+  return { tab: 'Staff', head: ['Staff_ID', 'ชื่อ', 'ชื่อเล่น', 'แผนก', 'สถานะ', 'เริ่มงาน', 'pf'], rows: rows, cursor: 0, next: null, total: rows.length, pfAt: Date.now() };
+}
+// ชีท "ระบบบัญชี" (อ่านอย่างเดียว · ห้ามเขียนกลับเด็ดขาด) — ไล่ทีละแท็บที่มีหัว "เลขที่บิล" หรือ "รายชื่อลูกค้า"
+function v2ExportAcct_(cursor, n) {
+  const ss = SpreadsheetApp.openById(ACCOUNTING_SHEET_ID);
+  const sheets = ss.getSheets();
+  const c = String(cursor || '0:0').split(':');
+  let ti = Number(c[0]) || 0, r = Number(c[1]) || 0;
+  for (; ti < sheets.length; ti++, r = 0) {
+    let h = v2FindHead_(sheets[ti], ['เลขที่บิล']);
+    if (h < 0) h = v2FindHead_(sheets[ti], ['รายชื่อลูกค้า']);
+    if (h < 0) continue;
+    const pg = v2Page_(sheets[ti], h, r, n);
+    pg.cursor = ti + ':' + r;
+    pg.next = pg.next !== null ? ti + ':' + pg.next : (ti + 1 < sheets.length ? (ti + 1) + ':0' : null);
+    return pg;
+  }
+  return { tab: '', head: [], rows: [], cursor: cursor, next: null, total: 0 };
+}
+
+function v2Dispatch_(e) {
+  const a = String(((e && e.parameter) || {}).action || '');
+  try {
+    if (a === 'pkV2Health') return { ok: true, version: CODE_VERSION, keys: !!prop('PK_V2_SECRET') };
+    if (a === 'pkV2Ticket') return v2Ticket_(e);
+    if (a === 'pkV2Renew') return v2Renew_(e);
+    if (a === 'pkV2Export') return v2Export_(e);
+    return { ok: false, error: 'ไม่รู้จัก action: ' + a };
+  } catch (err) {
+    return { ok: false, error: 'สะพาน v2 ผิดพลาด: ' + String(err && err.message || err) };
+  }
+}
+
+// รันใน editor: โชว์กุญแจ 2 ดอกที่ต้องใส่ใน Cloudflare (ดอก pin ไม่โชว์ — ไม่ต้องออกจาก Google)
+function v2ShowKeys() {
+  Logger.log('ใส่ใน Cloudflare (Settings › Variables and Secrets ของโปรเจกต์ pk-v2 แบบ Secret):');
+  Logger.log('PK_TICKET_KEY = ' + v2Key_('ticket'));
+  Logger.log('PK_SYNC_KEY   = ' + v2Key_('sync'));
+  Logger.log('⚠️ ห้ามวางในแชท/ไลน์/ไฟล์ใน repo');
+}
+// สงสัยกุญแจหลุด: เปลี่ยนกุญแจแม่ → ตั๋วทุกใบตาย ทุกคนใส่ PIN ใหม่ · แล้วรัน v2ShowKeys() ใส่ 2 ดอกใหม่ใน Cloudflare
+function v2RotateKeys() {
+  PropertiesService.getScriptProperties().deleteProperty('PK_V2_SECRET');
+  v2Secret_();
+  Logger.log('เปลี่ยนกุญแจแม่แล้ว — รัน v2ShowKeys() แล้วใส่กุญแจใหม่ใน Cloudflare');
 }
