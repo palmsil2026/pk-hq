@@ -50,7 +50,7 @@ jobs:
           npm install --no-save --no-audit --no-fund playwright@1.63.0
           for i in 1 2 3; do npx playwright install --with-deps chromium && break; [ "$i" = 3 ] && exit 1; sleep 20; done
       - name: เทสต์หน้าจอ (ทุกบทบาท · 320/360/390/1366 · โหมดมืด · reduced-motion)
-        run: node --no-warnings --test v2/tests/ui/*.mjs   # ทุกไฟล์เทสต์หน้าจอ (Foundation · โมดูล)
+        run: node --no-warnings --test --test-concurrency=1 v2/tests/ui/*.mjs   # ทุกไฟล์เทสต์หน้าจอ (Foundation · โมดูล) ทีละไฟล์ — รันพร้อมกันเครื่อง CI ช้าจนเทสต์จับเวลาพลาด
       - name: ภาพหน้าจอ (ข้อมูลสมมติ)
         run: node --no-warnings v2/tools/shots.mjs "$RUNNER_TEMP/shots"
       - uses: actions/upload-artifact@v4
