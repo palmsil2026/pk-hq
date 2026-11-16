@@ -10,13 +10,15 @@ import { Fail, bad, conflict, notFound, need, text, int, oneOf, iso, thaiDay, sp
 import { PRODUCTS } from "../import/reference.generated.mjs";
 import { MONEY_IN_SQL, moneyInArgs, byChannel, AR_WHERE, billOut } from "./account-lib.mjs";
 import { defineExecStaff } from "./exec-staff.mjs";
+import { floorData } from "./prodRead.mjs";
+import { OPEN_STATUSES } from "./office-lib.mjs";
 
 registerTable("prices", { pk: "pid", created: false });
 registerTable("price_history", { pk: "item_key", stamp: false });
 
 const EXEC = ["exec"];
 export const PRICE_KINDS = ["ราคาโรงงาน", "ราคาหน้าร้าน", "ราคาไม่รวมฝา"];   // ตรงกับที่ออฟฟิศอ่าน (office-lib.mjs › PRICE_KIND)
-const OPEN_ORDER = "('รอผลิต','กำลังผลิต','รอสกรีน','กำลังสกรีน','พร้อมส่ง','ส่งบางส่วน')";
+const OPEN_ORDER = "('" + OPEN_STATUSES.join("','") + "')";   // ออเดอร์ที่ยังไม่จบ (รวม "ออเดอร์ใหม่" ที่ยังไม่ส่งเข้าคิว — ส่งวันนี้ก็ต้องนับ) · ชุดเดียวกับออฟฟิศ
 const REF = new Map(PRODUCTS.map(p => [p.SKU, p]));
 const satangOfBaht = s => { const m = /^(\d+)(?:\.(\d{1,2}))?$/.exec(String(s || "").trim()); return m ? Number(m[1]) * 100 + Number((m[2] || "").padEnd(2, "0") || 0) : null; };
 
@@ -32,8 +34,7 @@ export function defineExec(R) {
         ["SELECT f.id, f.at, f.day, f.kind, f.severity, f.team, f.title, f.detail, f.entity, f.entity_id, f.status, f.version, s.nick AS raised_nick FROM flags f LEFT JOIN staff s ON s.id = f.raised_by WHERE f.status = 'เปิด' ORDER BY f.severity = 'ด่วน' DESC, f.at DESC LIMIT 100"],
         ["SELECT id, nick, name, dept_th, src, created_at, version FROM staff WHERE status = 'ทำงาน' AND exec_ok_at = '' ORDER BY created_at, nick LIMIT 60"],
         ["SELECT coalesce(sum(good_pcs), 0) AS good, coalesce(sum(grade_b_pcs), 0) AS b, coalesce(sum(waste_pcs), 0) AS waste, count(*) AS runs FROM machine_runs WHERE ended_day = ? AND status = 'ปิดแล้ว'", today],
-        [`SELECT (SELECT count(*) FROM machine_runs WHERE status = 'กำลังผลิต') AS running, (SELECT count(*) FROM machines WHERE kind IN ('เป่า','ฉีด') AND status = 'ใช้งาน') AS total,
-            (SELECT count(*) FROM machine_events WHERE ended_at = '' AND status = 'ใช้งาน' AND kind = 'จอดเครื่อง') AS stopped`],
+        ["SELECT 1 AS one"],   // เครื่องเดิน: ใช้ตัวคิดเดียวกับแผนผังทีมผลิต (floorData) ข้างล่าง
         [`SELECT status, count(*) AS n, sum(urgent) AS urgent, sum(CASE WHEN due_day <> '' AND due_day < ? THEN 1 ELSE 0 END) AS late FROM orders WHERE status IN ${OPEN_ORDER} GROUP BY status`, today],
         [`SELECT count(*) AS n, sum(CASE WHEN status IN ('พร้อมส่ง','ส่งบางส่วน') THEN 1 ELSE 0 END) AS ready FROM orders WHERE due_day = ? AND status IN ${OPEN_ORDER}`, today],
         ["SELECT count(DISTINCT order_id) AS orders, coalesce(sum(qty_pcs), 0) AS pcs FROM delivery_loads WHERE status = 'ส่งแล้ว' AND done_day = ?", today],
@@ -42,14 +43,15 @@ export function defineExec(R) {
         [`SELECT count(*) AS n, coalesce(sum(b.total_satang - b.paid_satang), 0) AS satang FROM bills b WHERE ${AR_WHERE}`],
         ["SELECT status, started_at, finished_at FROM sync_runs WHERE source = 'acct' ORDER BY started_at DESC LIMIT 1"],
       ]);
+      const fs = (await floorData(X)).summary;   // "เครื่องเดิน X/12" ตรงกับหน้าแผนผังทุกตัว (รอบค้าง/จอด/รอบจากแอปเดิม นับแบบเดียวกัน)
       const os = {}; let urgent = 0, late = 0;
       orders.forEach(r => { os[r.status] = r.n; urgent += r.urgent || 0; late += r.late || 0; });
       const chans = byChannel(inToday);
       return {
         asOf: iso(X.now), today, flags, newStaff,
         made: Object.assign(made[0], { period: "รอบที่ปิดวันนี้ (" + today + ")" }),
-        machines: mach[0],
-        orders: { waitProd: (os["รอผลิต"] || 0) + (os["กำลังผลิต"] || 0), waitScreen: (os["รอสกรีน"] || 0) + (os["กำลังสกรีน"] || 0), waitSend: (os["พร้อมส่ง"] || 0) + (os["ส่งบางส่วน"] || 0), urgent, late },
+        machines: { running: fs.running, total: fs.total, stopped: fs.stopped, stale: fs.stale },
+        orders: { newOrders: os["ออเดอร์ใหม่"] || 0, waitProd: (os["รอผลิต"] || 0) + (os["กำลังผลิต"] || 0), waitScreen: (os["รอสกรีน"] || 0) + (os["กำลังสกรีน"] || 0), waitSend: (os["พร้อมส่ง"] || 0) + (os["ส่งบางส่วน"] || 0), urgent, late },
         deliver: { dueToday: dueToday[0].n || 0, readyToday: dueToday[0].ready || 0, deliveredOrders: delivered[0].orders || 0, deliveredPcs: delivered[0].pcs || 0, period: "วันนี้ " + today },
         screenWaiting: screen[0].n,
         moneyIn: { day: today, byChannel: chans, total: chans.reduce((s, c) => s + c.satang, 0), period: "วันนี้ " + today + " · นับตามวันที่ชำระ" },

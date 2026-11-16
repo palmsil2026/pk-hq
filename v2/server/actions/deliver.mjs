@@ -10,7 +10,7 @@
 //  เงิน: ยังไม่เก็บเงินในหน้าส่งของ (รอคุณปาล์มตอบว่าคนขับเก็บเงินสดไหม) — การส่ง 1 ครั้งมี stop_id ไว้ผูกการรับเงินภายหลัง
 // ============================================================
 import { bad, conflict, notFound, need, int, text, iso, thaiDay, thaiHm, Fail, addDays, day as dayIn } from "../core.mjs";
-import { OPEN_ORDER_SQL, ON_TRUCK, ON_TRUCK_SQL, plainKey, screenKey, itemName, qtyText, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
+import { OPEN_ORDER_SQL, ON_TRUCK, ON_TRUCK_SQL, plainKey, screenKey, itemName, qtyText, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL, billAfterGuard } from "./deliver_common.mjs";
 
 const ROLES = ["deliver", "office"];
 const MAX_LINES = 60;
@@ -286,6 +286,7 @@ export function defineDeliver(R) {
   // ---- ส่งแล้ว (เต็ม/บางส่วน) — ที่เหลือยังอยู่บนรถ · ออเดอร์ที่ยังไม่ครบค้างเป็นงวดถัดไป ----
   R.define({
     name: "deliver.done", roles: ROLES, write: true, label: "ส่งแล้ว",
+    undo: { guard: billAfterGuard("SELECT order_id FROM delivery_loads WHERE stop_id = ?") },   // ออกบิลหลังส่งแล้ว = ย้อนส่งไม่ได้
     input: raw => ({ order: need(raw.order, "ออเดอร์", 40), loads: loadRefs(raw.loads, true) }),
     load: (X, input) => readLoads(X, input.loads, [
       ["SELECT i.*, t.piece_unit FROM order_items i LEFT JOIN product_types t ON t.code = i.type WHERE i.order_id = ?", input.order],

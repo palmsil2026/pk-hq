@@ -32,6 +32,14 @@ export function thaiDay(ms) {
 export function thaiHm(ms) { const d = new Date(ms + TZ_MS); return pad(d.getUTCHours()) + ":" + pad(d.getUTCMinutes()); }
 /** วันไทย "YYYY-MM-DD" + HH:mm ไทย → มิลลิวินาที UTC */
 export function atThai(day, h, m) { const p = String(day).split("-").map(Number); return Date.UTC(p[0], p[1] - 1, p[2], h || 0, m || 0) - TZ_MS; }
+const TH_MON = ["ม.ค.", "ก.พ.", "มี.ค.", "เม.ย.", "พ.ค.", "มิ.ย.", "ก.ค.", "ส.ค.", "ก.ย.", "ต.ค.", "พ.ย.", "ธ.ค."];
+/** วันที่ที่คนอ่านในข้อความ/ธง: "2026-11-16" → "16 พ.ย. 69" (ปี พ.ศ. 2 หลัก · ไม่ใช่วันที่ = คืนตามเดิม) — ห้ามโชว์ปี-เดือน-วันแบบระบบบนจอ */
+export function thDate(day) {
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(String(day || ""));
+  return m ? Number(m[3]) + " " + TH_MON[Number(m[2]) - 1] + " " + String(Number(m[1]) + 543).slice(-2) : String(day || "");
+}
+/** วัน+เวลาไทยของเวลา ISO/มิลลิวินาที: "16 พ.ย. 69 12:39" */
+export const thDateTime = t => { const ms = typeof t === "number" ? t : Date.parse(t); return thDate(thaiDay(ms)) + " " + thaiHm(ms); };
 export function addDays(day, n) { return thaiDay(atThai(day, 12, 0) + n * 86400000); }
 export function isDay(v) { const s = String(v || ""); return /^\d{4}-\d{2}-\d{2}$/.test(s) && addDays(s, 0) === s; }
 export function isIso(v) { const s = String(v || ""); return s.length === 24 && /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/.test(s) && iso(Date.parse(s)) === s; }

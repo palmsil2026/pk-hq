@@ -10,7 +10,8 @@
 import { Fail, bad, conflict, notFound, need, text, int, day, oneOf, iso, thaiDay } from "../core.mjs";
 import { nameKey } from "../import/legacy.mjs";
 import { CATALOG_READS, catalogOf, normalizeItem, deriveOrder, statusSet, splitBags, gradeOf, PRICE_KIND } from "./office-lib.mjs";
-import { plainKey, screenKey, negativeStockFlags } from "./deliver_common.mjs";
+import { plainKey, screenKey, negativeStockFlags, billAfterGuard } from "./deliver_common.mjs";
+import { PROD_TYPES } from "./prodLib.mjs";
 
 export const ROLES_OFFICE = ["office", "exec"];
 const PURCHASE = ["", "ขายราคาโรงงาน", "ขายหน้าร้าน"], PRICE_MODE = ["", "มาตรฐาน", "พิเศษ"];
@@ -65,6 +66,9 @@ const itemRow = (it, extra) => ({
   spec_key: it.spec_key, label: it.label, bags: it.bags, per_bag: it.per_bag, extra_pcs: it.extra_pcs, qty_pcs: it.qty_pcs,
   price_satang: it.price_satang, price_reason: it.price_reason, product_id: it.product_id || null, ...(extra || {}),
 });
+/** ที่มาของของในรายการ: ของที่โรงงานไม่มีเครื่องผลิต (ฝา ฟิล์ม ถุง ลัง — ซื้อมาขาย) = ใช้ของในสต๊อกเสมอ
+ *  (ไม่งั้นงานผลิตฝาค้างในคิวทีมผลิตตลอดไป และออเดอร์ไม่ถึง "พร้อมส่ง") · ของที่ผลิตได้ = ตามที่ออฟฟิศเลือก (ตั้งต้น ผลิต) */
+export const sourceOf = (type, want) => (PROD_TYPES.indexOf(type) < 0 || want === "สต๊อก" ? "สต๊อก" : "ผลิต");
 /** งานผลิต (ถ้าผลิต) + งานสกรีน (ถ้ามีสีสกรีน) ของรายการหนึ่ง */
 function jobRows(X, order, item, source) {
   const out = { jobs: [], sjobs: [] };
@@ -139,7 +143,7 @@ export function defineOfficeOrders(R) {
       const rows = items.map((it, i) => ({ id: id + "-" + (i + 1), order_id: id, line_no: i + 1, ...itemRow(it), status: "ใช้งาน", src: "v2" }));
       const jobs = [], sjobs = [];
       if (input.queue) rows.forEach((row, i) => {
-        row.source = input.sources[i] === "สต๊อก" ? "สต๊อก" : "ผลิต";
+        row.source = sourceOf(row.type, input.sources[i]);
         const j = jobRows(X, order, row, row.source);
         jobs.push(...j.jobs); sjobs.push(...j.sjobs);
       });
@@ -170,7 +174,7 @@ export function defineOfficeOrders(R) {
       const act = ctx.items.filter(i => i.status !== "ยกเลิก");
       const ops = [], jobs = [], sjobs = [], items = [];
       for (const it of act) {
-        const source = input.sources[it.id] === "สต๊อก" ? "สต๊อก" : "ผลิต";
+        const source = sourceOf(it.type, input.sources[it.id]);
         const j = jobRows(X, o, it, source);
         jobs.push(...j.jobs); sjobs.push(...j.sjobs);
         items.push({ ...it, source });
@@ -234,9 +238,9 @@ export function defineOfficeOrders(R) {
         if (!old) {   // รายการใหม่
           if (billed) throw locked("มีบิลแล้ว — เพิ่มรายการไม่ได้ (ยกเลิกบิลก่อน หรือลงออเดอร์ใหม่สำหรับของที่เพิ่ม)");
           itemsChanged = true;
-          const row = { id: o.id + "-" + (++line), order_id: o.id, line_no: line, ...itemRow(it), status: "ใช้งาน", src: "v2", source: queued ? "ผลิต" : "" };
+          const row = { id: o.id + "-" + (++line), order_id: o.id, line_no: line, ...itemRow(it), status: "ใช้งาน", src: "v2", source: queued ? sourceOf(it.type, "ผลิต") : "" };
           ops.push({ op: "insert", table: "order_items", row });
-          if (queued) { const j = jobRows(X, { ...o, ...h }, row, "ผลิต"); j.jobs.forEach(r => { nextJobs.push(r); ops.push({ op: "insert", table: "production_jobs", row: r }); }); j.sjobs.forEach(r => { nextSjobs.push(r); ops.push({ op: "insert", table: "screen_jobs", row: r }); }); }
+          if (queued) { const j = jobRows(X, { ...o, ...h }, row, row.source); j.jobs.forEach(r => { nextJobs.push(r); ops.push({ op: "insert", table: "production_jobs", row: r }); }); j.sjobs.forEach(r => { nextSjobs.push(r); ops.push({ op: "insert", table: "screen_jobs", row: r }); }); }
           nextItems.push(row);
           flags.push(...itemChecks(it, ctx, h, ctx.cust.name, n + 1));
           return;
@@ -375,6 +379,7 @@ export function defineOfficeOrders(R) {
   // ══ ลูกค้ามารับเองที่โรงงาน (ส่งเป็นงวดได้) — ลงของออก + ตัดสต๊อก ════════════════════════
   R.define({
     name: "office.order_pickup", roles: ROLES_OFFICE, write: true,
+    undo: { guard: billAfterGuard("SELECT ?") },   // ออกบิลหลังลูกค้ารับของแล้ว = ย้อนการรับไม่ได้ (undo_log.entity_id = ออเดอร์)
     input: raw => {
       if (!Array.isArray(raw.lines) || !raw.lines.length) throw bad("ต้องใส่จำนวนที่ลูกค้ารับอย่างน้อย 1 รายการ");
       const lines = raw.lines.map((l, i) => ({ item_id: need(l.item_id, "รายการ", 60), qty_pcs: int(l.qty_pcs, "จำนวนที่รับ (รายการที่ " + (i + 1) + ")", { min: 0, max: 10000000 }) })).filter(l => l.qty_pcs > 0);

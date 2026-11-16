@@ -82,7 +82,7 @@ button.card:hover { border-color: var(--edge); }
 .btns { display: grid; gap: var(--sp-2); grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr); }
 
 /* ── ป้ายจำนวน [ขนาด | ตัวเลขหนา หน่วย] · ป้ายสถานะ (สี+คำ+สัญลักษณ์) ───────────── */
-.qty { display: inline-flex; min-width: 0; align-items: stretch; border: 1px solid var(--edge); border-radius: var(--r-sm); overflow: hidden; font-size: 14px; line-height: 1.6; white-space: nowrap; max-width: 100%; }
+.qty { display: inline-flex; flex: none; min-width: 0; align-items: stretch; border: 1px solid var(--edge); border-radius: var(--r-sm); overflow: hidden; font-size: 14px; line-height: 1.6; white-space: nowrap; max-width: 100%; }
 .qty i { min-width: 0; font-style: normal; padding: 0 7px; background: var(--surface-2); color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; }
 .qty b { padding: 0 7px; font: 800 15px/1.6 var(--font-display); }
 .qty b + i { background: none; padding-left: 0; }
@@ -102,7 +102,7 @@ button.card:hover { border-color: var(--edge); }
 @keyframes shimmer { to { background-position: -200% 0; } }
 .stamp { font-size: var(--fs-caption); color: var(--ink-2); display: inline-flex; align-items: center; gap: 4px; }
 .banner { display: flex; align-items: center; gap: var(--sp-3); padding: var(--sp-3) var(--sp-4); border-radius: var(--r-md); font-size: 15px; }
-.banner .btn { margin-left: auto; min-height: 40px; }
+.banner .btn { margin-left: auto; min-height: var(--tap); flex: none; }
 .banner.t-warn, .banner.t-bad, .banner.t-brand { border: 0; }
 .upd { position: sticky; top: 56px; z-index: 19; margin: 0; border-radius: 0; }
 
@@ -133,7 +133,7 @@ button.card:hover { border-color: var(--edge); }
 .chip { min-height: var(--tap); padding: 0 var(--sp-4); border: 1.5px solid var(--edge); border-radius: var(--r-full); background: var(--surface); font: 600 15px var(--font-display); color: var(--ink); }
 .chip[aria-pressed="true"] { background: var(--brand-soft); border-color: var(--brand); color: var(--brand-ink); }
 .field { display: grid; gap: 4px; }
-.field input, .field textarea { min-height: var(--tap); padding: var(--sp-2) var(--sp-3); border: 1.5px solid var(--edge); border-radius: var(--r-md); background: var(--surface); font-size: 16px; }
+.field input, .field textarea { width: 100%; min-width: 0; min-height: var(--tap); padding: var(--sp-2) var(--sp-3); border: 1.5px solid var(--edge); border-radius: var(--r-md); background: var(--surface); font-size: 16px; }
 .field input:focus, .field textarea:focus { border-color: var(--focus); outline: none; box-shadow: 0 0 0 3px var(--brand-soft); }
 .err { color: var(--bad); font-weight: 600; font-size: 15px; }
 

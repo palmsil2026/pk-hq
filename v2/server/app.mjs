@@ -207,10 +207,10 @@ export function createApp(opt) {
       const auth = request.headers.get("authorization") || "";
       const token = /^Bearer\s+(\S+)$/i.exec(auth);
       const a = await authenticate(X, token ? token[1] : "", X.reqKey);
+      X.staff = a.staff; X.roles = a.roles;
+      X.role = pickRole(a, body.as, def);   // สิทธิ์บทบาทก่อน — ทีมอื่นได้ "ทำไม่ได้" ทันที ไม่ถูกถาม PIN ก่อนแล้วค่อยโดนปฏิเสธ
       // ทีมผลิต: action ที่ติด gate ต้องใช้ตั๋วจาก PIN ที่เพิ่งใส่ตอนกดบันทึก (k='g') — ตั๋วประจำเครื่องใช้แทนไม่ได้
       if (def.gate && a.kind !== "g") throw new Fail(401, "need_pin", "ใส่ PIN เพื่อยืนยันว่าใครบันทึก", { needPin: true });
-      X.staff = a.staff; X.roles = a.roles;
-      X.role = pickRole(a, body.as, def);
       X.settings = await loadSettings(X);
       const input = def.input(body.input || {}, X);
       if (!def.write) return json(200, { ok: true, data: await def.run(X, input, def.load ? await def.load(X, input) : {}) });

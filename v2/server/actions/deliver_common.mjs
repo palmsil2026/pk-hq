@@ -8,7 +8,8 @@
 //    ส่งแล้ว         ไม่ขยับคลัง (ออกไปตอนขึ้นรถแล้ว) · เอาลงจากรถ = คืนเข้ากุญแจเดิม
 // ============================================================
 
-import { deriveOrder, statusSet, OPEN_STATUSES } from "./office-lib.mjs";   // สถานะออเดอร์กติกาเดียวทั้งระบบ (โมดูลออฟฟิศเปิดให้ใช้)
+import { deriveOrder, statusSet, OPEN_STATUSES } from "./office-lib.mjs";
+import { conflict } from "../core.mjs";   // สถานะออเดอร์กติกาเดียวทั้งระบบ (โมดูลออฟฟิศเปิดให้ใช้)
 
 export const OPEN_ORDER_STATUSES = OPEN_STATUSES;   // ออเดอร์ใหม่ · รอผลิต · กำลังผลิต · รอสกรีน · กำลังสกรีน · พร้อมส่ง · ส่งบางส่วน
 export const OPEN_ORDER_SQL = "('" + OPEN_ORDER_STATUSES.join("','") + "')";
@@ -70,3 +71,14 @@ export function patchRows(rows, changed) {
 /** เกรดสต๊อกของขวดเปล่า: สีเกรด B (เช่น "ดำ (เกรด B)") = B · ขวดสกรีนแล้ว = A (กติกาเดียวกับออฟฟิศ › ลูกค้ามารับ) */
 export const gradeFor = (key, item, bColors) => (key === plainKey(item) && (bColors || []).indexOf(item.color) >= 0 ? "B" : "A");
 export const B_COLORS_SQL = "SELECT value FROM spec_values WHERE axis = 'สี' AND grade = 'B'";
+
+/**
+ * ด่านย้อน "ส่งแล้ว" (ส่งของ · ลูกค้ามารับ): ออฟฟิศออกบิลของออเดอร์นั้นหลังการส่งนี้แล้ว = ขั้นถัดไปรับไปแล้ว → ย้อนไม่ได้
+ *   (ไม่งั้นมีบิลของที่ระบบบอกว่ายังไม่ได้ส่ง) · orderSql = SELECT ที่คืน order_id ของรายการที่จะย้อน (ผูกกับ undo_log.entity_id)
+ */
+export function billAfterGuard(orderSql) {
+  return async (X, u) => {
+    const b = await X.db.first(`SELECT bill_no, customer_name FROM bills WHERE status <> 'ยกเลิก' AND created_at >= ? AND order_id IN (${orderSql}) LIMIT 1`, u.created_at, u.entity_id);
+    if (b) throw conflict("ออฟฟิศออกบิลของออเดอร์นี้หลังส่งแล้ว — ย้อนการส่งไม่ได้ · ถ้าส่งไม่ถึงจริง ให้ออฟฟิศยกเลิกบิลก่อน แล้วค่อยย้อน");
+  };
+}

@@ -6,6 +6,8 @@
 //  ทุกปุ่มย้อนได้ (ของกลาง undo.run) จนกว่าขั้นถัดไปแตะ · สองทีมกดงานเดียวกัน = คนหลังได้ 409 พร้อมบอกว่าใครรับไปแล้ว
 // ============================================================
 import { bad, conflict, notFound, need, int, text, iso, thaiDay, thaiHm } from "../core.mjs";
+import { stockGuard } from "./prodRun.mjs";
+const screenUndoGuard = stockGuard((have, n) => "ขวดสกรีนจากงานนี้ขึ้นรถ/ส่งไปแล้ว (คงเหลือ " + have + " น้อยกว่า " + n + ") — ย้อนไม่ได้ · ถ้าจำนวนผิด ให้กด \"ลงจำนวน\" แก้แทน");
 import { plainKey, screenKey, itemName, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 
 const ROLES = ["screen", "office"];
@@ -133,6 +135,7 @@ export function defineScreen(R) {
   // ---- เสร็จแล้ว (ลงดี/เสียได้ ไม่บังคับ) ----
   R.define({
     name: "screen.done", roles: ROLES, write: true, label: "งานสกรีนเสร็จ",
+    undo: { guard: screenUndoGuard },   // ขวดสกรีนขึ้นรถ/ส่งไปแล้ว = ย้อนไม่ได้ (ไม่งั้นสต๊อกติดลบทั้งที่ของอยู่บนรถ) — ด่านเดียวกับย้อนปิดรอบ
     input: raw => ({
       id: need(raw.id, "งานสกรีน", 40), version: int(raw.version, "รุ่นของงาน", { min: 1 }), team: text(raw.team, 40),
       good: int(raw.good, "จำนวนดี", { min: 0, max: 10000000, optional: true }), waste: int(raw.waste, "จำนวนเสีย", { min: 0, max: 10000000, optional: true }),
@@ -160,6 +163,7 @@ export function defineScreen(R) {
   // ---- ลงจำนวนดี/เสีย ภายหลัง (งานที่เสร็จแล้ว) — ปรับสต๊อกตามส่วนต่าง ----
   R.define({
     name: "screen.count", roles: ROLES, write: true, label: "ลงจำนวนงานสกรีน",
+    undo: { guard: screenUndoGuard },   // ขวดสกรีนขึ้นรถ/ส่งไปแล้ว = ย้อนไม่ได้ (ไม่งั้นสต๊อกติดลบทั้งที่ของอยู่บนรถ) — ด่านเดียวกับย้อนปิดรอบ
     input: raw => ({ id: need(raw.id, "งานสกรีน", 40), version: int(raw.version, "รุ่นของงาน", { min: 1 }), good: int(raw.good, "จำนวนดี", { min: 0, max: 10000000 }), waste: int(raw.waste, "จำนวนเสีย", { min: 0, max: 10000000 }) }),
     load: (X, input) => loadJob(X, input.id, ""),
     async run(X, input, ctx) {

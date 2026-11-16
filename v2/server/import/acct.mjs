@@ -13,7 +13,7 @@
 //
 //  รันซ้ำกี่รอบก็ไม่เบิ้ล (คีย์ = เลขบิลเดิม · ค่าไม่เปลี่ยน = ข้าม) · หน้าเดียว = batch เดียว (ล้มทั้งหน้า ไม่ครึ่ง ๆ กลาง ๆ)
 // ============================================================
-import { iso, thaiDay } from "../core.mjs";
+import { iso, thaiDay, thDate } from "../core.mjs";
 import { thaiDate, satangOf, matchCustomer } from "./legacy.mjs";
 import { importCustomers } from "./importers.mjs";
 
@@ -119,7 +119,7 @@ const money = s => (Number(s) / 100).toLocaleString("en-US", { minimumFractionDi
 function diffFlag(acctId, row, twin) {
   return { op: "flag", kind: "ชีทบัญชีไม่ตรงแอป", team: "account", severity: "ดู", entity: "bills", entity_id: twin.bill_no,
     title: "ยอดในชีทบัญชีไม่ตรงกับบิลในแอป: " + row.customer_name + " เลข " + (row.paper_no || "") ,
-    detail: "ชีทบัญชี " + money(row.total_satang) + " บ. · ในแอป " + money(twin.total_satang) + " บ. (บิลวันที่ " + row.bill_day + ") — ตรวจว่าตัวไหนถูก แล้วแก้ที่ต้นทาง",
+    detail: "ชีทบัญชี " + money(row.total_satang) + " บ. · ในแอป " + money(twin.total_satang) + " บ. (บิลวันที่ " + thDate(row.bill_day) + ") — ตรวจว่าตัวไหนถูก แล้วแก้ที่ต้นทาง",
     dedupe_key: "acctdiff:" + acctId };
 }
 
@@ -140,7 +140,7 @@ async function finishRun(X, out, seenThisPage, page) {
   const seenTotal = Number(seenCount[0].n) + thisPage.size;
   const limit = Math.max(VOID_MIN_SAFE, Math.floor(active.length * VOID_MAX_SHARE));
   const day = thaiDay(X.now);
-  const sample = missing.slice(0, 6).map(b => b.customer_name + " " + money(b.total_satang) + " บ. (" + b.bill_day + ")").join(" · ");
+  const sample = missing.slice(0, 6).map(b => b.customer_name + " " + money(b.total_satang) + " บ. (" + thDate(b.bill_day) + ")").join(" · ");
   if (!seenTotal || missing.length > limit) {
     out.problems.push("บิลหายจากชีทบัญชี " + missing.length + " ใบ — มากผิดปกติ ระบบไม่ยกเลิกให้ (ตรวจว่าแท็บถูกเปลี่ยนชื่อ/ย้ายหรือเปล่า)");
     out.ops.push({ op: "flag", kind: "นำเข้ามีปัญหา", team: "account", severity: "ด่วน", title: "บิลหายจากชีทบัญชี " + missing.length + " ใบ — มากผิดปกติ ยังไม่ได้ยกเลิก",

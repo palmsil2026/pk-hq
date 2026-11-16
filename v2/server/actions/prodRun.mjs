@@ -10,7 +10,7 @@
 //         ข้ามเที่ยงคืนได้ (วันเริ่ม/วันปิดแยก) · เปิดซ้ำบนเครื่องที่มีรอบเปิด = 409 พร้อมรอบนั้น (หน้าเว็บพาไปปิด)
 //         รอบค้าง (เปิดนานเกิน RUN_STALE_HOURS หรือค้างจากแอปเดิม) ปิดย้อนหลังได้ + เหตุผล + ธง
 // ============================================================
-import { bad, conflict, notFound, need, text, int, oneOf, iso, thaiDay, thaiHm, specKey, specLabel, newId } from "../core.mjs";
+import { bad, conflict, notFound, need, text, int, oneOf, iso, thaiDay, thaiHm, thDate, thDateTime, specKey, specLabel, newId } from "../core.mjs";
 import { readSpec, readWhen, readCrew, crewOps, produceMoves, negativeFlag, stockKey, jobsOps, JOB_OF_RUN, RUN_KINDS, OPEN_RUN } from "./prodLib.mjs";
 
 const ROLES = ["prod"];   // ประธานใช้แอปทีมผลิตได้เอง (as=prod) ตามกติกากลาง
@@ -24,15 +24,17 @@ const busyRun = (m, run, crew) => conflict(m.name + " มีรอบเปิ�
   { open: openRunInfo(run, m.name, crew) });
 
 /** ย้อนรายการที่ลงยอดเข้าสต๊อก: ถ้าของถูกส่ง/ใช้ไปแล้ว (คงเหลือไม่พอให้หักคืน) = ย้อนไม่ได้ ให้ใช้ "แก้ยอด" พร้อมเหตุผลแทน */
-async function stockUndoGuard(X, u) {
+/** ด่านย้อนที่เช็คสต๊อก (ใช้ร่วมกับงานสกรีน) — why(มี, ต้องคืน) = ข้อความบอกเหตุ+ทางแก้ของงานนั้น */
+export const stockGuard = why => async (X, u) => {
   const need = new Map();
   for (const o of JSON.parse(u.ops_json)) if (o.op === "unmove" && o.qty_pcs > 0) { const k = o.item_key + "#" + o.grade; need.set(k, (need.get(k) || 0) + o.qty_pcs); }
   if (!need.size) return;
   const keys = [...need.keys()];
   const rows = await X.db.all(`SELECT item_key || '#' || grade AS k, qty_pcs FROM stock_balance WHERE item_key || '#' || grade IN (${keys.map(() => "?").join(",")})`, ...keys);
   const have = new Map(rows.map(r => [r.k, r.qty_pcs]));
-  for (const [k, n] of need) if ((have.get(k) || 0) < n) throw conflict("ของจากรอบนี้ถูกส่ง/ใช้ไปบางส่วนแล้ว (คงเหลือ " + (have.get(k) || 0).toLocaleString("en-US") + " น้อยกว่า " + n.toLocaleString("en-US") + ") — ย้อนไม่ได้ ใช้ \"แก้ยอด\" พร้อมเหตุผลแทน");
-}
+  for (const [k, n] of need) if ((have.get(k) || 0) < n) throw conflict(why((have.get(k) || 0).toLocaleString("en-US"), n.toLocaleString("en-US")));
+};
+const stockUndoGuard = stockGuard((have, n) => "ของจากรอบนี้ถูกส่ง/ใช้ไปบางส่วนแล้ว (คงเหลือ " + have + " น้อยกว่า " + n + ") — ย้อนไม่ได้ ใช้ \"แก้ยอด\" พร้อมเหตุผลแทน");
 
 
 export function defineProdRuns(R) {
@@ -134,12 +136,16 @@ export function defineProdRuns(R) {
       ops.push(...produceMoves(r, input.good, input.b));
       const id = "R" + X.newId();
       const it = { type: r.type, size: r.size, neck: r.neck, shape: r.shape, color: input.color };
-      ops.push({ op: "insert", table: "machine_runs", row: { id, machine_id: r.machine_id, job_id: r.job_id, ...it, spec_key: specKey(it, ctx.axes),
+      const sk = specKey(it, ctx.axes);
+      // ช่วงสีใหม่ = สเปกใหม่ → ผูกงานเดิมต่อได้เฉพาะเมื่อสเปกของงานตรง (ไม่งั้นขวดสีใหม่ไปนับเป็นยอดของงานสีเดิม) · ไม่ตรง = ผลิตเข้าสต๊อก ผูกงานใหม่ได้จากแผ่นเครื่อง
+      const keepJob = ctx.job && ctx.job.spec_key === sk ? r.job_id : null;
+      ops.push({ op: "insert", table: "machine_runs", row: { id, machine_id: r.machine_id, job_id: keepJob, ...it, spec_key: sk,
         started_at: at, started_day: thaiDay(X.now), status: "กำลังผลิต", opened_by: X.staff.id, chain_id: r.chain_id || r.id, prev_run_id: r.id, src: "v2" } });
       const nick = new Map(ctx.crew.map(c => [c.name_text, c.staff_id]));
       ops.push(...crewOps(id, ctx.crew.map(c => c.name_text), nick));
       if (ctx.job) ops.push(...await jobsOps(X, [[ctx.job, { good_pcs: ctx.job.made + input.good }]]));
-      return { result: { id, closed: r.id }, label: "เปลี่ยนสี " + machine_name + " " + (r.color || "—") + " → " + input.color, ops };
+      const unlinked = !!r.job_id && !keepJob;
+      return { result: { id, closed: r.id, unlinked }, label: "เปลี่ยนสี " + machine_name + " " + (r.color || "—") + " → " + input.color + (unlinked ? " · สีใหม่ผลิตเข้าสต๊อก (ผูกงานได้ที่แผ่นเครื่อง)" : ""), ops };
     },
   });
 
@@ -164,7 +170,7 @@ export function defineProdRuns(R) {
       if (r.status !== "กำลังผลิต" && r.status !== "ค้างจากระบบเดิม") throw conflict("รอบนี้ " + r.status + " ไปแล้ว — โหลดใหม่");
       if (r.version !== input.version) throw conflict();
       const end = input.ended_at || iso(X.now);
-      if (end < r.started_at) throw bad("เวลาปิดอยู่ก่อนเวลาเริ่ม (" + thaiHm(Date.parse(r.started_at)) + " " + thaiDay(Date.parse(r.started_at)) + ")");
+      if (end < r.started_at) throw bad("เวลาปิดอยู่ก่อนเวลาเริ่ม (" + thDateTime(r.started_at) + ")");
       const legacy = r.status === "ค้างจากระบบเดิม";
       const staleMs = Number(X.settings.RUN_STALE_HOURS || 14) * 3600000;
       const lateMs = Number(X.settings.LATE_CLOSE_MIN || 60) * 60000;
@@ -178,7 +184,7 @@ export function defineProdRuns(R) {
         note: input.note ? (r.note ? r.note + " · " : "") + input.note : r.note } }];
       if (!legacy) ops.push(...produceMoves(r, input.good, input.b));   // รอบจากแอปเดิม = ประวัติ ไม่แตะสต๊อก (นับยอดยกมาแทน)
       if (late) ops.push({ op: "flag", kind: "รอบค้าง", team: "prod", severity: "ดู", entity: "machine_runs", entity_id: r.id,
-        title: "ปิดรอบย้อนหลัง " + machine_name + " · " + specLabel(r), detail: "เริ่ม " + thaiDay(Date.parse(r.started_at)) + " " + thaiHm(Date.parse(r.started_at)) + " · ปิดเวลา " + thaiDay(Date.parse(end)) + " " + thaiHm(Date.parse(end)) + " · เหตุผล: " + X.reason + (legacy ? " · รอบจากแอปเดิม (ไม่แตะสต๊อก)" : ""), dedupe_key: "late:" + r.id });
+        title: "ปิดรอบย้อนหลัง " + machine_name + " · " + specLabel(r), detail: "เริ่ม " + thDateTime(r.started_at) + " · ปิดเวลา " + thDateTime(end) + " · เหตุผล: " + X.reason + (legacy ? " · รอบจากแอปเดิม (ไม่แตะสต๊อก)" : ""), dedupe_key: "late:" + r.id });
       for (const f of ctx.flags) ops.push({ op: "update", table: "flags", id: f.id, expect: f.version, before: f, set: { status: "ปิด", resolution: "ปิดรอบแล้ว (" + (X.reason || "ปิดรอบ") + ")", resolved_by: X.staff.id, resolved_at: iso(X.now) } });
       if (ctx.job) ops.push(...await jobsOps(X, [[ctx.job, { good_pcs: ctx.job.made + input.good }]]));
       return { result: { id: r.id, late, legacy }, label: "ปิดรอบ " + machine_name + " · ดี " + input.good.toLocaleString("en-US") + " ใบ", ops };
@@ -364,7 +370,7 @@ export function defineProdRuns(R) {
     },
     async run(X, input, ctx) {
       const ops = ctx.runs.map(r => ({ op: "flag", kind: "รอบค้าง", team: "prod", severity: "ดู", entity: "machine_runs", entity_id: r.id,
-        title: "รอบค้างไม่ได้ปิด " + r.machine_name + " · " + specLabel(r), detail: "เปิดตั้งแต่ " + thaiDay(Date.parse(r.started_at)) + " " + thaiHm(Date.parse(r.started_at)) + " — ปิดรอบย้อนหลังพร้อมเหตุผลในหน้าทีมผลิต", dedupe_key: "stale:" + r.id }));
+        title: "รอบค้างไม่ได้ปิด " + r.machine_name + " · " + specLabel(r), detail: "เปิดตั้งแต่ " + thDateTime(r.started_at) + " — ปิดรอบย้อนหลังพร้อมเหตุผลในหน้าทีมผลิต", dedupe_key: "stale:" + r.id }));
       if (ctx.legacy) ops.push({ op: "flag", kind: "รอบค้าง", team: "prod", severity: "ดู", title: "รอบค้างจากแอปเดิม " + ctx.legacy + " รอบ", detail: "นำเข้ามาเป็น \"ค้างจากแอปเดิม\" — ปิดย้อนหลังในหน้าทีมผลิต › ประวัติ (ไม่แตะสต๊อก)", dedupe_key: "stale:legacy" });
       ops.push({ op: "note", entity: "machine_runs", entity_id: "", after: { stale: ctx.runs.length, legacy: ctx.legacy } });
       return { result: { flagged: ctx.runs.length, legacy: ctx.legacy }, undo: false, ops };
@@ -403,7 +409,7 @@ export function defineProdRuns(R) {
         if (s.id === m.id) throw bad("เลือกช่องของเครื่องตัวเอง");
         if (ctx.busy) throw conflict(s.name + " มีรอบเปิดอยู่ — ปิดรอบก่อนรวมเครื่อง");
         Object.assign(set, { plant: s.plant, pos_x: s.pos_x, pos_y: s.pos_y, w: s.w, h: s.h, map_label: set.map_label || s.map_label || s.name, sub: set.sub || m.name });
-        ops.push({ op: "update", table: "machines", id: s.id, expect: s.version, before: s, set: { status: "เลิกใช้", note: (s.note ? s.note + " · " : "") + "รวมกับ " + m.name + " (" + thaiDay(X.now) + ")", src: "v2" } });
+        ops.push({ op: "update", table: "machines", id: s.id, expect: s.version, before: s, set: { status: "เลิกใช้", note: (s.note ? s.note + " · " : "") + "รวมกับ " + m.name + " (" + thDate(thaiDay(X.now)) + ")", src: "v2" } });
       }
       for (const k of Object.keys(set)) if (set[k] === m[k]) delete set[k];
       if (!Object.keys(set).filter(k => k !== "src").length && !ops.length) throw bad("ไม่มีอะไรเปลี่ยน");

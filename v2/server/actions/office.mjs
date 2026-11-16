@@ -19,6 +19,7 @@ import { OPEN_STATUSES, CATALOG_READS, catalogOf, deriveOrder, loadOrderParts, c
 import { defineOfficeOrders, loadOrder, ROLES_OFFICE } from "./office-orders.mjs";
 import { defineOfficeCustomers } from "./office-customers.mjs";
 import { defineOfficeBills, suggestDue } from "./office-bills.mjs";
+import { plainKey, screenKey, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 
 const IN = n => "(" + Array.from({ length: n }, () => "?").join(",") + ")";
 const OPEN_SQL = "('" + OPEN_STATUSES.join("','") + "')";
@@ -275,19 +276,24 @@ export function defineOffice(R) {
     name: "office.stock", roles: ROLES_OFFICE,
     async run(X) {
       const today = thaiDay(X.now);
-      const [bal, open] = await X.db.reads([
+      const [bal, open, bColors] = await X.db.reads([
         ["SELECT item_key, grade, label, qty_pcs, updated_at FROM stock_balance WHERE substr(item_key, 1, 5) = 'spec:' ORDER BY label"],
         [`SELECT id FROM orders WHERE status IN ${OPEN_SQL}`],
+        [B_COLORS_SQL],
       ]);
       const P = await loadOrderParts(X, open.map(r => r.id));
+      const bSet = bColors.map(b => b.value);
       const need = new Map();
       for (const [id, o] of P.orders) {
         const d = deriveOrder(o, P.items[id], P.jobs[id], P.sjobs[id], P.loads[id]);
         for (const i of d.items) {
           const left = Math.max(0, i.qty_pcs - i.delivered - i.on_truck);
           if (!left) continue;
-          const k = "spec:" + i.spec_key;
-          const n = need.get(k) || { label: i.label, type: i.type, size: i.size, need: 0, orders: 0, soonest: "" };
+          // กุญแจ/เกรดเดียวกับที่ขึ้นรถจะตัดจริง (deliver_common): สกรีนเสร็จแล้ว = ขวดสกรีน · ยังไม่เสร็จ = ขวดเปล่าที่รอสกรีน · สีเกรด B = สต๊อก B
+          const sj = (P.sjobs[id] || []).find(j => j.order_item_id === i.id && j.status !== "ยกเลิก");
+          const k = sj && sj.status === "เสร็จแล้ว" ? screenKey(i, sj) : plainKey(i);
+          const grade = gradeFor(k, i, bSet);
+          const n = need.get(k) || { label: i.label + (k !== plainKey(i) ? " สกรีน " + k.split("|สกรีน ")[1] : ""), type: i.type, size: i.size, need: 0, orders: 0, soonest: "", grade };
           n.need += left; n.orders++;
           if (o.due_day && (!n.soonest || o.due_day < n.soonest)) n.soonest = o.due_day;
           need.set(k, n);
@@ -300,10 +306,10 @@ export function defineOffice(R) {
         if (b.updated_at > r.updated_at) r.updated_at = b.updated_at;
         by.set(b.item_key, r);
       }
-      for (const [k, n] of need) { const r = by.get(k) || { item_key: k, label: n.label, a: 0, b: 0, updated_at: "" }; Object.assign(r, { need: n.need, orders: n.orders, soonest: n.soonest, type: n.type, size: n.size }); by.set(k, r); }
+      for (const [k, n] of need) { const r = by.get(k) || { item_key: k, label: n.label, a: 0, b: 0, updated_at: "" }; Object.assign(r, { need: n.need, orders: n.orders, soonest: n.soonest, type: n.type, size: n.size, grade: n.grade }); by.set(k, r); }
       const rows = [...by.values()].map(r => {
         const [type, size] = r.item_key.slice(5).split("|");
-        return { ...r, type: r.type || type, size: r.size || size, need: r.need || 0, orders: r.orders || 0, short: Math.max(0, (r.need || 0) - Math.max(0, r.a)) };
+        return { ...r, type: r.type || type, size: r.size || size, need: r.need || 0, orders: r.orders || 0, short: Math.max(0, (r.need || 0) - Math.max(0, r.grade === "B" ? r.b : r.a)) };
       }).sort((a, b) => (b.short > 0) - (a.short > 0) || b.need - a.need || String(a.label).localeCompare(String(b.label), "th"));
       return { asOf: iso(X.now), today, rows, started: bal.length > 0 };
     },

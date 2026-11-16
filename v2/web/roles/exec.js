@@ -1,6 +1,6 @@
 // ประธาน/คุณปาล์ม (?app=exec) — หน้าแรก "เรื่องที่ต้องตัดสินใจ" (ธงทุกทีม + คนใหม่ในรายชื่อ) → ภาพรวมวันนี้ · ระบบหาข้อยกเว้น คนตัดสิน
 //   เมนู: วันนี้ · แผนผัง (ดูอย่างเดียว) · เงิน · ราคา · ทีม (PIN/พักงาน ผ่าน Google — PIN ไม่ขึ้น Cloudflare) · ไม่มีรายงานรายวันที่ไม่มีเรื่องให้ตัดสิน
-import { floorView } from "./shared.js";
+import { floorView } from "./floor.js";   // แผนผังจริงของทีมผลิต (ผังโรง 1/โรง 2 · เครื่องเดิน X/12 เลขเดียวกับหน้าทีมผลิต) แบบดูอย่างเดียว
 import { thText, moneyInView, owingView, billSheet, syncButton, syncLine, moneyPad, chLabel } from "./money.js";
 
 const TEAM = { office: "ออฟฟิศ", prod: "ทีมผลิต", screen: "ทีมสกรีน", deliver: "ส่งของ", account: "บัญชี", exec: "ประธาน", "": "ระบบ" };
@@ -328,7 +328,7 @@ async function settingsBox(ctx, box) {
       const save = v => ctx.save("setting.set", { key: s.key, value: v, version: s.version }, { label: (SETTING_TH[s.key] || s.key) + " = " + v, after: () => { sh.close(); ctx.refresh(); } }).catch(() => {});
       sh.body.append(h("p.small.muted", s.note), onoff ? h("div.chips", [["1", "เปิด"], ["0", "ปิด"]].map(([v, l]) => h("button.chip", { type: "button", "aria-pressed": String(s.value === v), onclick: () => save(v) }, l))) : h("div.field", inp), h("p.ref", "ชื่อค่าตั้ง " + s.key));
       if (!onoff) sh.foot.append(h("button.btn.pri.block", { type: "button", onclick: () => save(inp.value.trim()) }, "บันทึก"));
-    } }, h("div.row", h("span.grow", SETTING_TH[s.key] || s.note || s.key), h("b", onoff ? (s.value === "0" ? "ปิด" : "เปิด") : (s.value || "—")))));
+    } }, h("div.row", h("span.grow", { style: { minWidth: "8em" } }, SETTING_TH[s.key] || s.note || s.key), h("b", { style: { minWidth: "0", overflowWrap: "anywhere" } }, onoff ? (s.value === "0" ? "ปิด" : "เปิด") : (s.value || "—")))));
   }
 }
 async function acctBox(ctx, box) {

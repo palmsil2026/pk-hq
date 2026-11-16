@@ -13,7 +13,7 @@ const CSS = `.numdisp[aria-pressed="false"]{border-color:var(--edge);box-shadow:
 button.card[aria-pressed="true"]{border-color:var(--brand);box-shadow:0 0 0 1.5px var(--brand)}
 .mbar{height:6px;border-radius:3px;background:var(--surface-2);overflow:hidden}.mbar>i{display:block;height:100%;background:var(--brand)}
 .tap{display:grid;gap:4px;width:100%;min-height:44px;padding:0;border:0;background:none;color:inherit;text-align:left;font:inherit;cursor:pointer}
-.sec-h{display:flex;align-items:baseline;gap:8px}.sec-h b{font:700 17px/1.35 var(--font-display)}.sec-h .n{margin-left:auto;font:800 22px/1 var(--font-display);font-variant-numeric:tabular-nums}`;
+.sec-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 8px}.sec-h b{flex:none;font:700 17px/1.35 var(--font-display)}.sec-h .n{margin-left:auto;font:800 22px/1 var(--font-display);font-variant-numeric:tabular-nums}`;
 if (typeof document !== "undefined" && !document.getElementById("pk-money-css")) document.head.append(h("style#pk-money-css", CSS));
 
 const CH_FALLBACK = [{ value: "เงินสด", label: "เงินสด" }, { value: "โอน KBank", label: "KBank" }, { value: "โอน KTB", label: "KTB" }, { value: "โอน BBL", label: "BBL" }, { value: "เช็ค", label: "เช็ค" }];

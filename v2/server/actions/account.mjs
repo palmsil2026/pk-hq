@@ -6,7 +6,7 @@
 //    · เลขกระดาษซ้ำวันเดียวกัน = บอกว่าซ้ำกับใคร (ยืนยันว่าคนละใบได้ + เหตุผล + ธง) · แก้/ยกเลิกได้เฉพาะบิลที่ลงจากแอปบัญชี
 //    · บิลจากชีทบัญชี = ดูได้ รับชำระ/แก้ในชีท (ไม่เขียนกลับ) · เงินเข้านับตามวันที่ชำระ · ทุกยอดบอกช่วงเวลา
 // ============================================================
-import { Fail, bad, conflict, notFound, need, text, int, day as dayOf, iso, thaiDay, addDays } from "../core.mjs";
+import { Fail, bad, conflict, notFound, need, text, int, day as dayOf, iso, thaiDay, addDays, thDate } from "../core.mjs";
 import { nameKey } from "../import/legacy.mjs";
 import {
   MONEY_ROLES, AR_WHERE, sourceOf, billOut, payDay, channelOf, MONEY_IN_SQL, moneyInArgs, byChannel, monthStart, monthEnd,
@@ -33,11 +33,11 @@ export function pickTwins(rows, billDay, billNo) {
 }
 /** เลขกระดาษซ้ำกับบิลในแอปใบอื่น วันเดียวกัน */
 const dupOf = (rows, billDay, billNo) => rows.find(d => d.bill_day === billDay && d.bill_no !== billNo && d.status !== "ยกเลิก") || null;
-const dupFail = (d, paper) => new Fail(409, "dup_paper", "เลขบิล #" + paper + " วันที่ " + d.bill_day + " ใช้กับ " + d.customer_name + " ฿" + baht(d.total_satang) + " ไปแล้ว — ถ้าเป็นคนละใบจริง กดยืนยันพร้อมเหตุผล",
+const dupFail = (d, paper) => new Fail(409, "dup_paper", "เลขบิล #" + paper + " วันที่ " + thDate(d.bill_day) + " ใช้กับ " + d.customer_name + " ฿" + baht(d.total_satang) + " ไปแล้ว — ถ้าเป็นคนละใบจริง กดยืนยันพร้อมเหตุผล",
   { dup: { customer_name: d.customer_name, total_satang: d.total_satang, bill_day: d.bill_day } });
 const dupFlag = (b, paper, d, reason) => ({ op: "flag", kind: "เลขบิลซ้ำ", team: "account", entity: "bills", entity_id: b.bill_no,
   title: "เลขบิลกระดาษ #" + paper + " ซ้ำวันเดียวกัน: " + b.customer_name + " กับ " + d.customer_name,
-  detail: "วันที่ " + b.bill_day + " · ยืนยันว่าคนละใบ เหตุผล: " + reason, dedupe_key: "duppaper:" + b.bill_no });
+  detail: "วันที่ " + thDate(b.bill_day) + " · ยืนยันว่าคนละใบ เหตุผล: " + reason, dedupe_key: "duppaper:" + b.bill_no });
 const payRow = (X, b, amount, channel, day, note) => ({ op: "insert", table: "bill_payments", row: {
   id: "P" + X.newId(), bill_no: b.bill_no, at: iso(X.now), day, amount_satang: amount, channel, status: "ใช้ได้", by: X.staff.id, note: note || "", src: "v2" } });
 
@@ -247,7 +247,7 @@ export function defineAccount(R) {
           { op: "note", entity: "bills", entity_id: b.bill_no, after: { paper_satang: input.paper_satang, bill_satang: b.total_satang, paper_no: input.paper_no } },
           { op: "flag", kind: "ยอดไม่ตรง", team: "office", severity: "ดู", entity: "bills", entity_id: b.bill_no,
             title: "ยอดบิลกระดาษไม่ตรงกับออเดอร์: " + b.customer_name,
-            detail: "บนบิลกระดาษ" + (input.paper_no ? " #" + input.paper_no : "") + " ฿" + baht(input.paper_satang) + " · ในระบบ ฿" + baht(b.total_satang) + " (บิลวันที่ " + b.bill_day + ") — ออฟฟิศเช็คแล้วแก้ที่ออเดอร์ แล้วบัญชีผูกเลขใหม่",
+            detail: "บนบิลกระดาษ" + (input.paper_no ? " #" + input.paper_no : "") + " ฿" + baht(input.paper_satang) + " · ในระบบ ฿" + baht(b.total_satang) + " (บิลวันที่ " + thDate(b.bill_day) + ") — ออฟฟิศเช็คแล้วแก้ที่ออเดอร์ แล้วบัญชีผูกเลขใหม่",
             dedupe_key: "mismatch:" + b.bill_no },
         ],
       };
@@ -289,7 +289,7 @@ export function defineAccount(R) {
       if (input.paper_no) {
         const inSheet = ctx.sheet.find(a => dayGap(a.bill_day, input.bill_day) <= 7);
         if (inSheet) {
-          throw new Fail(409, "in_sheet", "บิล #" + input.paper_no + " มีในชีทบัญชีแล้ว (" + inSheet.customer_name + " ฿" + baht(inSheet.total_satang) + " วันที่ " + inSheet.bill_day + ") — ไม่ต้องลงซ้ำ ระบบนับจากชีทให้แล้ว",
+          throw new Fail(409, "in_sheet", "บิล #" + input.paper_no + " มีในชีทบัญชีแล้ว (" + inSheet.customer_name + " ฿" + baht(inSheet.total_satang) + " วันที่ " + thDate(inSheet.bill_day) + ") — ไม่ต้องลงซ้ำ ระบบนับจากชีทให้แล้ว",
             { sheet: { customer_name: inSheet.customer_name, total_satang: inSheet.total_satang, bill_day: inSheet.bill_day } });
         }
       }
@@ -479,7 +479,7 @@ export function defineAccount(R) {
         const b = ctx.bills.get(input.items[0].bill_no);
         ops.push({ op: "flag", kind: "ยอดไม่ตรง", team: "account", severity: "ดู", entity: "bills", entity_id: b.bill_no,
           title: "ลูกค้าจ่ายเกินยอด ฿" + baht(input.excess) + ": " + b.customer_name,
-          detail: "รับเท่ายอดค้าง ฿" + baht(total) + " (" + input.channel + " วันที่ " + input.day + ") · ส่วนเกิน ฿" + baht(input.excess) + " ยังไม่ได้ลงที่ไหน · เหตุผล: " + X.reason });
+          detail: "รับเท่ายอดค้าง ฿" + baht(total) + " (" + input.channel + " วันที่ " + thDate(input.day) + ") · ส่วนเกิน ฿" + baht(input.excess) + " ยังไม่ได้ลงที่ไหน · เหตุผล: " + X.reason });
       }
       const one = ctx.bills.get(input.items[0].bill_no);
       return {
@@ -602,7 +602,7 @@ export function defineAccount(R) {
       for (const b of ctx.bills) {
         if (isAcct(b) || b.src !== "v2") throw bad(b.customer_name + ": " + sourceOf(b).why);
         if (b.status !== "ค้างชำระ") throw conflict(b.customer_name + ": บิลนี้" + (b.status === "ยกเลิก" ? "ถูกยกเลิกแล้ว" : "ชำระครบแล้ว") + " — โหลดใหม่");
-        if (b.stmt_no) throw conflict("บิลวันที่ " + b.bill_day + " อยู่ในใบวางบิล " + b.stmt_no + " แล้ว");
+        if (b.stmt_no) throw conflict("บิลวันที่ " + thDate(b.bill_day) + " อยู่ในใบวางบิล " + b.stmt_no + " แล้ว");
         if (key(b) !== k0) throw bad("ใบวางบิลหนึ่งใบต้องเป็นลูกค้ารายเดียวกัน");
       }
       const { no, op } = nextDoc(ctx.seq, "stmt:" + ctx.yy, "ST" + ctx.yy + "-");

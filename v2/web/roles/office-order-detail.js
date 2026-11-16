@@ -96,6 +96,8 @@ export function showOrder(ctx, id, host, opt) {
 }
 const fmtVal = (k, v) => (v === "" || v === null || v === undefined ? "ว่าง" : /_satang$/.test(k) ? "฿" + baht(v) : /_day$/.test(k) ? thDayLong(v) : k === "urgent" ? (v ? "ด่วน" : "ไม่ด่วน") : typeof v === "number" ? n0(v) : String(v));
 
+/** ของที่โรงงานผลิตเองได้ (ชุดเดียวกับหลังบ้าน server/actions/prodLib.mjs › PROD_TYPES) */
+const MADE_HERE = ["ขวด", "ถัง", "พรีฟอร์ม"];
 /** ส่งเข้าคิว: ต่อรายการเลือก "ผลิตใหม่" หรือ "ใช้ของในสต๊อก" (ตั้งต้น = ผลิต) · รอโอน/รอแบบ = เตือนก่อน */
 async function queueSheet(ctx, d, done) {
   const od = d.order, src = {};
@@ -103,6 +105,11 @@ async function queueSheet(ctx, d, done) {
   if (od.pay_status === "รอโอนเงิน" || od.design_status === "รอแบบ" || od.design_status === "แก้ไขแบบ")
     add(S.body, h("div.banner.t-warn", icon("alert"), h("span", "ออเดอร์นี้ " + [od.pay_status === "รอโอนเงิน" ? "ยังรอโอนเงิน" : "", /แบบ/.test(od.design_status) ? od.design_status : ""].filter(Boolean).join(" · ") + " — แน่ใจว่าให้เริ่มผลิตแล้ว")));
   d.items.forEach(it => {
+    if (MADE_HERE.indexOf(it.type) < 0) {   // ฝา ฟิล์ม ถุง ลัง = ซื้อมาขาย ไม่มีเครื่องผลิต → ใช้ของในสต๊อกเสมอ (หลังบ้านบังคับแบบเดียวกัน)
+      src[it.id] = "สต๊อก";
+      add(S.body, h("div.icard", h("div.row", h("b.grow", it.label), itemBadge(it)), h("span.small.muted", "ซื้อมาขาย — ใช้ของในสต๊อก (ไม่เข้าคิวผลิต)" + (it.stock_a ? " · มี " + n0(it.stock_a) : ""))));
+      return;
+    }
     src[it.id] = "ผลิต";
     const segs = h("div.chips", [["ผลิต", "ผลิตใหม่"], ["สต๊อก", "ใช้ของในสต๊อก" + (it.stock_a ? " (มี " + n0(it.stock_a) + ")" : "")]].map(([v, l]) =>
       h("button.chip", { type: "button", "aria-pressed": String(v === "ผลิต"), onclick: e => { src[it.id] = v; segs.querySelectorAll(".chip").forEach(c => c.setAttribute("aria-pressed", String(c === e.currentTarget))); } }, l)));

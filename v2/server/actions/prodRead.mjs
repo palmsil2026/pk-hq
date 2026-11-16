@@ -16,17 +16,15 @@ const runOut = r => ({ id: r.id, machine_id: r.machine_id, machine: r.machine_na
   started_at: r.started_at, started_day: r.started_day, ended_at: r.ended_at, ended_day: r.ended_day, end_kind: r.end_kind, status: r.status, good: r.good_pcs, b: r.grade_b_pcs, waste: r.waste_pcs,
   waste_reason: r.waste_reason, note: r.note, crew: r.crew || "", job_id: r.job_id, time_issue: r.time_issue, late_close: r.late_close, legacy: String(r.src || "").startsWith("legacy"), per_bag: r.per_bag || 0, version: r.version });
 
-export function defineProdRead(R) {
-  // ── แผนผังโรงงาน (หน้าแรกทีมผลิต) ──
-  R.define({
-    name: "prod.floor", roles: READ,
-    async run(X) {
+/** แผนผัง + สรุป "เครื่องเดิน X/12" — ตัวเดียวกันทั้งหน้าทีมผลิตและภาพรวมประธาน (home.exec) ให้เลขตรงกันเสมอ */
+export async function floorData(X) {
       const today = thaiDay(X.now);
       const staleH = Number(X.settings.RUN_STALE_HOURS || 14);
       const cut = iso(X.now - staleH * 3600000);
       const [machines, runs, evs, made, flags, waitJobs, waitItems] = await X.db.reads([
         ["SELECT id, name, map_label, sub, kind, plant, pos_x, pos_y, w, h, tracked, status, makes, rating, mold, version FROM machines WHERE status <> 'เลิกใช้' ORDER BY plant, pos_y, pos_x"],
-        [`SELECT r.id, r.machine_id, r.type, r.size, r.neck, r.shape, r.color, r.started_at, r.status, r.job_id, r.src, r.version, ${CREW} FROM machine_runs r WHERE r.status IN ${OPEN_RUN} ORDER BY r.started_at DESC`],
+        [`SELECT r.id, r.machine_id, r.type, r.size, r.neck, r.shape, r.color, r.started_at, r.status, CASE WHEN j.status IN ('รอผลิต','กำลังผลิต') THEN r.job_id END AS job_id, r.src, r.version, ${CREW}
+           FROM machine_runs r LEFT JOIN production_jobs j ON j.id = r.job_id WHERE r.status IN ${OPEN_RUN} ORDER BY r.started_at DESC`],   // งานถูกยกเลิก/จบแล้ว = แผนผังไม่บอกว่ายังผูกงาน
         ["SELECT id, machine_id, kind, reason, stage, mold_to, started_at, work_at, version FROM machine_events WHERE ended_at = '' AND status = 'ใช้งาน'"],
         [`SELECT r.machine_id, sum(r.good_pcs) AS good, sum(r.grade_b_pcs) AS b FROM machine_runs r WHERE r.status = 'ปิดแล้ว' AND ${DAYOF} = ? GROUP BY r.machine_id`, today],
         ["SELECT dedupe_key FROM flags WHERE status = 'เปิด' AND instr(dedupe_key, 'stale:') = 1"],
@@ -72,8 +70,11 @@ export function defineProdRead(R) {
         },
         sweep, machines: list,
       };
-    },
-  });
+}
+
+export function defineProdRead(R) {
+  // ── แผนผังโรงงาน (หน้าแรกทีมผลิต) ──
+  R.define({ name: "prod.floor", roles: READ, run: X => floorData(X) });
 
   // ── รายละเอียดเครื่อง (แผ่นล่าง): ไทม์ไลน์วันนี้ · ยอดผลิต วัน/เดือน/ทั้งหมด · ข้อมูลเครื่อง ──
   R.define({
