@@ -8,11 +8,12 @@
 //    ส่งแล้ว         ไม่ขยับคลัง (ออกไปตอนขึ้นรถแล้ว) · เอาลงจากรถ = คืนเข้ากุญแจเดิม
 // ============================================================
 
-export const OPEN_ORDER_STATUSES = ["รอผลิต", "กำลังผลิต", "รอสกรีน", "กำลังสกรีน", "พร้อมส่ง", "ส่งบางส่วน"];
+import { deriveOrder, statusSet, OPEN_STATUSES } from "./office-lib.mjs";   // สถานะออเดอร์กติกาเดียวทั้งระบบ (โมดูลออฟฟิศเปิดให้ใช้)
+
+export const OPEN_ORDER_STATUSES = OPEN_STATUSES;   // ออเดอร์ใหม่ · รอผลิต · กำลังผลิต · รอสกรีน · กำลังสกรีน · พร้อมส่ง · ส่งบางส่วน
 export const OPEN_ORDER_SQL = "('" + OPEN_ORDER_STATUSES.join("','") + "')";
 export const ON_TRUCK = ["บนรถ", "ส่งไม่ได้"];          // ของที่ยังอยู่บนรถ (ส่งไม่ได้ = ยังอยู่บนรถ จนกว่าจะส่งใหม่หรือเอาลง)
 export const ON_TRUCK_SQL = "('บนรถ','ส่งไม่ได้')";
-const PRE_DELIVERY = ["รอผลิต", "กำลังผลิต", "รอสกรีน", "กำลังสกรีน", "พร้อมส่ง"];
 
 export const plainKey = item => "spec:" + item.spec_key;
 export function screenColorOf(item, job) {
@@ -51,29 +52,21 @@ export function negativeStockFlags(balances, moves, team) {
 }
 
 /**
- * สถานะออเดอร์หลังงานสกรีนเปลี่ยน (ใช้เฉพาะช่วงก่อนส่ง — ส่งบางส่วน/ส่งแล้ว/ยกเลิก ไม่แตะ)
- *   มีงานกำลังสกรีน (จ่ายทีมแล้ว) → กำลังสกรีน
- *   ยังมีงานรอ (ไม่มีทีมทำอยู่)     → ถ้าเดิมกำลังสกรีน = รอสกรีน · อย่างอื่นคงเดิม
- *   งานสกรีนเสร็จหมด               → งานผลิตที่ผูกออเดอร์ยังไม่เสร็จ = กำลังผลิต/รอผลิต · ไม่งั้น = พร้อมส่ง
- *   jobs = งานสกรีนทั้งหมดของออเดอร์ (สถานะหลังเปลี่ยน) · prodJobs = งานผลิตที่ผูกออเดอร์ (ไม่รวมยกเลิก)
+ * สถานะออเดอร์ใช้กติกาเดียวกับโมดูลออฟฟิศ (office-lib › deriveOrder/statusSet — ยกจาก recomputeOrder_ ของ GAS)
+ *   ส่งรายการ/งาน/ของบนรถ "หลังบันทึก" เข้ามา → op เปลี่ยนสถานะเฉพาะเมื่อเปลี่ยนจริง (ไม่แตะ = ไม่ทำให้ "ย้อน" ของคนอื่นติด)
+ *   ออเดอร์ที่ไม่ใช่ของ v2 (นำเข้า/ตัวอย่าง) ไม่แตะ — แบบเดียวกับออฟฟิศ
  */
-export function orderStatusAfterScreen(order, jobs, prodJobs) {
-  const cur = order.status;
-  if (PRE_DELIVERY.indexOf(cur) < 0) return cur;
-  const act = jobs.filter(j => j.status !== "ยกเลิก");
-  if (!act.length) return cur;
-  if (act.some(j => j.status === "เตรียมการสกรีน")) return "กำลังสกรีน";
-  if (act.some(j => j.status === "รอดำเนินการ")) return cur === "กำลังสกรีน" ? "รอสกรีน" : cur;
-  const pend = (prodJobs || []).filter(p => p.status !== "เสร็จ" && p.status !== "ยกเลิก");
-  if (pend.length) return pend.some(p => p.status === "กำลังผลิต") ? "กำลังผลิต" : "รอผลิต";
-  return "พร้อมส่ง";
+export function orderStatusOp(X, order, items, prodJobs, screenJobs, loads) {
+  if (!order) return [];
+  const set = statusSet(order, deriveOrder(order, items, prodJobs, screenJobs, loads), X);
+  return set ? [{ op: "update", table: "orders", id: order.id, expect: order.version, before: order, set }] : [];
 }
-
-/** สถานะออเดอร์หลังส่ง: ทุกรายการส่งครบ = ส่งแล้ว · ส่งไปบ้าง = ส่งบางส่วน · ยังไม่ได้ส่งเลย = คงเดิม */
-export function orderStatusAfterDelivery(order, items) {
-  const act = items.filter(i => i.status === "ใช้งาน");
-  if (!act.length) return order.status;
-  if (act.every(i => i.delivered_pcs >= i.qty_pcs)) return "ส่งแล้ว";
-  if (act.some(i => i.delivered_pcs > 0)) return "ส่งบางส่วน";
-  return order.status === "ส่งแล้ว" || order.status === "ส่งบางส่วน" ? "พร้อมส่ง" : order.status;
+/** แทนแถวเดิมด้วยแถวหลังแก้ (ตามรหัส) + ต่อแถวใหม่ */
+export function patchRows(rows, changed) {
+  const m = new Map((rows || []).map(r => [r.id, r]));
+  (changed || []).forEach(r => m.set(r.id, Object.assign({}, m.get(r.id) || {}, r)));
+  return [...m.values()];
 }
+/** เกรดสต๊อกของขวดเปล่า: สีเกรด B (เช่น "ดำ (เกรด B)") = B · ขวดสกรีนแล้ว = A (กติกาเดียวกับออฟฟิศ › ลูกค้ามารับ) */
+export const gradeFor = (key, item, bColors) => (key === plainKey(item) && (bColors || []).indexOf(item.color) >= 0 ? "B" : "A");
+export const B_COLORS_SQL = "SELECT value FROM spec_values WHERE axis = 'สี' AND grade = 'B'";

@@ -190,8 +190,8 @@ export async function docSheet(ctx, input, extraFoot) {
   sh.title = d.title.replace(/ \(.*\)$/, "") + " · " + d.customer.name;
   sh.body.replaceChildren(docPaper(d));
   if (d.bills && d.bills.length) {
-    put(sh.body, h("div.card", h("div.lbl", "บิลของออเดอร์นี้ (ดูอย่างเดียว — ออก/แก้บิลที่ออฟฟิศ/บัญชี)"),
-      d.bills.map(b => h("div.row", h("span.grow", (b.kind || "บิล") + " · " + ui.thDay(b.day) + (b.paper_no ? " · เล่ม " + b.paper_no : "")), ui.pill(b.status, b.status === "ชำระแล้ว" ? "ok" : "warn"), h("b", ui.money(b.total_satang))))));
+    put(sh.body, h("div.card", h("div.lbl", "ออเดอร์นี้มีบิลแล้ว (ออฟฟิศ/บัญชีเป็นคนออกและเก็บเงิน)"),
+      d.bills.map(b => h("div.row", h("span.grow", "บิล" + (b.kind || "") + " · " + ui.thDay(b.day) + (b.paper_no ? " · เลขบิลกระดาษ " + b.paper_no : "")), ui.pill(b.status, b.status === "ชำระแล้ว" ? "ok" : "warn")))));
   }
   const shareBtn = h("button.btn.pri", { type: "button" }, icon("download", "sm"), "ส่งรูป / ไลน์");
   shareBtn.addEventListener("click", () => ui.busy(shareBtn, () => shareDoc(d)));

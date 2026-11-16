@@ -115,7 +115,7 @@ test("ส่งของ: เส้นทาง (timeline วัน → สา�
   await p.waitForSelector(".sheet.on h2:has-text('ส่งแล้ว · ร้านตัวอย่าง D')");
   await p.locator(".sheet.on .sheet-foot .btn.ok").click();
   await p.waitForSelector(".snack.on button:has-text('ย้อน')");
-  assert.equal(one("SELECT status FROM orders WHERE id = 'OD004'").status, "ส่งแล้ว");
+  assert.equal(one("SELECT delivered_pcs FROM order_items WHERE order_id = 'OD004'").delivered_pcs, 3000);   // ออเดอร์ตัวอย่าง (ไม่ใช่ v2) สถานะไม่ไหล — กติกาออฟฟิศ
   await p.locator("nav.nav a[data-key='done']").click();
   await p.locator(".stopsdone button.card", { hasText: "ร้านตัวอย่าง D" }).click();
   await p.waitForSelector(".sheet.on .paper");
@@ -128,7 +128,7 @@ test("ส่งของ: เส้นทาง (timeline วัน → สา�
   await p.locator(".sheet.on.modal .btn.pri", { hasText: "ย้อนการส่ง" }).click();
   await p.waitForSelector(".snack.on:has-text('กลับไปอยู่บนรถ')");
   assert.equal(one("SELECT status FROM delivery_loads WHERE id = ?", L.id).status, "บนรถ");
-  assert.equal(one("SELECT status FROM orders WHERE id = 'OD004'").status, "พร้อมส่ง");
+  assert.equal(one("SELECT delivered_pcs FROM order_items WHERE order_id = 'OD004'").delivered_pcs, 0);
   assert.deepEqual(p.errors, []);
   await p.context().close();
 });
@@ -152,7 +152,7 @@ test("ส่งของ: ส่งบางส่วน (แป้นตัว�
   await p.waitForSelector(".snack.on button:has-text('ย้อน')");
   const rows = S.d1.q("SELECT status, qty_pcs, split_from FROM delivery_loads WHERE order_id = 'OD001' AND status <> 'ยกเลิก' ORDER BY qty_pcs DESC");
   assert.deepEqual(rows.map(r => [r.status, r.qty_pcs]), [["ส่งแล้ว", 6000], ["บนรถ", 2000]]);
-  assert.equal(one("SELECT status FROM orders WHERE id = 'OD001'").status, "ส่งบางส่วน");
+  assert.equal(one("SELECT delivered_pcs FROM order_items WHERE id = 'OD001-1'").delivered_pcs, 6000);
   // ส่งไม่ได้: ต้องเลือกเหตุผล
   await p.locator(".truckblk", { hasText: "รถ 04" }).locator(".card.job", { hasText: "ร้านตัวอย่าง A" }).locator("button", { hasText: "ส่งไม่ได้" }).click();
   await p.waitForSelector(".sheet.on.modal .chip");

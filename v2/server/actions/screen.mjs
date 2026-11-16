@@ -6,28 +6,30 @@
 //  ทุกปุ่มย้อนได้ (ของกลาง undo.run) จนกว่าขั้นถัดไปแตะ · สองทีมกดงานเดียวกัน = คนหลังได้ 409 พร้อมบอกว่าใครรับไปแล้ว
 // ============================================================
 import { bad, conflict, notFound, need, int, text, iso, thaiDay, thaiHm } from "../core.mjs";
-import { plainKey, screenKey, itemName, negativeStockFlags, orderStatusAfterScreen } from "./deliver_common.mjs";
+import { plainKey, screenKey, itemName, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 
 const ROLES = ["screen", "office"];
-const LIVE = ["รอดำเนินการ", "เตรียมการสกรีน"];
 
 // ---- อ่านงาน + ของที่ต้องใช้ตัดสิน (1 รอบคุยกับฐาน) ----
 async function loadJob(X, id, teamCode) {
   const sub = "(SELECT order_id FROM screen_jobs WHERE id = ?)";
   const itemSub = "(SELECT spec_key FROM order_items WHERE id = (SELECT order_item_id FROM screen_jobs WHERE id = ?))";
-  const [jobs, orders, siblings, prods, teams, last, items, bal] = await X.db.reads([
+  const [jobs, orders, siblings, prods, teams, last, items, bal, loads, bColors] = await X.db.reads([
     ["SELECT * FROM screen_jobs WHERE id = ?", id],
     [`SELECT o.*, c.name AS customer_name FROM orders o LEFT JOIN customers c ON c.id = o.customer_id WHERE o.id = ${sub}`, id],
-    [`SELECT id, status FROM screen_jobs WHERE order_id = ${sub}`, id],
-    [`SELECT id, status FROM production_jobs WHERE order_id = ${sub} AND status <> 'ยกเลิก'`, id],
+    [`SELECT * FROM screen_jobs WHERE order_id = ${sub}`, id],
+    [`SELECT * FROM production_jobs WHERE order_id = ${sub}`, id],
     ["SELECT code, active FROM screen_teams WHERE code = ?", teamCode || ""],
     ["SELECT staff_name, at, action FROM audit_log WHERE entity = 'screen_jobs' AND entity_id = ? ORDER BY id DESC LIMIT 1", id],
-    ["SELECT i.*, t.piece_unit FROM order_items i LEFT JOIN product_types t ON t.code = i.type WHERE i.id = (SELECT order_item_id FROM screen_jobs WHERE id = ?)", id],
-    [`SELECT item_key, qty_pcs FROM stock_balance WHERE grade = 'A' AND substr(item_key, 1, length('spec:' || ${itemSub})) = 'spec:' || ${itemSub}`, id, id],
+    [`SELECT i.*, t.piece_unit FROM order_items i LEFT JOIN product_types t ON t.code = i.type WHERE i.order_id = ${sub}`, id],
+    [`SELECT item_key, grade, qty_pcs FROM stock_balance WHERE substr(item_key, 1, length('spec:' || ${itemSub})) = 'spec:' || ${itemSub}`, id, id],
+    [`SELECT * FROM delivery_loads WHERE order_id = ${sub}`, id],
+    [B_COLORS_SQL],
   ]);
   const job = jobs[0];
   if (!job) throw notFound("ไม่พบงานสกรีนนี้ (อาจถูกเปลี่ยนไปแล้ว — โหลดใหม่)");
-  return { job, order: orders[0], siblings, prods, team: teams[0] || null, last: last[0] || null, item: items[0] || null, balances: bal };
+  return { job, order: orders[0], siblings, prods, team: teams[0] || null, last: last[0] || null, items, item: items.find(i => i.id === job.order_item_id) || null,
+    balances: bal, loads, bColors: bColors.map(b => b.value) };
 }
 
 /** version ไม่ตรง = มีคนกดก่อน → บอกว่าใคร/ทีมไหน/เมื่อไร (คนหลังไม่ทับของคนแรก) */
@@ -40,13 +42,9 @@ function staleConflict(ctx) {
   return conflict("งานนี้มีคนแก้ไปก่อนแล้ว" + who + " — โหลดใหม่", { current: cur });
 }
 
-/** ออเดอร์: op เปลี่ยนสถานะเฉพาะเมื่อเปลี่ยนจริง (ไม่แตะ = ไม่ทำให้ "ย้อน" ของคนอื่นติด) */
-function orderOps(ctx, jobAfter) {
-  const o = ctx.order;
-  if (!o) return [];
-  const jobs = ctx.siblings.map(s => (s.id === ctx.job.id ? { id: s.id, status: jobAfter.status } : s));
-  const next = orderStatusAfterScreen(o, jobs, ctx.prods);
-  return next === o.status ? [] : [{ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set: { status: next } }];
+/** ออเดอร์: สถานะไหลตามงานจริง (กติกาเดียวกับออฟฟิศ) — op เฉพาะเมื่อเปลี่ยนจริง */
+function orderOps(X, ctx, jobAfter) {
+  return orderStatusOp(X, ctx.order, ctx.items, ctx.prods, patchRows(ctx.siblings, [{ ...ctx.job, ...jobAfter }]), ctx.loads);
 }
 
 /** จำนวนที่ใช้จริงของงาน: ดี (ไม่ลง = จำนวนงาน − เสีย) · ใช้ขวดเปล่า = ดี + เสีย */
@@ -61,11 +59,13 @@ function usage(job, item, good, waste) {
 function stockOps(X, ctx, dUsed, dGood) {
   const item = ctx.item;
   if (!item) return [];
-  const label = itemName(item);
+  const label = itemName(item), plain = plainKey(item), g = gradeFor(plain, item, ctx.bColors);
   const moves = [];
-  if (dUsed) moves.push({ op: "move", item_key: plainKey(item), label, grade: "A", qty_pcs: -dUsed, move_type: "เบิกสกรีน", ref_entity: "screen_jobs", ref_id: ctx.job.id });
+  if (dUsed) moves.push({ op: "move", item_key: plain, label, grade: g, qty_pcs: -dUsed, move_type: "เบิกสกรีน", ref_entity: "screen_jobs", ref_id: ctx.job.id });
   if (dGood) moves.push({ op: "move", item_key: screenKey(item, ctx.job), label: label + " สกรีน" + (item.screen_color || ctx.job.colors ? " " + (item.screen_color || ctx.job.colors) : ""), grade: "A", qty_pcs: dGood, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: ctx.job.id });
-  return [...moves, ...negativeStockFlags(ctx.balances, moves, X.role)];
+  const flags = [];
+  for (const gr of ["A", "B"]) flags.push(...negativeStockFlags(ctx.balances.filter(b => b.grade === gr), moves.filter(m => m.grade === gr), X.role));
+  return [...moves, ...flags];
 }
 
 export function defineScreen(R) {
@@ -125,7 +125,7 @@ export function defineScreen(R) {
       return {
         result: { id: j.id, team: input.team, from: j.team || "" },
         label: input.team + " รับงาน" + (cust ? " " + cust : "") + (j.team ? " (แทน " + j.team + ")" : ""),
-        ops: [{ op: "update", table: "screen_jobs", id: j.id, expect: j.version, before: j, set: after }, ...orderOps(ctx, after)],
+        ops: [{ op: "update", table: "screen_jobs", id: j.id, expect: j.version, before: j, set: after }, ...orderOps(X, ctx, after)],
       };
     },
   });
@@ -151,7 +151,7 @@ export function defineScreen(R) {
       const ops = [{ op: "update", table: "screen_jobs", id: j.id, expect: j.version, before: j, set }];
       ops.push(...stockOps(X, ctx, u.used, u.good));
       if (!ctx.item) ops.push({ op: "flag", kind: "ทำนอกขั้นตอน", team: X.role, entity: "screen_jobs", entity_id: j.id, title: "งานสกรีนไม่ผูกรายการสินค้า — สต๊อกไม่ขยับ", detail: "ให้ออฟฟิศผูกงานนี้กับรายการในออเดอร์", dedupe_key: "screen-noitem:" + j.id });
-      ops.push(...orderOps(ctx, set));
+      ops.push(...orderOps(X, ctx, set));
       const cust = ctx.order ? ctx.order.customer_name || "" : "";
       return { result: { id: j.id, team, good: u.good, waste: u.waste, used: u.used }, label: "สกรีนเสร็จ" + (cust ? " " + cust : "") + (team ? " · " + team : ""), ops };
     },

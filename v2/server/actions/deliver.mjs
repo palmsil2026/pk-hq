@@ -10,7 +10,7 @@
 //  เงิน: ยังไม่เก็บเงินในหน้าส่งของ (รอคุณปาล์มตอบว่าคนขับเก็บเงินสดไหม) — การส่ง 1 ครั้งมี stop_id ไว้ผูกการรับเงินภายหลัง
 // ============================================================
 import { bad, conflict, notFound, need, int, text, iso, thaiDay, thaiHm, Fail, addDays, day as dayIn } from "../core.mjs";
-import { OPEN_ORDER_SQL, ON_TRUCK, ON_TRUCK_SQL, plainKey, screenKey, itemName, qtyText, negativeStockFlags, orderStatusAfterDelivery } from "./deliver_common.mjs";
+import { OPEN_ORDER_SQL, ON_TRUCK, ON_TRUCK_SQL, plainKey, screenKey, itemName, qtyText, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 
 const ROLES = ["deliver", "office"];
 const MAX_LINES = 60;
@@ -184,7 +184,7 @@ export function defineDeliver(R) {
       const orderId = lines[0].order_id;
       const [orders, bills] = await X.db.reads([
         ["SELECT o.id, o.order_day, o.due_day, o.brand, c.name, c.address, c.phone, c.district, c.route_code FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?", orderId],
-        ["SELECT bill_no, bill_day, kind, status, total_satang, due_day, paper_no FROM bills WHERE order_id = ? AND status <> 'ยกเลิก' ORDER BY bill_day DESC LIMIT 3", orderId],
+        ["SELECT bill_no, bill_day, kind, status, due_day, paper_no FROM bills WHERE order_id = ? AND status <> 'ยกเลิก' ORDER BY bill_day DESC LIMIT 3", orderId],   // ไม่ส่งยอดเงิน — ทีมส่งของยังไม่ต้องเห็นเงิน (PALM-WAY §9: ขยายการเห็นเงินต้องถามก่อน)
       ]);
       const set = {};
       settings.forEach(s => { set[s.key] = s.value; });
@@ -203,7 +203,7 @@ export function defineDeliver(R) {
         vehicle: first.vehicle_id ? (first.vehicle_name || "รถ " + first.vehicle_id) + (first.plate ? " · " + first.plate : "") : "",
         by: first.by_nick || "", lines: [...merged.values()].map(m => ({ ...m, text: qtyText({ per_bag: m.per_bag, piece_unit: m.unit }, m.qty_pcs) })),
         totalPcs: lines.reduce((s, l) => s + l.qty_pcs, 0), ref: input.stop || orderId, orderDay: o.order_day,
-        bills: bills.map(b => ({ bill_no: b.bill_no, day: b.bill_day, kind: b.kind, status: b.status, total_satang: b.total_satang, due_day: b.due_day, paper_no: b.paper_no })),
+        bills: bills.map(b => ({ day: b.bill_day, kind: b.kind, status: b.status, due_day: b.due_day, paper_no: b.paper_no })),
       };
     },
   });
@@ -227,17 +227,18 @@ export function defineDeliver(R) {
       };
     },
     async load(X, input) {
-      const [orders, items, jobs, vehicles, trips, balances, loads] = await X.db.reads([
+      const [orders, items, jobs, vehicles, trips, balances, loads, bColors] = await X.db.reads([
         ["SELECT o.*, c.name AS customer_name FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id = ?", input.order],
         ["SELECT i.*, t.piece_unit FROM order_items i LEFT JOIN product_types t ON t.code = i.type WHERE i.order_id = ?", input.order],
         ["SELECT id, order_item_id, status, team, colors FROM screen_jobs WHERE order_id = ? AND status <> 'ยกเลิก'", input.order],
         ["SELECT * FROM vehicles WHERE id = ?", input.vehicle],
         ["SELECT * FROM delivery_trips WHERE id = ?", tripId(thaiDay(X.now), input.vehicle)],
-        ["SELECT b.item_key, b.qty_pcs FROM stock_balance b WHERE b.grade = 'A' AND EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = ? AND substr(b.item_key, 1, length('spec:' || i.spec_key)) = 'spec:' || i.spec_key)", input.order],
+        ["SELECT b.item_key, b.grade, b.qty_pcs FROM stock_balance b WHERE EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = ? AND substr(b.item_key, 1, length('spec:' || i.spec_key)) = 'spec:' || i.spec_key)", input.order],
         [`SELECT l.order_item_id, l.qty_pcs, l.loaded_at, t.vehicle_id, s.nick FROM delivery_loads l LEFT JOIN delivery_trips t ON t.id = l.trip_id LEFT JOIN staff s ON s.id = l.loaded_by WHERE l.order_id = ? AND l.status IN ${ON_TRUCK_SQL}`, input.order],
+        [B_COLORS_SQL],
       ]);
       if (!orders[0]) throw notFound("ไม่พบออเดอร์นี้ (อาจถูกเปลี่ยนไปแล้ว — โหลดใหม่)");
-      return { order: orders[0], items: new Map(items.map(i => [i.id, i])), jobs, vehicle: vehicles[0] || null, trip: trips[0] || null, balances, loads };
+      return { order: orders[0], items: new Map(items.map(i => [i.id, i])), jobs, vehicle: vehicles[0] || null, trip: trips[0] || null, balances, loads, bColors: bColors.map(b => b.value) };
     },
     async run(X, input, ctx) {
       const o = ctx.order;
@@ -265,11 +266,12 @@ export function defineDeliver(R) {
       for (const l of input.lines) {
         const it = ctx.items.get(l.item), id = "L" + X.newId(), key = stockKeyFor(it, ctx.jobs);
         loadRows.push({ op: "insert", table: "delivery_loads", row: { id, trip_id: trip.id, order_id: o.id, order_item_id: it.id, qty_pcs: l.qty, status: "บนรถ", loaded_at: iso(X.now), loaded_by: X.staff.id, stock_key: key } });
-        moves.push({ op: "move", item_key: key, label: itemName(it) + (key.indexOf("|สกรีน ") > 0 ? " สกรีน " + key.split("|สกรีน ")[1] : ""), grade: "A", qty_pcs: -l.qty, move_type: "ขึ้นรถ", ref_entity: "delivery_loads", ref_id: id });
+        moves.push({ op: "move", item_key: key, label: itemName(it) + (key.indexOf("|สกรีน ") > 0 ? " สกรีน " + key.split("|สกรีน ")[1] : ""), grade: gradeFor(key, it, ctx.bColors), qty_pcs: -l.qty, move_type: "ขึ้นรถ", ref_entity: "delivery_loads", ref_id: id });
         addDelta(deltas, it.id, "onboard", l.qty);
         pcs += l.qty;
       }
-      const flags = negativeStockFlags(ctx.balances, moves, X.role);
+      const flags = [];
+      for (const g of ["A", "B"]) flags.push(...negativeStockFlags(ctx.balances.filter(b => b.grade === g), moves.filter(m => m.grade === g), X.role));
       if (input.over && over.length) flags.push({ op: "flag", kind: "ทำนอกขั้นตอน", team: X.role, entity: "orders", entity_id: o.id, title: "ขึ้นรถเกินออเดอร์: " + o.customer_name, detail: over.join(" · ") + " · เหตุผล: " + X.reason });
       if (input.early && early.length) flags.push({ op: "flag", kind: "ทำนอกขั้นตอน", team: X.role, entity: "orders", entity_id: o.id, title: "ขึ้นรถก่อนสกรีนเสร็จ: " + o.customer_name, detail: early.join(" · ") + " · เหตุผล: " + X.reason });
       const label = "ขึ้นรถ " + ctx.vehicle.id + " · " + o.customer_name;
@@ -287,15 +289,19 @@ export function defineDeliver(R) {
     input: raw => ({ order: need(raw.order, "ออเดอร์", 40), loads: loadRefs(raw.loads, true) }),
     load: (X, input) => readLoads(X, input.loads, [
       ["SELECT i.*, t.piece_unit FROM order_items i LEFT JOIN product_types t ON t.code = i.type WHERE i.order_id = ?", input.order],
+      ["SELECT * FROM production_jobs WHERE order_id = ?", input.order],
+      ["SELECT * FROM screen_jobs WHERE order_id = ?", input.order],
+      ["SELECT * FROM delivery_loads WHERE order_id = ?", input.order],
     ]),
     async run(X, input, ctx) {
       const all = new Map(ctx.extra[0].map(i => [i.id, i]));
+      const [, prodJobs, screenJobs, orderLoads] = ctx.extra;
       const o = ctx.orders.get(input.order);
       if (!o) throw bad("ของที่เลือกไม่ใช่ของออเดอร์นี้ — โหลดใหม่");
       if (o.status === "ยกเลิก") throw conflict("ออเดอร์นี้ถูกยกเลิกแล้ว — เอาของลงคืนคลังแทน");
       const stop = "P" + X.newId(), at = iso(X.now), today = thaiDay(X.now);
       const ops = [{ op: "note", entity: "delivery_stops", entity_id: stop, after: { order: o.id, loads: ctx.picked.map(l => l.id) } }];
-      const deltas = new Map(), rest = [];
+      const deltas = new Map(), rest = [], changed = [];
       let pcs = 0;
       for (const l of ctx.picked) {
         if (l.order_id !== o.id) throw bad("ของที่เลือกปนกันหลายออเดอร์ — กดส่งทีละร้าน");
@@ -310,14 +316,16 @@ export function defineDeliver(R) {
           rest.push({ op: "insert", table: "delivery_loads", row: { id: rid, trip_id: l.trip_id, order_id: l.order_id, order_item_id: l.order_item_id, qty_pcs: l.qty_pcs - q, status: "บนรถ", loaded_at: l.loaded_at, loaded_by: l.loaded_by, stock_key: l.stock_key, split_from: l.id, note: "เหลือจากส่งบางส่วน" } });
         }
         ops.push({ op: "update", table: "delivery_loads", id: l.id, expect: l.version, before: l, set });
+        changed.push({ id: l.id, order_id: l.order_id, order_item_id: l.order_item_id, ...set, qty_pcs: q });
         addDelta(deltas, l.order_item_id, "delivered", q);
         addDelta(deltas, l.order_item_id, "onboard", -q);
         pcs += q;
       }
       ops.push(...rest, ...itemOps(all, deltas));
-      const after = [...all.values()].map(i => { const d = deltas.get(i.id) || {}; return { ...i, delivered_pcs: i.delivered_pcs + (d.delivered || 0) }; });
-      const next = orderStatusAfterDelivery(o, after);
-      if (next !== o.status) ops.push({ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set: next === "ส่งแล้ว" ? { status: next, delivered_day: today } : { status: next } });
+      const after = [...all.values()].map(i => { const d = deltas.get(i.id) || {}; return { ...i, delivered_pcs: i.delivered_pcs + (d.delivered || 0), onboard_pcs: Math.max(0, i.onboard_pcs + (d.onboard || 0)) }; });
+      const statusOps = orderStatusOp(X, o, after, prodJobs, screenJobs, patchRows(orderLoads, [...changed, ...rest.map(r => r.row)]));
+      ops.push(...statusOps);
+      const next = statusOps.length && statusOps[0].set.status ? statusOps[0].set.status : o.status;
       const restPcs = rest.reduce((s, r) => s + r.row.qty_pcs, 0);
       return {
         result: { stop, order: o.id, pcs, rest_pcs: restPcs, order_status: next }, label: "ส่งแล้ว · " + o.customer_name + (next === "ส่งบางส่วน" ? " (บางส่วน)" : ""), ops,
@@ -352,7 +360,7 @@ export function defineDeliver(R) {
     name: "deliver.unload", roles: ROLES, write: true, reason: "optional", label: "เอาของลงจากรถ",
     input: raw => ({ loads: loadRefs(raw.loads, false) }),
     load: (X, input) => readLoads(X, input.loads, [
-      [`SELECT item_key, qty_pcs FROM stock_balance WHERE grade = 'A' AND item_key IN (SELECT stock_key FROM delivery_loads WHERE id IN (${ph(input.loads.length)}))`, ...input.loads.map(l => l.id)],
+      [B_COLORS_SQL],
     ]),
     async run(X, input, ctx) {
       const at = iso(X.now), today = thaiDay(X.now);
@@ -364,7 +372,7 @@ export function defineDeliver(R) {
         if (o) names.add(o.customer_name);
         ops.push({ op: "update", table: "delivery_loads", id: l.id, expect: l.version, before: l, set: { status: "คืนคลัง", done_at: at, done_day: today, done_by: X.staff.id, note: X.reason || l.note } });
         const key = l.stock_key || (it ? plainKey(it) : "");
-        if (key) moves.push({ op: "move", item_key: key, label: itemName(it), grade: "A", qty_pcs: l.qty_pcs, move_type: "คืนคลัง", ref_entity: "delivery_loads", ref_id: l.id, reason: X.reason });
+        if (key) moves.push({ op: "move", item_key: key, label: itemName(it), grade: it ? gradeFor(key, it, ctx.extra[0].map(b => b.value)) : "A", qty_pcs: l.qty_pcs, move_type: "คืนคลัง", ref_entity: "delivery_loads", ref_id: l.id, reason: X.reason });
         addDelta(deltas, l.order_item_id, "onboard", -l.qty_pcs);
         pcs += l.qty_pcs;
       }

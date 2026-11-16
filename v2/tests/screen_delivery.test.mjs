@@ -3,7 +3,7 @@ import { test } from "node:test";
 import assert from "node:assert/strict";
 import { world, T0 } from "./helpers/world.mjs";
 import { specKey, specLabel } from "../server/core.mjs";
-import { orderStatusAfterScreen, orderStatusAfterDelivery, negativeStockFlags } from "../server/actions/deliver_common.mjs";
+import { negativeStockFlags } from "../server/actions/deliver_common.mjs";
 
 const AT = new Date(T0).toISOString();
 const TODAY = "2026-11-16";
@@ -125,9 +125,6 @@ test("สกรีน · เสร็จแล้ว (ไม่ลงจำน�
   const f = openFlags(W, "สต๊อกติดลบ");
   assert.equal(f.length, 1); assert.match(f[0].detail, /คงเหลือ -1,000 \(ก่อนหน้า 1,000\)/); assert.equal(f[0].team, "screen");
   assert.equal(ord(W, "OB").status, "พร้อมส่ง");
-  // งานผลิตที่ผูกออเดอร์ยังไม่เสร็จ → ไม่ใช่พร้อมส่ง
-  assert.equal(orderStatusAfterScreen({ status: "รอสกรีน" }, [{ status: "เสร็จแล้ว" }], [{ status: "กำลังผลิต" }]), "กำลังผลิต");
-  assert.equal(orderStatusAfterScreen({ status: "ส่งบางส่วน" }, [{ status: "เสร็จแล้ว" }], []), "ส่งบางส่วน", "ช่วงส่งแล้วไม่แตะ");
   assert.equal((await undo(W, T.screen, r2)).ok, true);
   assert.equal(openFlags(W, "สต๊อกติดลบ").length, 0, "ย้อนแล้วธงที่ยกในคำขอนั้นปิดเอง");
   assert.equal((await undo(W, T.screen, r1)).ok, true);
@@ -422,13 +419,47 @@ test("ส่งของ/สกรีน · ทุกปุ่มบันทึ
   assert.ok(await rounds(T.deliver, "deliver.unload", { loads: [{ id: R.id, version: 1 }] }) <= 4);
 });
 
-test("ตัวช่วย: สถานะออเดอร์หลังส่ง · ธงสต๊อกติดลบ (ครั้งเดียวต่อกุญแจ · ของเข้าไม่ยกธง)", () => {
-  const items = (a, b) => [{ status: "ใช้งาน", qty_pcs: 100, delivered_pcs: a }, { status: "ใช้งาน", qty_pcs: 50, delivered_pcs: b }, { status: "ยกเลิก", qty_pcs: 9, delivered_pcs: 0 }];
-  assert.equal(orderStatusAfterDelivery({ status: "พร้อมส่ง" }, items(100, 50)), "ส่งแล้ว");
-  assert.equal(orderStatusAfterDelivery({ status: "พร้อมส่ง" }, items(10, 0)), "ส่งบางส่วน");
-  assert.equal(orderStatusAfterDelivery({ status: "ส่งบางส่วน" }, items(0, 0)), "พร้อมส่ง");
-  assert.equal(orderStatusAfterDelivery({ status: "รอผลิต" }, items(0, 0)), "รอผลิต");
+test("ตัวช่วย: ธงสต๊อกติดลบ (ครั้งเดียวต่อกุญแจ · ของเข้าไม่ยกธง)", () => {
   const f = negativeStockFlags([{ item_key: "spec:a", qty_pcs: 5 }], [
     { item_key: "spec:a", qty_pcs: -3 }, { item_key: "spec:a", qty_pcs: -3 }, { item_key: "spec:a", qty_pcs: -3 }, { item_key: "spec:b", qty_pcs: 10 }], "deliver");
   assert.equal(f.length, 1); assert.equal(f[0].dedupe_key, "stockneg:spec:a"); assert.match(f[0].detail, /คงเหลือ -1 \(ก่อนหน้า 2\)/);
+});
+
+test("เงินไม่หลุดหน้าสกรีน/ส่งของ: คิว · เส้นทาง · ส่งแล้ว · ใบส่งของ (มีบิลแล้วบอกแค่ว่ามี ไม่บอกยอด)", async () => {
+  const { W, T } = await setup();
+  W.d1.raw.prepare("UPDATE order_items SET price_satang = 1234 WHERE order_id = 'OA'").run();
+  W.d1.raw.prepare("UPDATE orders SET total_satang = 987654 WHERE id = 'OA'").run();
+  W.d1.raw.prepare("INSERT INTO bills(bill_no,bill_day,customer_id,customer_name,order_id,total_satang,kind,status,created_at,updated_at) VALUES ('PB-T1',?,?,?,?,?,?,?,?,?)").run(TODAY, "CA", "ร้านทดสอบ ก", "OA", 987654, "เครดิต", "ค้างชำระ", AT, AT);
+  await W.call(T.deliver, "deliver.load", { order: "OA", vehicle: "04", lines: [{ item: "IA1", qty: 8000 }] });
+  const L = loadsOf(W, "OA")[0];
+  const d = await W.call(T.deliver, "deliver.done", { order: "OA", loads: [{ id: L.id, version: 1 }] });
+  for (const [tk, a, input] of [[T.screen, "screen.list", { tab: "queue" }], [T.deliver, "deliver.board", {}], [T.deliver, "deliver.done_list", {}], [T.deliver, "deliver.doc", { stop: d.data.stop }]]) {
+    const r = await W.call(tk, a, input);
+    assert.equal(r.ok, true, a);
+    const s = JSON.stringify(r.data);
+    assert.ok(!/_satang/.test(s) && !s.includes("987654") && !s.includes("9876.54") && !s.includes("1234"), a + " มีตัวเลขเงิน: " + s.slice(0, 160));
+  }
+  const doc = await W.call(T.deliver, "deliver.doc", { stop: d.data.stop });
+  assert.equal(doc.data.bills.length, 1); assert.equal(doc.data.bills[0].kind, "เครดิต");
+});
+
+test("สต๊อกเกรด B: สีเกรด B ตัดจากสต๊อกเกรด B (ไม่ปนของดี) · สถานะออเดอร์ตามกติกาออฟฟิศ (งานผลิตยังไม่เสร็จ = ยังไม่พร้อมส่ง) · ออเดอร์ใหม่ขึ้นเส้นทาง", async () => {
+  const { W, T } = await setup();
+  const B = { type: "ขวด", size: "600 ml", neck: "คอยาว", shape: "MK", color: "ดำ (เกรด B)" };
+  W.d1.raw.prepare("INSERT INTO spec_values(axis, value, pos, grade) VALUES ('สี', 'ดำ (เกรด B)', 99, 'B') ON CONFLICT DO NOTHING").run();
+  W.d1.raw.prepare("UPDATE spec_values SET grade = 'B' WHERE axis = 'สี' AND value = 'ดำ (เกรด B)'").run();
+  W.d1.raw.prepare("INSERT INTO orders(id,order_day,customer_id,due_day,status,created_at,updated_at) VALUES ('OG','2026-11-15','CA','','ออเดอร์ใหม่',?,?)").run(AT, AT);
+  W.d1.raw.prepare("INSERT INTO order_items(id,order_id,line_no,type,size,neck,shape,color,spec_key,label,bags,per_bag,qty_pcs,created_at,updated_at) VALUES ('IG1','OG',1,?,?,?,?,?,?,?,?,?,?,?,?)")
+    .run(B.type, B.size, B.neck, B.shape, B.color, specKey(B), specLabel(B), 2, 200, 400, AT, AT);
+  const board = (await W.call(T.deliver, "deliver.board", {})).data;
+  assert.ok(board.stops.some(s => s.id === "OG" && s.due_day === ""), "ออเดอร์ใหม่ (ยังไม่กำหนดวัน) ขึ้นในเส้นทาง");
+  const r = await W.call(T.deliver, "deliver.load", { order: "OG", vehicle: "04", lines: [{ item: "IG1", qty: 400 }] });
+  assert.equal(r.ok, true, JSON.stringify(r));
+  const k = "spec:" + specKey(B);
+  assert.equal(W.one("SELECT qty_pcs FROM stock_balance WHERE item_key = ? AND grade = 'B'", k).qty_pcs, -400);
+  assert.equal(W.one("SELECT count(*) n FROM stock_balance WHERE item_key = ? AND grade = 'A'", k).n, 0, "เกรด B ไม่แตะของดี");
+  // งานผลิตที่ผูกออเดอร์ยังไม่เสร็จ → สกรีนเสร็จแล้วออเดอร์ไม่ไป "พร้อมส่ง"
+  W.d1.raw.prepare("INSERT INTO production_jobs(id,order_id,order_item_id,type,spec_key,status,created_at,updated_at) VALUES ('PJ1','OC','IC1','ขวด',?, 'กำลังผลิต',?,?)").run(specKey(BOTTLE), AT, AT);
+  await W.call(T.screen, "screen.done", { id: "J3", version: 1, team: "ทีม 1" });
+  assert.equal(ord(W, "OC").status, "กำลังผลิต");
 });
