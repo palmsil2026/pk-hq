@@ -20,6 +20,12 @@ import { defineOfficeOrders, loadOrder, ROLES_OFFICE } from "./office-orders.mjs
 import { defineOfficeCustomers } from "./office-customers.mjs";
 import { defineOfficeBills, suggestDue } from "./office-bills.mjs";
 import { plainKey, screenKey, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
+import { defineOfficePlan } from "./office-plan.mjs";          // งวดส่ง · เลื่อน · รอยืนยัน · รวมตามสินค้า · หน้าร้าน (0210)
+import { defineOfficeDeposits, DEPOSIT_SQL, depositSum } from "./office-deposits.mjs";   // มัดจำ (0210)
+import { defineOfficeGeo } from "./office-geo.mjs";            // หมุดลูกค้า · แนะนำสาย · ชื่อสาย (0310)
+import { planState, wantRange } from "./office-plan-lib.mjs";
+import { mapsUrl, learnRoutes, districtKey } from "./geo-lib.mjs";
+const sentOf = loads => (loads || []).filter(l => l.status === "ส่งแล้ว").map(l => ({ order_item_id: l.order_item_id, qty_pcs: l.qty_pcs, done_day: l.done_day }));
 
 const IN = n => "(" + Array.from({ length: n }, () => "?").join(",") + ")";
 const OPEN_SQL = "('" + OPEN_STATUSES.join("','") + "')";
@@ -34,15 +40,18 @@ async function customersOf(X, ids) {
 async function unitsOf(X) { return new Map((await X.db.all("SELECT code, piece_unit FROM product_types")).map(t => [t.code, t.piece_unit])); }
 
 /** แถวออเดอร์สำหรับรายการ (ไม่มียอดเงิน · ไม่มีรหัสบนจอ — id ไว้เปิดรายละเอียดเท่านั้น) */
-function rowOf(o, d, cust, units, today, bill) {
+function rowOf(o, d, cust, units, today, bill, rounds) {
   const status = d.status;
+  const plan = planState(o, rounds, d.items, sentOf(d.loads));
+  const open = OPEN_STATUSES.indexOf(status) >= 0;
   let money = null;
   if (bill && bill.status === "ค้างชำระ") money = bill.due_day && bill.due_day < today ? "overdue" : "owing";
   else if (!bill && o.src === "v2" && o.status !== "ยกเลิก" && d.delivered > 0) money = "unbilled";
   return {
-    id: o.id, version: o.version, order_day: o.order_day, due_day: o.due_day, status, urgent: o.urgent, brand: o.brand, pay_status: o.pay_status, design_status: o.design_status,
+    id: o.id, version: o.version, order_day: o.order_day, due_day: open ? plan.due : o.due_day, status, hold: o.hold || 0, want_when: o.want_when || "", want_day: o.want_day || "",
+    reserve: open && plan.reserve, round: open && plan.current && plan.n > 1 ? { seq: plan.current.seq, n: plan.n, carried: plan.current.carried } : null, wait_next: open && plan.current ? plan.current.wait_next : false, urgent: o.urgent, brand: o.brand, pay_status: o.pay_status, design_status: o.design_status,
     src: o.src, customer_id: o.customer_id, customer: cust ? cust.name : o.customer_text, route_code: cust ? cust.route_code : null, district: cust ? cust.district : "",
-    late: !!o.due_day && o.due_day < today && OPEN_STATUSES.indexOf(status) >= 0, money, bill: bill ? { bill_no: bill.bill_no, status: bill.status, due_day: bill.due_day, kind: bill.kind } : null,
+    late: open && !!plan.due && plan.due < today, money, bill: bill ? { bill_no: bill.bill_no, status: bill.status, due_day: bill.due_day, kind: bill.kind } : null,
     qty: d.qty, delivered: d.delivered,
     items: d.items.map(i => ({ ...pick(i, ITEM_KEYS), piece_unit: units.get(i.type) || "ชิ้น" })),
   };
@@ -51,12 +60,16 @@ async function rowsFor(X, ids, today) {
   if (!ids.length) return [];
   const [P, units] = await Promise.all([loadOrderParts(X, ids), unitsOf(X)]);
   const custs = await customersOf(X, [...P.orders.values()].map(o => o.customer_id));
-  const bills = new Map();
-  for (const part of chunk(ids, 90)) (await X.db.all("SELECT bill_no, order_id, status, due_day, kind FROM bills WHERE status <> 'ยกเลิก' AND order_id IN " + IN(part.length), ...part)).forEach(b => bills.set(b.order_id, b));
+  const bills = new Map(), rounds = {};
+  for (const part of chunk(ids, 90)) {
+    (await X.db.all("SELECT bill_no, order_id, status, due_day, kind FROM bills WHERE status <> 'ยกเลิก' AND order_id IN " + IN(part.length), ...part)).forEach(b => bills.set(b.order_id, b));
+    (await X.db.all("SELECT * FROM order_rounds WHERE status = 'ใช้งาน' AND order_id IN " + IN(part.length), ...part)).forEach(r => { (rounds[r.order_id] = rounds[r.order_id] || []).push(r); });
+  }
   return ids.filter(id => P.orders.has(id)).map(id => {
     const o = P.orders.get(id);
     const d = deriveOrder(o, P.items[id], P.jobs[id], P.sjobs[id], P.loads[id]);
-    return rowOf(o, d, custs.get(o.customer_id), units, today, bills.get(id));
+    d.loads = P.loads[id];
+    return rowOf(o, d, custs.get(o.customer_id), units, today, bills.get(id), rounds[id]);
   });
 }
 
@@ -88,6 +101,9 @@ export function defineOffice(R) {
   defineOfficeOrders(R);
   defineOfficeCustomers(R);
   defineOfficeBills(R);
+  defineOfficePlan(R);
+  defineOfficeDeposits(R);
+  defineOfficeGeo(R);
 
   R.define({
     name: "office.home", roles: ROLES_OFFICE,
@@ -117,6 +133,8 @@ export function defineOffice(R) {
           { key: "money", label: "ค้างเงิน", hint: "ยังไม่ออกบิล/บิลค้าง", n: count("money"), tone: "warn" },
         ],
         acctOwing: acct[0] ? acct[0].n : 0,
+        // ของจอง (ยังไม่มีวันนัด) ค้างเกิน N วัน = ขึ้นรายชื่อให้โทรยืนยัน (ไม่ตัดเอง · N = ค่าตั้ง RESERVE_CALL_DAYS)
+        reserveCall: { days: Number(X.settings.RESERVE_CALL_DAYS || 14), ids: rows.filter(r => r.reserve && r.order_day <= addDays(today, -Number(X.settings.RESERVE_CALL_DAYS || 14))).map(r => r.id) },
         orders: rows,
       };
     },
@@ -166,14 +184,18 @@ export function defineOffice(R) {
         ["SELECT code, piece_unit FROM product_types"],
         ["SELECT s.nick, s.id FROM staff s JOIN orders o ON o.taker_staff_id = s.id WHERE o.id = ?", id],
         ["SELECT b.item_key, b.grade, b.qty_pcs FROM stock_balance b WHERE b.item_key IN (SELECT 'spec:' || spec_key FROM order_items WHERE order_id = ?)", id],
+        ["SELECT * FROM order_rounds WHERE order_id = ? AND status = 'ใช้งาน' ORDER BY seq", id],
+        [DEPOSIT_SQL, id],
+        ["SELECT e.id, e.seq, e.from_day, e.to_day, e.cause, e.note, e.created_at, s.nick FROM reschedule_events e LEFT JOIN staff s ON s.id = e.by_staff WHERE e.order_id = ? AND e.status = 'ใช้งาน' ORDER BY e.created_at DESC LIMIT 30", id],
         // รายการล่าสุดของออเดอร์นี้ที่ "ฉัน" ยังย้อนได้ (ลงออเดอร์พร้อมลูกค้าใหม่ = แถวย้อนผูกกับลูกค้า → หาผ่านรหัสคำขอเดียวกัน)
         [`SELECT u.id, u.label FROM undo_log u WHERE u.status = 'พร้อมย้อน' AND u.until_at > ? AND u.staff_id = ? AND u.audit_id IN
            (SELECT min(a2.id) FROM audit_log a1 JOIN audit_log a2 ON a2.req_key = a1.req_key WHERE a1.entity = 'orders' AND a1.entity_id = ? AND a1.req_key <> '' GROUP BY a1.req_key)
            ORDER BY u.created_at DESC LIMIT 1`, iso(X.now), X.staff.id, id],
       ]);
-      const [hist, bills, units, taker, stock, undo] = c.more;
+      const [hist, bills, units, taker, stock, rounds, deposits, moves, undo] = c.more;
       const o = c.o;
       const d = deriveOrder(o, c.items, c.jobs, c.sjobs, c.loads);
+      const plan = planState(o, rounds, d.items, sentOf(c.loads));
       const U = new Map(units.map(u => [u.code, u.piece_unit]));
       const activeBill = bills.find(b => b.status !== "ยกเลิก") || null;
       const started = d.items.some(i => (i.job && (i.job.status !== "รอผลิต" || i.job.good_pcs > 0)) || (i.screen && (i.screen.status !== "รอดำเนินการ" || i.screen.team)));
@@ -191,8 +213,11 @@ export function defineOffice(R) {
       };
       return {
         asOf: iso(X.now), today,
-        order: { ...o, status: d.status, stored_status: o.status, taker: taker[0] ? taker[0].nick : o.taker_text, late: !!o.due_day && o.due_day < today && OPEN_STATUSES.indexOf(d.status) >= 0 },
-        customer: c.cust ? pick(c.cust, ["id", "name", "phone", "district", "subdistrict", "route_code", "address", "map_url", "note", "credit_days", "status", "version"]) : null,
+        order: { ...o, status: d.status, stored_status: o.status, taker: taker[0] ? taker[0].nick : o.taker_text, due_day: OPEN_STATUSES.indexOf(d.status) >= 0 ? plan.due : o.due_day,
+          late: !!plan.due && plan.due < today && OPEN_STATUSES.indexOf(d.status) >= 0, want_range: wantRange(o.order_day, o.want_when, o.want_day) },
+        plan, reschedules: moves, deposits, deposit_satang: depositSum(deposits),
+        customer: c.cust ? { ...pick(c.cust, ["id", "name", "phone", "district", "subdistrict", "route_code", "address", "map_url", "note", "credit_days", "status", "version", "geo_src"]),
+          map_open: c.cust.geo_lat_e6 !== null && c.cust.geo_lat_e6 !== undefined ? mapsUrl(c.cust.geo_lat_e6, c.cust.geo_lng_e6) : "" } : null,
         items: d.items.map(i => ({ ...i, piece_unit: U.get(i.type) || "ชิ้น", stock_a: (stock.find(s => s.item_key === "spec:" + i.spec_key && s.grade === "A") || {}).qty_pcs || 0,
           stock_b: (stock.find(s => s.item_key === "spec:" + i.spec_key && s.grade === "B") || {}).qty_pcs || 0 })),
         cancelled_items: c.items.filter(i => i.status === "ยกเลิก").map(i => ({ id: i.id, label: i.label, qty_pcs: i.qty_pcs })),
@@ -244,7 +269,7 @@ export function defineOffice(R) {
     input: raw => ({ id: need(raw.id, "ลูกค้า", 40) }),
     async run(X, input) {
       const today = thaiDay(X.now);
-      const [c, aliases, items, orderIds, bills, merged] = await X.db.reads([
+      const [c, aliases, items, orderIds, bills, merged, peers] = await X.db.reads([
         ["SELECT * FROM customers WHERE id = ?", input.id],
         ["SELECT alias FROM customer_aliases WHERE customer_id = ? LIMIT 20", input.id],
         [`SELECT i.type, i.size, i.neck, i.shape, i.color, i.screen_color, i.cap_color, i.spec_key, i.label, i.bags, i.per_bag, i.extra_pcs, i.qty_pcs, i.price_satang, o.order_day, o.purchase_type
@@ -252,8 +277,13 @@ export function defineOffice(R) {
         ["SELECT id FROM orders WHERE customer_id = ? ORDER BY order_day DESC, id DESC LIMIT 60", input.id],
         ["SELECT bill_no, bill_day, kind, status, total_satang, paid_satang, due_day, order_id, src, paper_no FROM bills WHERE customer_id = ? AND status <> 'ยกเลิก' ORDER BY bill_day DESC LIMIT 60", input.id],
         ["SELECT id, name FROM customers WHERE merged_into = ?", input.id],
+        ["SELECT k.district, k.route_code FROM customers k JOIN customers me ON me.id = ? WHERE k.merged_into IS NULL AND k.route_code IS NOT NULL AND k.district <> '' AND k.id <> me.id AND (k.district = me.district OR k.district = 'อ.' || me.district OR 'อ.' || k.district = me.district)", input.id],
       ]);
       if (!c[0]) throw notFound("ไม่พบลูกค้านี้");
+      // แนะนำสายจากอำเภอ (เฉพาะรายที่ยังไม่มีสาย · คนกดยืนยัน ไม่เขียนทับ)
+      const L = learnRoutes(c[0].route_code ? [] : peers);
+      const sug = L.get(districtKey(c[0].district));
+      const geo = c[0].geo_lat_e6 !== null && c[0].geo_lat_e6 !== undefined ? { open: mapsUrl(c[0].geo_lat_e6, c[0].geo_lng_e6), src: c[0].geo_src, acc_m: c[0].geo_acc_m, at: c[0].geo_at } : null;
       // "เคยสั่ง": สเปกเดียวกัน (รวมสีสกรีน/ฝา) นับครั้ง · ค่าครั้งล่าสุด (ถุง/เศษ/ราคา) ไว้เติมฟอร์มทีเดียวทั้งไลน์
       const g = new Map();
       for (const i of items) {
@@ -265,7 +295,8 @@ export function defineOffice(R) {
       const usual = [...g.values()].sort((a, b) => b.n - a.n || (a.last_day < b.last_day ? 1 : -1)).slice(0, 8);
       const owe = bills.filter(b => b.status === "ค้างชำระ");
       return {
-        asOf: iso(X.now), today, customer: c[0], aliases: aliases.map(a => a.alias), merged,
+        asOf: iso(X.now), today, customer: c[0], aliases: aliases.map(a => a.alias), merged, geo,
+        route_hint: sug ? { route: sug.ok ? sug.route : "", basis: "ลูกค้า อ." + sug.district + " ที่มีสาย: " + [[sug.route, sug.n], ...sug.others.map(x => [x.route, x.n])].map(([r, n]) => "สาย " + r + " " + n + " ราย").join(" · ") } : null,
         usual, orders: await rowsFor(X, orderIds.map(r => r.id), today), bills,
         owing: { n: owe.length, satang: owe.reduce((s, b) => s + b.total_satang - b.paid_satang, 0), overdue: owe.filter(b => b.due_day && b.due_day < today).length, period: "บิลที่ยังค้าง ณ " + today },
       };
@@ -319,15 +350,17 @@ export function defineOffice(R) {
     name: "office.bill", roles: ROLES_OFFICE,
     input: raw => ({ bill_no: need(raw.bill_no, "เลขบิล", 40) }),
     async run(X, input) {
-      const [b, cust, ord] = await X.db.reads([
+      const [b, cust, ord, dep] = await X.db.reads([
         ["SELECT * FROM bills WHERE bill_no = ?", input.bill_no],
         ["SELECT c.name, c.phone, c.address, c.district, c.subdistrict FROM customers c JOIN bills b ON b.customer_id = c.id WHERE b.bill_no = ?", input.bill_no],
         ["SELECT o.id, o.order_day, o.brand, o.due_day FROM orders o JOIN bills b ON b.order_id = o.id WHERE b.bill_no = ?", input.bill_no],
+        ["SELECT d.amount_satang, d.channel, d.paid_day, d.status FROM order_deposits d JOIN bills b ON b.order_id = d.order_id WHERE b.bill_no = ? AND d.status = 'ใช้งาน' ORDER BY d.paid_day", input.bill_no],
       ]);
       if (!b[0]) throw new Fail(404, "not_found", "ไม่พบบิลนี้");
       let lines = [];
       try { lines = JSON.parse(b[0].items_json || "[]"); } catch (e) { lines = []; }
       return { bill: { ...b[0], lines }, customer: cust[0] || null, order: ord[0] || null,
+        deposits: dep, deposit_satang: depositSum(dep),   // โชว์ "มัดจำแล้ว X" ในหน้าบิล — ไม่หักยอดบิลเอง
         company: { name: X.settings.COMPANY_LEGAL_NAME || X.settings.COMPANY_NAME || "โรงขวด P&K", short: X.settings.COMPANY_NAME || "", phone: X.settings.COMPANY_PHONE || "" } };
     },
   });

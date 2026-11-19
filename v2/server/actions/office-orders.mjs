@@ -12,6 +12,9 @@ import { nameKey } from "../import/legacy.mjs";
 import { CATALOG_READS, catalogOf, normalizeItem, deriveOrder, statusSet, splitBags, gradeOf, PRICE_KIND } from "./office-lib.mjs";
 import { plainKey, screenKey, negativeStockFlags, billAfterGuard } from "./deliver_common.mjs";
 import { PROD_TYPES } from "./prodLib.mjs";
+import { planInput, wantInput, planState } from "./office-plan-lib.mjs";
+import { roundRows, planCols } from "./office-plan.mjs";
+import { depositRemindFlag } from "./office-deposits.mjs";
 
 export const ROLES_OFFICE = ["office", "exec"];
 const PURCHASE = ["", "ขายราคาโรงงาน", "ขายหน้าร้าน"], PRICE_MODE = ["", "มาตรฐาน", "พิเศษ"];
@@ -110,7 +113,11 @@ export function defineOfficeOrders(R) {
       const head = headerInput(raw);
       const nc = newCustomerInput(raw.new_customer);
       if (!nc && !head.customer_id) throw bad("ต้องเลือกลูกค้า");
-      return { head, nc, items: itemsInput(raw), queue: !!raw.queue, sources: Array.isArray(raw.sources) ? raw.sources : [] };
+      // งวดส่ง (ไม่ส่งมา = แบบเดิม: due_day เป็นงวดเดียว) · ต้องการเมื่อไร (ไม่บังคับ) · รอยืนยัน = ไม่ส่งเข้าคิว
+      const plan = planInput(raw.plan);
+      if (plan) head.due_day = plan.first_day;
+      const hold = raw.hold ? 1 : 0;
+      return { head, nc, items: itemsInput(raw), queue: !!raw.queue && !hold, hold, plan, want: wantInput(raw), sources: Array.isArray(raw.sources) ? raw.sources : [] };
     },
     async load(X, input) {
       const res = await X.db.reads([...CATALOG_READS, ...PRICE_READS,
@@ -137,7 +144,7 @@ export function defineOfficeOrders(R) {
       const items = input.items.map((r, i) => withProduct(normalizeItem(r, ctx.cat, i + 1), ctx.products));
       const id = "O" + X.newId();
       const order = { id, order_day: today, ...h, customer_id: cust.id, customer_text: cust.name, taker_staff_id: X.staff.id, taker_text: X.staff.nick,
-        has_screen: items.some(i => i.screen_color) ? 1 : 0, total_satang: null, status: "ออเดอร์ใหม่", src: "v2" };
+        has_screen: items.some(i => i.screen_color) ? 1 : 0, total_satang: null, status: "ออเดอร์ใหม่", src: "v2", hold: input.hold, ...input.want, ...(input.plan ? planCols(input.plan) : {}) };
       const totalKnown = items.every(i => i.price_satang !== null);
       order.total_satang = totalKnown ? items.reduce((s, i) => s + i.price_satang * i.qty_pcs, 0) : null;
       const rows = items.map((it, i) => ({ id: id + "-" + (i + 1), order_id: id, line_no: i + 1, ...itemRow(it), status: "ใช้งาน", src: "v2" }));
@@ -150,12 +157,14 @@ export function defineOfficeOrders(R) {
       if (input.queue) order.status = deriveOrder({ ...order, status: "รอผลิต" }, rows, jobs, sjobs, []).status;
       ops.push({ op: "insert", table: "orders", row: order });
       rows.forEach(r => ops.push({ op: "insert", table: "order_items", row: r }));
+      if (input.plan) roundRows(X, id, input.plan, rows[0].qty_pcs).forEach(r => ops.push({ op: "insert", table: "order_rounds", row: r }));
+      if (input.queue) { const f = depositRemindFlag(X, order, cust.name, []); if (f) ops.push(f); }
       jobs.forEach(r => ops.push({ op: "insert", table: "production_jobs", row: r }));
       sjobs.forEach(r => ops.push({ op: "insert", table: "screen_jobs", row: r }));
       items.forEach((it, i) => itemChecks(it, ctx, h, cust.name, i + 1).forEach(f => ops.push({ ...f, entity: "orders", entity_id: id })));
       return {
         label: "ลงออเดอร์ " + cust.name, ops,
-        result: { id, customer_id: cust.id, customer: cust.name, status: order.status, queued: input.queue, jobs: jobs.length, screen_jobs: sjobs.length, order_day: today },
+        result: { id, customer_id: cust.id, customer: cust.name, status: order.status, queued: input.queue, hold: input.hold, jobs: jobs.length, screen_jobs: sjobs.length, order_day: today },
       };
     },
   });
@@ -165,7 +174,7 @@ export function defineOfficeOrders(R) {
     name: "office.order_queue", roles: ROLES_OFFICE, write: true,
     input: raw => ({ id: need(raw.id, "ออเดอร์", 40), version: int(raw.version, "รุ่นของออเดอร์", { min: 1 }),
       sources: raw.sources && typeof raw.sources === "object" ? raw.sources : {} }),
-    load: (X, input) => loadOrder(X, input.id),
+    load: (X, input) => loadOrder(X, input.id, [["SELECT amount_satang, status FROM order_deposits WHERE order_id = ?", input.id]]),
     async run(X, input, ctx) {
       const o = ctx.o;
       if (o.version !== input.version) throw conflict();
@@ -181,9 +190,11 @@ export function defineOfficeOrders(R) {
         ops.push({ op: "update", table: "order_items", id: it.id, expect: it.version, before: it, set: { source } });
       }
       const d = deriveOrder({ ...o, status: "รอผลิต" }, items, jobs, sjobs, ctx.loads);
-      ops.push({ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set: { status: d.status } });
+      ops.push({ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set: o.hold ? { status: d.status, hold: 0 } : { status: d.status } });   // ส่งเข้าคิว = ลูกค้ายืนยันแล้ว
       jobs.forEach(r => ops.push({ op: "insert", table: "production_jobs", row: r }));
       sjobs.forEach(r => ops.push({ op: "insert", table: "screen_jobs", row: r }));
+      const remind = depositRemindFlag(X, o, ctx.cust ? ctx.cust.name : "", ctx.more[0]);
+      if (remind) ops.push(remind);
       return { label: "ส่งเข้าคิว " + (ctx.cust ? ctx.cust.name : ""), ops, result: { id: o.id, status: d.status, jobs: jobs.length, screen_jobs: sjobs.length } };
     },
   });
@@ -191,11 +202,12 @@ export function defineOfficeOrders(R) {
   // ══ แก้ไขออเดอร์ (ทั้งใบ: หัว + รายการ) ════════════════════════════════════════
   R.define({
     name: "office.order_update", roles: ROLES_OFFICE, write: true,
-    input: raw => ({ id: need(raw.id, "ออเดอร์", 40), version: int(raw.version, "รุ่นของออเดอร์", { min: 1 }), head: headerInput(raw),
+    input: raw => ({ id: need(raw.id, "ออเดอร์", 40), version: int(raw.version, "รุ่นของออเดอร์", { min: 1 }), head: headerInput(raw), keepDue: raw.due_day === undefined,
       items: itemsInput(raw).map(x => ({ ...x, id: text(x.id, 60) })) }),
     async load(X, input) {
-      const c = await loadOrder(X, input.id, [...CATALOG_READS, ...PRICE_READS, ["SELECT * FROM customers WHERE id = ?", input.head.customer_id || "-"]]);
-      c.cat = catalogOf(c.more.slice(0, 3)); c.prices = c.more[3]; c.products = c.more[4]; c.newCust = c.more[5][0];
+      const c = await loadOrder(X, input.id, [...CATALOG_READS, ...PRICE_READS, ["SELECT * FROM customers WHERE id = ?", input.head.customer_id || "-"],
+        ["SELECT id FROM order_rounds WHERE order_id = ? AND status = 'ใช้งาน'", input.id]]);
+      c.cat = catalogOf(c.more.slice(0, 3)); c.prices = c.more[3]; c.products = c.more[4]; c.newCust = c.more[5][0]; c.hasRounds = c.more[6].length > 0;
       return c;
     },
     async run(X, input, ctx) {
@@ -203,6 +215,7 @@ export function defineOfficeOrders(R) {
       if (o.version !== input.version) throw conflict();
       if (o.status === "ยกเลิก") throw locked("ออเดอร์นี้ยกเลิกแล้ว — ลงออเดอร์ใหม่แทน");
       const h = { ...input.head, customer_id: input.head.customer_id || o.customer_id };
+      if (input.keepDue) h.due_day = o.due_day;   // ฟอร์มแก้ไม่ส่งวันส่ง = ไม่แตะ (เลื่อนวันทำที่งวดส่ง พร้อมสาเหตุ)
       const today = thaiDay(X.now);
       const billed = ctx.bills.length > 0;
       const queued = o.status !== "ออเดอร์ใหม่";
@@ -215,6 +228,9 @@ export function defineOfficeOrders(R) {
       const set = {};
       for (const k of HEADER) if (String(h[k] ?? "") !== String(o[k] ?? "")) set[k] = h[k];
       if ("due_day" in set && h.due_day && h.due_day < today) throw bad("วันส่งเป็นวันที่ผ่านมาแล้ว — เลือกวันนี้หรือหลังจากนี้");
+      if ("due_day" in set && ctx.hasRounds) throw locked("ออเดอร์นี้วางงวดส่งไว้ — เลื่อนวันที่ \"งวดส่ง\" ในรายละเอียด (ต้องเลือกสาเหตุ)");
+      // ออเดอร์ที่ไม่ได้วางงวด: ย้ายวันที่นัดไว้ = ลงสมุดเลื่อนด้วย (สาเหตุ "แก้ในหน้าออเดอร์" + เหตุผลถ้ามี)
+      if ("due_day" in set && o.due_day) ops.push({ op: "insert", table: "reschedule_events", row: { id: "RS" + X.newId(), order_id: o.id, round_id: "", seq: 0, from_day: o.due_day, to_day: h.due_day, cause: "แก้ในหน้าออเดอร์", note: X.reason || "", by_staff: X.staff.id, src: "v2" } });
       if ("customer_id" in set) {
         if (!ctx.newCust || ctx.newCust.merged_into) throw notFound("ไม่พบลูกค้าที่เลือก (อาจถูกรวม/เปลี่ยน — โหลดใหม่)");
         if (anyDelivered || billed) throw locked("ส่งของ/ออกบิลให้ลูกค้าเดิมไปแล้ว — เปลี่ยนลูกค้าไม่ได้ ให้ยกเลิกแล้วลงใบใหม่");

@@ -10,6 +10,7 @@
 import { Fail, bad, conflict, notFound, need, text, int, oneOf, day, thaiDay, addDays } from "../core.mjs";
 import { loadOrder, ROLES_OFFICE } from "./office-orders.mjs";
 import { deriveOrder } from "./office-lib.mjs";
+import { depositBillFlag } from "./office-deposits.mjs";
 
 const locked = (msg, extra) => new Fail(409, "locked", msg, extra);
 const money = s => (Number(s) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -31,7 +32,8 @@ export function defineOfficeBills(R) {
     },
     async load(X, input) {
       const prefix = "PK2-" + thaiDay(X.now).slice(0, 4) + "-";
-      const c = await loadOrder(X, input.order_id, [["SELECT max(CAST(substr(bill_no, ?) AS INTEGER)) AS n FROM bills WHERE substr(bill_no, 1, ?) = ?", prefix.length + 1, prefix.length, prefix]]);
+      const c = await loadOrder(X, input.order_id, [["SELECT max(CAST(substr(bill_no, ?) AS INTEGER)) AS n FROM bills WHERE substr(bill_no, 1, ?) = ?", prefix.length + 1, prefix.length, prefix],
+        ["SELECT amount_satang, status FROM order_deposits WHERE order_id = ?", input.order_id]]);
       c.billNo = prefix + String((Number(c.more[0][0] && c.more[0][0].n) || 0) + 1).padStart(4, "0");
       return c;
     },
@@ -74,6 +76,8 @@ export function defineOfficeBills(R) {
         { op: "guard", sql: "SELECT 1 FROM orders WHERE id = ? AND version = ?", args: [o.id, o.version] },
         { op: "insert", table: "bills", row },
       ];
+      const dep = depositBillFlag(o.id, custName, ctx.more[1], row.bill_no, total);   // มีมัดจำ = ธงให้บัญชีตัดสิน (ไม่หักยอดเอง)
+      if (dep) ops.push(dep);
       if (why.length) ops.push({ op: "flag", kind: "ยอดไม่ตรง", team: "office", entity: "bills", entity_id: row.bill_no, title: custName + ": บิลไม่ตรงกับออเดอร์", detail: why.join(" · ") + " · เหตุผล: " + X.reason });
       return { label: "ออกบิล " + custName + " ฿" + money(total), ops, result: { bill_no: row.bill_no, total_satang: total, kind: input.kind, due_day: due },
         conflictMessage: "ออเดอร์นี้เพิ่งถูกแก้ — โหลดใหม่ แล้วเช็คจำนวน/ราคาในบิลอีกครั้ง" };

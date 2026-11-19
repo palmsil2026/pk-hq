@@ -13,6 +13,7 @@ import { defineDeliver } from "./deliver.mjs"; // 0300 สกรีน + ส่�
 import { defineProduction } from "./prod.mjs";   // 0100 ทีมผลิต
 import { defineExec } from "./exec.mjs";          // 0400 ประธาน + บัญชี
 import { defineAccount } from "./account.mjs";    // 0400 ประธาน + บัญชี
+import { defineDeliverGeo } from "./deliver-geo.mjs";   // 0310 ส่งของ: ปักหมุดร้านตอนส่ง
 
 export function buildRegistry(extra) {
   const R = createRegistry();
@@ -26,6 +27,7 @@ export function buildRegistry(extra) {
   defineDeliver(R);      // 0300 สกรีน + ส่งของ
   defineExec(R);         // 0400 ประธาน + บัญชี
   defineAccount(R);      // 0400 ประธาน + บัญชี
+  defineDeliverGeo(R);   // 0310 ส่งของ: ปักหมุดร้านตอนส่ง
   if (typeof extra === "function") extra(R);   // เทสต์ใส่ action ตัวอย่างเพิ่มได้
   return R;
 }
