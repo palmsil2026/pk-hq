@@ -11,6 +11,7 @@ import { orderFormView } from "./office-order-form.js";
 import { openOrderIn } from "./office-order-detail.js";
 import { customersView } from "./office-customers.js";
 import { isWide } from "./office-data.js";
+import { treeView, walkinView } from "./office-tree.js";
 const { h, icon } = ui;
 useCss("../roles/office.css");
 
@@ -61,10 +62,13 @@ export default {
         let rows = d.orders;
         if (QUEUE_OF[filter]) rows = rows.filter(o => QUEUE_OF[filter].includes(o.status));
         else if (filter === "money") rows = rows.filter(o => o.money);
+        else if (filter === "call") rows = rows.filter(o => (d.reserveCall ? d.reserveCall.ids : []).includes(o.id));
         else rows = rows.filter(o => o.status !== "ส่งแล้ว" && o.status !== "ยกเลิก");
         const q = d.queues.find(x => x.key === filter);
-        lbl.textContent = (q ? q.label + (q.hint ? " (" + q.hint + ")" : "") : "ออเดอร์ที่ยังไม่จบ") + " · " + n0(rows.length) + " ใบ";
-        put(note, filter === "money" && d.acctOwing ? h("p.hint", "บิลค้างจากชีทบัญชี (ไม่ผูกออเดอร์) อีก " + n0(d.acctOwing) + " ใบ — ดูรายร้านในหน้าลูกค้า") : null);
+        lbl.textContent = (q ? q.label + (q.hint ? " (" + q.hint + ")" : "") : filter === "call" ? "ของจองค้างนาน — โทรยืนยัน" : "ออเดอร์ที่ยังไม่จบ") + " · " + n0(rows.length) + " ใบ";
+        const call = d.reserveCall && d.reserveCall.ids.length ? h("button.banner.t-warn", { type: "button", style: { width: "100%", textAlign: "left" }, onclick: () => { filter = filter === "call" ? "" : "call"; ctx.api.store.set("office.q", filter); draw(st); } },
+          icon("phone"), h("span", "ของจอง (ยังไม่นัดส่ง) ค้างเกิน " + d.reserveCall.days + " วัน " + n0(d.reserveCall.ids.length) + " ใบ — โทรยืนยันกับลูกค้า (ระบบไม่ตัดเอง)" + (filter === "call" ? " · แตะเพื่อดูทั้งหมด" : " · แตะเพื่อดู"))) : null;
+        put(note, call, filter === "money" && d.acctOwing ? h("p.hint", "บิลค้างจากชีทบัญชี (ไม่ผูกออเดอร์) อีก " + n0(d.acctOwing) + " ใบ — ดูรายร้านในหน้าลูกค้า") : null);
         ui.renderList(list, rows, o => o.id, o => orderCard(ctx, o, x => M.open(x.id, list), { today: d.today, current: o.id === M.cur }),
           ui.empty(filter ? "ไม่มีงานในคิวนี้" : "ไม่มีงานค้าง", filter ? "แตะคิวเดิมอีกครั้งเพื่อดูทั้งหมด" : ""));
       };
@@ -74,6 +78,24 @@ export default {
     // ── ออเดอร์ทั้งหมด: ค้น/กรอง (รวมที่จบแล้ว + ประวัติแอปเดิม) ทีละหน้า ────────────────────
     orders(ctx, view, n) {
       mark(view, "orders");
+      // รายใบ / รวมตามสินค้า (ต้นไม้แบบแอป Office เดิม) / ซื้อหน้าร้าน — จำมุมมองที่เลือกไว้ในเครื่อง
+      let mode = ctx.api.store.get("office.ov") || "list";
+      const modeSeg = seg([["list", "รายใบ"], ["tree", "รวมตามสินค้า"], ["walkin", "ซื้อหน้าร้าน"]], mode, v => { mode = v || "list"; ctx.api.store.set("office.ov", mode); paintMode(); }, { label: "มุมมองออเดอร์" });
+      modeSeg.classList.add("oview");
+      const listPane = h("div.stack"), altPane = h("div.stack"), altPanel = h("aside.md-detail", { "aria-label": "รายละเอียด" }, h("p.panel-empty", "แตะใบสั่งเพื่อดูรายละเอียด"));
+      const altBody = h("div.stack");
+      add(view, modeSeg, listPane, altPane);
+      add(altPane, h("div.md", altBody, altPanel));
+      let altM = null;
+      const paintMode = () => {
+        listPane.hidden = mode !== "list"; altPane.hidden = mode === "list";
+        if (mode === "list") return;
+        put(altBody);
+        const open = (id, lb) => { if (lb) lb.querySelectorAll("[data-id]").forEach(c => c.setAttribute("aria-current", String(c.dataset.id === id))); openOrderIn(ctx, altPanel, id, () => paintMode()); };
+        altM = { open };
+        if (mode === "tree") treeView(ctx, altBody, altM); else walkinView(ctx, altBody, altM);
+      };
+      view = listPane;
       let q = "", group = "open", next = null, rows = [], seq = 0;
       const M = master(ctx, () => load());
       const search = h("input", { type: "search", placeholder: "ค้นร้าน · ชื่องาน · สินค้า · หมายเหตุ", "aria-label": "ค้นออเดอร์" });
@@ -97,8 +119,9 @@ export default {
         ui.renderList(list, rows, o => o.id, o => orderCard(ctx, o, x => M.open(x.id, list), { today: d.today, maxItems: 3, current: o.id === M.cur }), ui.empty("ไม่พบออเดอร์", q ? "ลองคำสั้นลง หรือเลือก \"ทั้งหมด\"" : ""));
         moreBtn.hidden = !next;
       }
-      load();
-      if (n.arg) M.open(n.arg, list);
+      if (mode === "list" || !n.arg) load();
+      if (n.arg) { mode = "list"; modeSeg.set("list"); load(); M.open(n.arg, list); }
+      paintMode();
     },
 
     customers(ctx, view, n) { mark(view, "customers"); return customersView(ctx, view, n); },

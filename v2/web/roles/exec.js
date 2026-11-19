@@ -1,6 +1,7 @@
 // ประธาน/คุณปาล์ม (?app=exec) — หน้าแรก "เรื่องที่ต้องตัดสินใจ" (ธงทุกทีม + คนใหม่ในรายชื่อ) → ภาพรวมวันนี้ · ระบบหาข้อยกเว้น คนตัดสิน
 //   เมนู: วันนี้ · แผนผัง (ดูอย่างเดียว) · เงิน · ราคา · ทีม (PIN/พักงาน ผ่าน Google — PIN ไม่ขึ้น Cloudflare) · ไม่มีรายงานรายวันที่ไม่มีเรื่องให้ตัดสิน
 import { floorView } from "./floor.js";   // แผนผังจริงของทีมผลิต (ผังโรง 1/โรง 2 · เครื่องเดิน X/12 เลขเดียวกับหน้าทีมผลิต) แบบดูอย่างเดียว
+import { routeAreasBox } from "./exec-routes.js";   // 0310 ชื่อสายที่ทีมเรียก ↔ รหัสสาย (ออฟฟิศ/ส่งของ)
 import { thText, moneyInView, owingView, billSheet, syncButton, syncLine, moneyPad, chLabel } from "./money.js";
 
 const TEAM = { office: "ออฟฟิศ", prod: "ทีมผลิต", screen: "ทีมสกรีน", deliver: "ส่งของ", account: "บัญชี", exec: "ประธาน", "": "ระบบ" };
@@ -231,9 +232,10 @@ function team(ctx, view) {
     if (d.lastImport) box.append(h("p.small.muted", "นำเข้าพนักงานจากชีตล่าสุด " + ui.thDayOf(d.lastImport.started_at) + " " + ui.thTime(d.lastImport.started_at) + " · " + d.lastImport.status));
   });
   const imp = h("div.stack"), settings = h("div.stack"), acct = h("div.stack");
+  const areas = h("div.stack");
   view.append(h("div.wide-2.stack", h("div.stack", h("div.lbl", "พนักงาน"), listBox),
-    h("div.stack", h("div.lbl", "ชีทบัญชี"), acct, h("div.lbl", "นำเข้าข้อมูลจากชีตเดิม (อ่านอย่างเดียว · กดซ้ำได้ไม่เบิ้ล)"), imp, h("div.lbl", "ค่าตั้ง"), settings)));
-  return Promise.all([p1, importBox(ctx, imp), settingsBox(ctx, settings), acctBox(ctx, acct)]);
+    h("div.stack", h("div.lbl", "ชีทบัญชี"), acct, h("div.lbl", "นำเข้าข้อมูลจากชีตเดิม (อ่านอย่างเดียว · กดซ้ำได้ไม่เบิ้ล)"), imp, h("div.lbl", "ค่าตั้ง"), settings, h("div.lbl", "ชื่อสายส่ง (ที่ทีมเรียก)"), areas)));
+  return Promise.all([p1, importBox(ctx, imp), settingsBox(ctx, settings), acctBox(ctx, acct), routeAreasBox(ctx, areas)]);
 }
 function staffSheet(ctx, s, d, refresh) {
   const { h, ui } = ctx;
@@ -315,7 +317,7 @@ async function importBox(ctx, box) {
     box.append(h("div.card", h("div.row", h("b.grow", s.label), btn), st));
   });
 }
-const SETTING_TH = { UNDO_HOURS: "ย้อนรายการได้ภายใน (ชั่วโมง)", GATE_TICKET_MIN: "ทีมผลิต: PIN ตอนบันทึกใช้ได้ (นาที)", RUN_STALE_HOURS: "รอบเครื่องเปิดค้างเกิน (ชั่วโมง) = ขึ้นเรื่อง", MIN_WEB_VERSION: "รุ่นหน้าเว็บต่ำสุดที่ยอมให้ใช้", COMPANY_NAME: "ชื่อบนหัวเอกสาร", ACCT_SYNC_AUTO: "ซิงก์ชีทบัญชีอัตโนมัติทุกวัน ~20:00", ACCT_DUE_DAYS: "ลูกหนี้ครบกำหนดภายใน (วัน) ขึ้นหน้าบัญชี" };
+const SETTING_TH = { UNDO_HOURS: "ย้อนรายการได้ภายใน (ชั่วโมง)", GATE_TICKET_MIN: "ทีมผลิต: PIN ตอนบันทึกใช้ได้ (นาที)", RUN_STALE_HOURS: "รอบเครื่องเปิดค้างเกิน (ชั่วโมง) = ขึ้นเรื่อง", MIN_WEB_VERSION: "รุ่นหน้าเว็บต่ำสุดที่ยอมให้ใช้", COMPANY_NAME: "ชื่อบนหัวเอกสาร", ACCT_SYNC_AUTO: "ซิงก์ชีทบัญชีอัตโนมัติทุกวัน ~20:00", ACCT_DUE_DAYS: "ลูกหนี้ครบกำหนดภายใน (วัน) ขึ้นหน้าบัญชี", DEPOSIT_REMIND: "มัดจำ: เตือนตอนส่งเข้าคิว (ไม่เตือน / งานสกรีน / ทุกออเดอร์)", RESERVE_CALL_DAYS: "ของจองค้างเกิน (วัน) ให้โทรยืนยัน" };
 async function settingsBox(ctx, box) {
   const { h, ui, api } = ctx;
   let d;

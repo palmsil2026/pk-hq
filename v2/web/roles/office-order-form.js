@@ -11,11 +11,12 @@ import { customerPicker, custTag } from "../parts/customer-picker.js";
 import { specLine, calcLine, labelOf, listPriceOf } from "../parts/spec-picker.js";
 import { orderText } from "../parts/order-card.js";
 import { cached, forget, write } from "./office-data.js";
+import { blankPlan, planPicker, planPayload, planWords, wantWords } from "../parts/plan-picker.js";
 const { h, icon } = ui;
 
 const DRAFT = "office.draft";
 const blank = () => ({ mode: "new", id: "", version: 0, customer: null, brand: "", items: [], due_day: "", urgent: 0, purchase_type: "ขายราคาโรงงาน", price_mode: "มาตรฐาน",
-  pay_status: "", design_status: "", block_fee_satang: null, note: "" });
+  pay_status: "", design_status: "", block_fee_satang: null, note: "", plan: blankPlan(), hold: 0 });
 const newItem = x => Object.assign({ type: "", size: "", neck: "", shape: "", color: "", screen_color: "", cap_color: "", bags: 0, extra_pcs: 0, qty_pcs: 0, price_satang: null, price_reason: "" }, x || {});
 let F = null;   // ร่างที่กรอกค้าง (อยู่ข้ามการสลับหน้า)
 const saveDraft = () => { if (F && F.mode === "new") ctxStore.set(DRAFT, F); };
@@ -43,6 +44,7 @@ export async function orderFormView(ctx, view, n) {
   } else if (!F || F.mode !== "new") {
     F = ctx.api.store.get(DRAFT) || blank();
     if (F.mode !== "new") F = blank();
+    if (!F.plan) F.plan = { ...blankPlan(), first_day: F.due_day || "" };   // ร่างรุ่นก่อน (มีแค่วันส่ง)
   }
   if (preCust) { const c = customers.find(x => x.id === preCust); if (c) F.customer = c; }
   if (!F.items.length) F.items.push(newItem());
@@ -101,13 +103,11 @@ function render(ctx, view, cat, customers) {
     put(linesBox, ...lineEls);
   }
   const addBtn = h("button.btn", { type: "button", onclick: () => { F.items.push(newItem()); drawLines(); dirty(); lineEls[lineEls.length - 1].guide(); } }, icon("plus", "sm"), "เพิ่มสินค้า");
-  // ── วันส่ง · ด่วน ──
-  const dueLbl = h("span.muted");
-  const paintDue = () => { dueLbl.textContent = F.due_day ? thDayLong(F.due_day) : "ยังไม่กำหนด"; };
-  const week = weekRow(F.due_day, d => { F.due_day = d; paintDue(); dirty(); }, { title: "วันส่ง", allowNone: true, noneText: "ยังไม่กำหนดวันส่ง" });
+  // ── ต้องการเมื่อไร · นัดส่ง · งวดส่ง · ด่วน · รอยืนยัน (เลิกตั้งวันส่ง +10 วันเอง — ไม่เลือก = จอง) ──
   const urgent = h("button.chip", { type: "button", "aria-pressed": String(!!F.urgent), onclick: e => { F.urgent = F.urgent ? 0 : 1; e.currentTarget.setAttribute("aria-pressed", String(!!F.urgent)); dirty(); } }, icon("bolt", "sm"), " ด่วน");
-  const noDue = h("button.chip", { type: "button", onclick: () => { F.due_day = ""; week.set(""); paintDue(); dirty(); } }, "ยังไม่กำหนด");
-  paintDue();
+  const mainItem = () => { const it = F.items.find(i => i.type); if (!it) return null; const c = calcLine(it, cat); return { qty: c.qty, per: c.per, unit: c.unit, label: labelOf(it) }; };
+  const planEl = editing ? null : planPicker(F.plan, { main: mainItem, today: todayTh(), onChange: () => { F.due_day = F.plan.first_day; dirty(); }, extraChips: urgent });
+  const holdBtn = h("button.chip.holdsw", { type: "button", "aria-pressed": String(!!F.hold), onclick: e => { F.hold = F.hold ? 0 : 1; e.currentTarget.setAttribute("aria-pressed", String(!!F.hold)); dirty(); } }, icon("clock", "sm"), " รอยืนยัน — ยังไม่ส่งเข้าคิวผลิต");
   // ── การซื้อ · ตัวเลือกเพิ่มเติม ──
   const vals = k => ((ctx.vocab["orders." + k] || []).filter(v => v.value).map(v => [v.value, v.label]));
   const purchase = seg(vals("purchase_type").length ? vals("purchase_type") : [["ขายราคาโรงงาน", "ขายราคาโรงงาน"], ["ขายหน้าร้าน", "ขายหน้าร้าน"]], F.purchase_type, v => { F.purchase_type = v; lineEls.forEach(l => l.refresh()); dirty(); }, { label: "ประเภทการซื้อ" });
@@ -132,6 +132,7 @@ function render(ctx, view, cat, customers) {
   const err = h("p.err", { role: "alert" });
   function paintSum() {
     paintMore();
+    if (planEl) planEl.refresh();
     const ok = F.items.filter(i => i.type && calcLine(i, cat).qty > 0);
     const pcs = ok.reduce((s, i) => s + calcLine(i, cat).qty, 0);
     const money = ok.length && ok.every(i => i.price_satang !== null && i.price_satang !== undefined) ? ok.reduce((s, i) => s + calcLine(i, cat).qty * i.price_satang, 0) : null;
@@ -161,8 +162,10 @@ function render(ctx, view, cat, customers) {
     }
     const items = its.map(i => ({ ...(i.id ? { id: i.id } : {}), type: i.type, size: i.size, neck: i.neck, shape: i.shape, color: i.color, screen_color: i.screen_color, cap_color: i.cap_color,
       bags: i.bags || 0, extra_pcs: i.extra_pcs || 0, qty_pcs: calcLine(i, cat).qty, price_satang: i.price_satang === undefined ? null : i.price_satang, price_reason: i.price_reason || "" }));
-    const head = { brand: F.brand.trim(), due_day: F.due_day, urgent: F.urgent ? 1 : 0, purchase_type: F.purchase_type, price_mode: F.price_mode, pay_status: F.pay_status, design_status: F.design_status,
+    if (!editing && F.plan.mode === "กำหนดจำนวน" && !F.plan.each && !F.plan.times) { err.textContent = "งวดแบบกำหนดจำนวน: ใส่ \"ต่อครั้ง\" หรือ \"กี่ครั้ง\""; return null; }
+    const head = { brand: F.brand.trim(), urgent: F.urgent ? 1 : 0, purchase_type: F.purchase_type, price_mode: F.price_mode, pay_status: F.pay_status, design_status: F.design_status,
       block_fee_satang: F.block_fee_satang, note: F.note.trim(), items };
+    if (!editing) Object.assign(head, { plan: planPayload(F.plan, mainItem()), want_when: F.plan.want_when, want_day: F.plan.want_day, hold: F.hold ? 1 : 0 });   // แก้ไข = ไม่ส่งวันส่ง (เลื่อนที่งวดส่ง พร้อมสาเหตุ)
     if (F.customer.isNew) head.new_customer = { name: F.customer.name, district: F.customer.district, phone: F.customer.phone, route_code: F.customer.route_code };
     else head.customer_id = F.customer.id;
     return head;
@@ -171,18 +174,19 @@ function render(ctx, view, cat, customers) {
     const p = await collect();
     if (!p) return;
     const c = F.customer;
-    const hold = p.pay_status === "รอโอนเงิน" || p.design_status === "รอแบบ" || p.design_status === "แก้ไขแบบ";
+    const hold = p.pay_status === "รอโอนเงิน" || p.design_status === "รอแบบ" || p.design_status === "แก้ไขแบบ" || !!p.hold;
     let queue = !editing && !hold;
     const S = ui.sheet({ title: editing ? "ตรวจการแก้ไขก่อนบันทึก" : "ตรวจอีกครั้งก่อนบันทึก", modal: true, foot: true });
-    const qToggle = editing ? null : h("button.chip", { type: "button", "aria-pressed": String(queue), onclick: e => { queue = !queue; e.currentTarget.setAttribute("aria-pressed", String(queue)); } }, "ส่งเข้าคิวผลิตเลย");
+    const qToggle = editing ? null : h("button.chip", { type: "button", "aria-pressed": String(queue), disabled: p.hold ? true : null, onclick: e => { queue = !queue; e.currentTarget.setAttribute("aria-pressed", String(queue)); } }, "ส่งเข้าคิวผลิตเลย");
     const rows = p.items.map(it => { const x = { ...it, piece_unit: calcLine(it, cat).unit, per_bag: calcLine(it, cat).per }; return h("div.icard", h("div.row", h("b.grow", labelOf(it)), itemBadge(x)),
       h("div.small.muted", [it.screen_color ? "สกรีน" + it.screen_color : "", it.cap_color ? "ฝา" + it.cap_color : "", it.price_satang !== null ? "฿" + baht(it.price_satang) + "/" + x.piece_unit : "ไม่ใส่ราคา"].filter(Boolean).join(" · "))); });
     add(S.body, h("div.dhead", h("b.name", c.name), h("span.small.muted", c.isNew ? "ลูกค้าใหม่ · " + ([c.district ? "อ." + c.district : "", c.phone].filter(Boolean).join(" · ") || "ยังไม่ระบุอำเภอ") : custTag(c))),
       c.note ? h("div.cust-note", icon("alert", "sm"), h("span", "หมายเหตุการค้า: " + c.note)) : null, ...rows,
-      h("dl.kv2", h("dt", "วันส่ง"), h("dd", (p.due_day ? thDayLong(p.due_day) : "ยังไม่กำหนด") + (p.urgent ? " · ด่วน" : "")), h("dt", "ประเภท"), h("dd", [p.purchase_type, p.price_mode ? "ราคา" + p.price_mode : ""].filter(Boolean).join(" · ")),
+      h("dl.kv2", editing ? null : [h("dt", "นัดส่ง"), h("dd", planWords(F.plan, mainItem()) + (p.urgent ? " · ด่วน" : ""))], editing && p.urgent ? [h("dt", "ด่วน"), h("dd", "ด่วน")] : null,
+        wantWords(F.plan) && !editing ? [h("dt", "ต้องการ"), h("dd", wantWords(F.plan).replace("ลูกค้าต้องการ ", ""))] : null, h("dt", "ประเภท"), h("dd", [p.purchase_type, p.price_mode ? "ราคา" + p.price_mode : ""].filter(Boolean).join(" · ")),
         p.brand ? [h("dt", "งาน"), h("dd", p.brand)] : null, p.pay_status ? [h("dt", "เงิน"), h("dd", p.pay_status)] : null, p.design_status ? [h("dt", "แบบ"), h("dd", p.design_status)] : null,
         p.block_fee_satang ? [h("dt", "ค่าบล็อก"), h("dd", "฿" + baht(p.block_fee_satang))] : null, p.note ? [h("dt", "หมายเหตุ"), h("dd", p.note)] : null),
-      qToggle ? h("div", qToggle, h("p.hint", hold ? "รอโอนเงิน/รอแบบ — ตั้งให้ยังไม่ส่งเข้าคิว (ส่งทีหลังจากหน้ารายละเอียด)" : "ปิด = ลงไว้ก่อน ยังไม่ให้ทีมผลิตเห็น")) : null);
+      qToggle ? h("div", qToggle, h("p.hint", p.hold ? "รอยืนยัน — ยังไม่ส่งเข้าคิว (ลูกค้ายืนยันแล้วกด \"ส่งเข้าคิวผลิต\" ในหน้ารายละเอียด)" : hold ? "รอโอนเงิน/รอแบบ — ตั้งให้ยังไม่ส่งเข้าคิว (ส่งทีหลังจากหน้ารายละเอียด)" : "ปิด = ลงไว้ก่อน ยังไม่ให้ทีมผลิตเห็น")) : null);
     const okBtn = h("button.btn.pri", { type: "button" }, editing ? "ยืนยันบันทึกการแก้ไข" : "ยืนยันบันทึก");
     add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("back") }, "กลับไปแก้"), okBtn));
     okBtn.addEventListener("click", () => ui.busy(okBtn, async () => {
@@ -191,7 +195,7 @@ function render(ctx, view, cat, customers) {
       if (!r) return;
       forget("office.customers");
       const savedId = editing ? F.id : r.data.id;
-      const text = orderText({ ...p, customer: c.name, tag: c.isNew ? (c.district ? "อ." + c.district : "") : custTag(c), order_day: todayTh(), by: ctx.me && ctx.me.staff ? ctx.me.staff.nick : "",
+      const text = orderText({ ...p, due_day: editing ? F.due_day : F.plan.first_day, plan_text: editing ? "" : planWords(F.plan, mainItem()), customer: c.name, tag: c.isNew ? (c.district ? "อ." + c.district : "") : custTag(c), order_day: todayTh(), by: ctx.me && ctx.me.staff ? ctx.me.staff.nick : "",
         items: p.items.map(it => ({ ...it, label: labelOf(it), piece_unit: calcLine(it, cat).unit, per_bag: calcLine(it, cat).per })) });
       // การ์ดเดิมกลายเป็น "บันทึกแล้ว" + ใบสั่งข้อความ + แชร์ไลน์ (ฟอร์มข้างหลังล้างรอใบถัดไป)
       S.title = editing ? "แก้ไขแล้ว" : "บันทึกแล้ว";
@@ -219,7 +223,8 @@ function render(ctx, view, cat, customers) {
     h("section.card", h("div.lbl", "ลูกค้า"), picker, h("label.field", h("span.lbl", "ชื่องาน/แบรนด์"), brandIn)),
     h("div.of-usual-m"),
     h("section.card", h("div.row", h("div.lbl.grow", "สินค้า")), linesBox, addBtn),
-    h("section.card", h("div.row", h("div.lbl.grow", "วันส่ง"), dueLbl), week, h("div.chips", noDue, urgent)),
+    editing ? h("section.card", h("div.row", h("div.lbl.grow", "วันส่ง"), h("span.muted", F.due_day ? thDayLong(F.due_day) : "ยังไม่นัด")), h("p.hint", "นัด/เลื่อนวันส่งและงวดส่ง ทำที่หน้ารายละเอียดออเดอร์ (ต้องเลือกสาเหตุ)"), h("div.chips", urgent))
+      : h("section.card", planEl, h("div.chips", holdBtn)),
     h("section.card", h("div.lbl", "ประเภทการซื้อ"), purchase, h("div.lbl", "ราคา"), priceMode),
     more, h("div.row", h("span.grow"), resetBtn), bar);
   const aside = h("div.stack.of-aside");

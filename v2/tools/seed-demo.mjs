@@ -9,6 +9,7 @@ import { importProducts, importMachines } from "../server/import/importers.mjs";
 import { seedScreenDeliver } from "./seed-sd.mjs";   // ข้อมูลสมมติของโมดูลสกรีน + ส่งของ
 import { seedProd } from "./seed-prod.mjs";   // ทีมผลิต: ประวัติรอบ · สต๊อก · โมลด์ (ข้อมูลสมมติ)
 import { seedExecAccount } from "./seed-exec-account.mjs";   // ประธาน + บัญชี
+import { seedOfficePlan } from "./seed-office-plan.mjs";   // ออฟฟิศ 0210 + หมุด 0310
 
 export const DEMO_STAFF = [
   ["S101", "แอน", "ออฟฟิศ"], ["S102", "ฝน", "ออฟฟิศ"], ["S111", "บอส", "ผลิต"], ["S112", "เก่ง", "ผลิต"], ["S113", "นุ่น", "ผลิต"],
@@ -92,5 +93,6 @@ export async function seedDemo(d1, opt) {
   await seedScreenDeliver(X, apply, now);   // สกรีน + ส่งของ (tools/seed-sd.mjs)
   await seedProd(d1, { now });
   await seedExecAccount(X, { unconfirmed: ["S113"] });   // ประธาน + บัญชี
+  await seedOfficePlan(X, apply, now);   // งวดส่ง · มัดจำ · หน้าร้าน · หมุด/สาย (tools/seed-office-plan.mjs)
   return { staff: DEMO_STAFF.length };
 }

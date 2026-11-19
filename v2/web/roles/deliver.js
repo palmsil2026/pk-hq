@@ -31,7 +31,7 @@ function stopCard(ctx, s, d) {
   const [cls, pill] = stopState(ctx, s);
   return h("button.card.stop." + cls, { type: "button", onclick: () => stopSheet(ctx, s, d) },
     h("div.row", h("span.name.grow", s.customer), s.urgent ? ui.pill("ด่วน", "bad", "bolt") : null),
-    h("div.row", stopQty(s)), h("div.row", pill));
+    h("div.row", stopQty(s)), h("div.row", pill, s.round ? ui.pill("งวด " + s.round.seq + "/" + s.round.n, "brand") : null));
 }
 
 // ── เส้นทาง: กลุ่มวันส่ง → สาย ──
@@ -56,7 +56,8 @@ function routeGroups(ctx, stops, d) {
   const by = new Map();
   for (const s of stops) { const k = s.route_code || ""; if (!by.has(k)) by.set(k, []); by.get(k).push(s); }
   const keys = [...by.keys()].sort((a, b) => (a === "") - (b === "") || a.localeCompare(b, "th", { numeric: true }));
-  return h("div.daybody", keys.map(k => h("div.routeblk", h("div.lbl", icon("route", "sm"), (k ? "สาย " + k : "ยังไม่มีสาย") + " · " + by.get(k).length + " ร้าน"),
+  const area = k => (by.get(k).find(s => s.area_name) || {}).area_name;   // ชื่อสายที่ทีมเรียก (route_areas) คู่รหัส
+  return h("div.daybody", keys.map(k => h("div.routeblk", h("div.lbl", icon("route", "sm"), (k ? "สาย " + k + (area(k) ? " " + area(k) : "") : "ยังไม่มีสาย") + " · " + by.get(k).length + " ร้าน"),
     h("div.stops", by.get(k).map(s => stopCard(ctx, s, d))))));
 }
 
@@ -67,10 +68,13 @@ function stopSheet(ctx, s, d) {
   put(sh.body, 
     h("div.row", pill, s.urgent ? ui.pill("ด่วน", "bad", "bolt") : null, duePill(s.due_day, d.today)),
     h("div.row.small.muted", [s.route_code ? "สาย " + s.route_code : "ยังไม่มีสาย", s.district, s.brand ? "งาน " + s.brand : ""].filter(Boolean).join(" · ")),
-    s.phone || s.map_url ? h("div.btns", s.phone ? h("a.btn", { href: "tel:" + s.phone.replace(/[^\d+]/g, "") }, "โทร " + s.phone) : null, s.map_url ? h("a.btn", { href: s.map_url, target: "_blank", rel: "noopener" }, icon("map", "sm"), "แผนที่") : null) : null,
+    s.phone || s.map_open || s.map_url ? h("div.btns", s.phone ? h("a.btn", { href: "tel:" + s.phone.replace(/[^\d+]/g, "") }, "โทร " + s.phone) : null, s.map_open || s.map_url ? h("a.btn", { href: s.map_open || s.map_url, target: "_blank", rel: "noopener" }, icon("map", "sm"), "แผนที่") : null) : null,
+    s.round ? h("div.row.small", ui.pill("งวด " + s.round.seq + "/" + s.round.n + (s.round.carried ? " · รวมส่วนขาดงวดก่อน" : ""), "brand", "truck")) : null,
+    !s.has_geo ? h("p.small.muted", icon("pin", "sm"), " ร้านนี้ยังไม่มีหมุด — กด \"ส่งแล้ว\" ที่ร้าน แล้วปักหมุดได้แตะเดียว") : null,
     h("div.card.flat", h("div.lbl", "รายการ"), s.items.map(it => h("div.itemrow", h("b", fullName(it) + (it.screen_color ? " สกรีน" + it.screen_color : "")), qtyOf(it, it.qty_pcs, ""),
       h("span.sub", [it.delivered_pcs ? "ส่งแล้ว " + qtyWords(it, it.delivered_pcs) : "", it.onboard_pcs ? "บนรถ " + qtyWords(it, it.onboard_pcs) : "",
-        it.left_pcs ? "ยังไม่ได้ขึ้นรถ " + qtyWords(it, it.left_pcs) : it.onboard_pcs ? "ขึ้นรถครบแล้ว" : "ส่งครบแล้ว"].filter(Boolean).join(" · "))))));
+        it.left_pcs ? "ยังไม่ได้ขึ้นรถ " + qtyWords(it, it.left_pcs) : it.onboard_pcs ? "ขึ้นรถครบแล้ว" : "ส่งครบแล้ว",
+        it.round_pcs !== undefined && it.round_pcs < it.left_pcs + it.onboard_pcs ? "งวดนี้ " + qtyWords(it, it.round_pcs) : ""].filter(Boolean).join(" · "))))));
   if (s.loads.length) put(sh.body, h("div.stack", h("div.lbl", "ของบนรถ"), s.loads.map(l => {
     const it = s.items.find(i => i.id === l.order_item_id) || {};
     return h("div.loadrow", ui.pill(l.vehicle_id ? vname(d, l.vehicle_id) : "ไม่ระบุคัน", "brand", "truck"), qtyOf(it, l.qty_pcs), h("span.muted.small", "ขึ้นโดย " + (l.loaded_nick || "—") + " " + ui.thTime(l.loaded_at)),
@@ -118,11 +122,14 @@ function loadSheet(ctx, s, d) {
   const btn = h("button.btn.pri.block", { type: "button" }, icon("truck", "sm"), "ขึ้นรถ");
   const veh = choice(vlist.map(v => ({ value: v.id, text: v.name || "รถ " + v.id, sub: v.id === last ? "ล่าสุด" : v.plate || "" })), { label: "เลือกคัน", onChange: () => { msg.textContent = ""; drawSum(); } });
   veh.el.classList.add("vchips");
-  const mode = choice([{ value: "all", text: "ทั้งหมดที่เหลือ" }, { value: "part", text: "บางส่วน" }], { value: "all", label: "ขึ้นเท่าไร", onChange: () => drawItems() });
+  // งวดส่ง: งวดนี้ต้องส่งน้อยกว่าที่เหลือ = ตั้งต้นที่ "งวดนี้" (ส่วนขาดงวดก่อนรวมมาแล้ว) · เลือกทั้งหมด/บางส่วนเองได้
+  const hasRound = items.some(i => i.round_pcs !== undefined && i.round_pcs < i.left_pcs);
+  const mode = choice([...(hasRound ? [{ value: "round", text: "งวดนี้" + (s.round ? " (" + s.round.seq + "/" + s.round.n + ")" : "") }] : []), { value: "all", text: "ทั้งหมดที่เหลือ" }, { value: "part", text: "บางส่วน" }], { value: hasRound ? "round" : "all", label: "ขึ้นเท่าไร", onChange: () => drawItems() });
+  const qOf = it => (mode.value === "all" ? it.left_pcs : mode.value === "round" ? Math.min(it.left_pcs, it.round_pcs === undefined ? it.left_pcs : it.round_pcs) : want.get(it.id));
   const list = h("div.card.flat");
   const drawItems = () => {
     list.replaceChildren(h("div.lbl", "ของที่จะขึ้น"), ...items.map(it => {
-      const n = mode.value === "all" ? it.left_pcs : want.get(it.id);
+      const n = qOf(it);
       return h("div.itemrow", h("b", fullName(it) + (it.screen_color ? " สกรีน" + it.screen_color : "")), qtyOf(it, n, ""),
         h("span.sub", "ยังไม่ได้ขึ้นรถ " + qtyWords(it, it.left_pcs)),
         mode.value === "part" ? h("button.btn", { type: "button", style: { gridColumn: "1 / -1" }, onclick: async () => {
@@ -132,7 +139,7 @@ function loadSheet(ctx, s, d) {
     }));
     drawSum();
   };
-  const lines = () => items.map(it => ({ item: it.id, qty: mode.value === "all" ? it.left_pcs : want.get(it.id) })).filter(l => l.qty > 0);
+  const lines = () => items.map(it => ({ item: it.id, qty: qOf(it) })).filter(l => l.qty > 0);
   const drawSum = () => {
     const n = lines().length;
     sum.textContent = veh.value ? "ขึ้น" + vname(d, veh.value) + " · " + n + " รายการ" : "เลือกคันก่อน";
@@ -192,7 +199,7 @@ function doneSheet(ctx, s, d, onlyVehicle) {
     if (!ls.length) { msg.textContent = "เลือกคันก่อน"; return; }
     const refs = ls.map(l => ({ id: l.id, version: l.version, qty: mode.value === "all" ? l.qty_pcs : want.get(l.id) })).filter(r => r.qty > 0);
     if (!refs.length) { msg.textContent = "จำนวนเป็น 0 ทั้งหมด — ถ้าร้านไม่รับเลย ให้กด \"ส่งไม่ได้\""; return; }
-    ui.busy(btn, () => save(ctx, "deliver.done", { order: s.id, loads: refs }, { label: "ส่งแล้ว " + s.customer, done: () => sh.close() }));
+    ui.busy(btn, () => save(ctx, "deliver.done", { order: s.id, loads: refs }, { label: "ส่งแล้ว " + s.customer, done: () => { sh.close(); if (!s.has_geo && s.customer_id) geoPrompt(ctx, s); } }));
   });
 }
 
@@ -331,3 +338,26 @@ export default {
   ],
   views,
 };
+
+// ── ปักหมุดร้านนี้ (หลังกด "ส่งแล้ว" ที่ร้านที่ยังไม่มีหมุด) — แตะเดียวใช้ GPS มือถือ · ข้ามได้ ─────────────────────
+function geoPrompt(ctx, s) {
+  if (!navigator.geolocation) return;
+  const sh = ui.sheet({ title: "ปักหมุดร้านนี้", foot: true });
+  const msg = h("p.err", { role: "alert" });
+  const btn = h("button.btn.pri.block", { type: "button" }, icon("pin", "sm"), "ปักหมุดตรงนี้");
+  put(sh.body, h("p", h("b", s.customer), " ยังไม่มีหมุดในระบบ"), h("p.muted", "ถ้ายืนอยู่ที่ร้าน แตะปุ่มเดียว แอปใช้ GPS มือถือเก็บตำแหน่งร้านให้ — ครั้งหน้าเปิดนำทางได้เลย"), msg);
+  put(sh.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => sh.close() }, "ข้าม"), btn));
+  btn.addEventListener("click", () => ui.busy(btn, () => new Promise(resolve => {
+    msg.textContent = "กำลังหาตำแหน่ง… (รอสักครู่ ไม่ต้องกดซ้ำ)";
+    navigator.geolocation.getCurrentPosition(async pos => {
+      const c = pos.coords;
+      const input = { customer: s.customer_id, version: s.customer_version, lat_e6: Math.round(c.latitude * 1e6), lng_e6: Math.round(c.longitude * 1e6), acc_m: Math.round(c.accuracy || 0) };
+      const r = await save(ctx, "deliver.geo", input, { label: "ปักหมุด " + s.customer + " (แม่น ~" + input.acc_m + " ม.)", done: () => sh.close() });
+      if (!r) msg.textContent = "";
+      resolve();
+    }, err => {
+      msg.textContent = err && err.code === 1 ? "มือถือไม่อนุญาตให้ใช้ตำแหน่ง — เปิดสิทธิ์ตำแหน่งของเบราว์เซอร์ หรือกด \"ข้าม\"" : "หาตำแหน่งไม่ได้ (" + (err && err.code === 3 ? "ช้าเกิน" : "สัญญาณ GPS อ่อน") + ") — ออกไปที่โล่งแล้วลองใหม่ หรือกด \"ข้าม\"";
+      resolve();
+    }, { enableHighAccuracy: true, timeout: 15000, maximumAge: 30000 });
+  })));
+}

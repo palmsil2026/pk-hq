@@ -21,7 +21,8 @@ export function customersView(ctx, view, n) {
   const listBox = h("div.stack.orders"), panel = h("aside.md-detail", h("p.panel-empty", "แตะลูกค้าเพื่อดูรายละเอียด"));
   const count = h("div.lbl");
   add(view, h("div.row", h("div.cpick.grow", h("div.inp", icon("search", "sm"), search)),
-    h("button.btn", { type: "button", onclick: () => editCustomer(ctx, null, cat, list, c => { reload(); open(c.id); }) }, icon("plus", "sm"), "ลูกค้าใหม่")),
+    h("button.btn", { type: "button", onclick: () => editCustomer(ctx, null, cat, list, c => { reload(); open(c.id); }) }, icon("plus", "sm"), "ลูกค้าใหม่"),
+    h("button.btn", { type: "button", onclick: () => routeSuggestSheet(ctx, () => reload()) }, icon("route", "sm"), "แนะนำสาย")),
   chips, h("div.md", h("div.stack", count, listBox), panel));
   let cat = null;
   cached(ctx, "office.form").then(c => { cat = c; }).catch(() => {});
@@ -67,9 +68,16 @@ export function showCustomer(ctx, id, host, opt) {
     kvAdd("สาย/อำเภอ", [c.route_code ? "สาย " + c.route_code : "", c.district ? "อ." + c.district : "", c.subdistrict ? "ต." + c.subdistrict : ""].filter(Boolean).join(" · ") || "ยังไม่ระบุ");
     if (c.phone) add(kv, h("dt", "เบอร์"), h("dd", h("a", { href: "tel:" + c.phone.replace(/[^\d+]/g, "") }, icon("phone", "sm"), " " + c.phone)));
     kvAdd("ที่อยู่", c.address);
-    if (c.map_url && /^https?:\/\//.test(c.map_url)) add(kv, h("dt", "แผนที่"), h("dd", h("a", { href: c.map_url, target: "_blank", rel: "noopener" }, icon("pin", "sm"), " เปิดแผนที่")));
+    // หมุดร้าน: มีพิกัด = เปิดนำทาง · มีแต่ลิงก์ที่อ่านไม่ได้ = เปิดลิงก์เดิม · วางลิงก์ที่ลูกค้าส่งในไลน์ได้ทุกเมื่อ
+    add(kv, h("dt", "หมุดร้าน"), h("dd", h("div.geo-row",
+      d.geo ? h("a.btn", { href: d.geo.open, target: "_blank", rel: "noopener" }, icon("pin", "sm"), "เปิดแผนที่") : c.map_url && /^https?:\/\//.test(c.map_url) ? h("a.btn", { href: c.map_url, target: "_blank", rel: "noopener" }, icon("pin", "sm"), "เปิดลิงก์เดิม") : null,
+      h("span.small.muted", d.geo ? "จาก" + d.geo.src + (d.geo.acc_m ? " · แม่น ~" + d.geo.acc_m + " ม." : "") : c.map_url ? "ลิงก์นี้อ่านพิกัดไม่ได้ — รอคนขับปักหมุดตอนส่ง" : "ยังไม่มีหมุด (คนขับปักได้ตอนส่งของ)"),
+      h("button.btn.ghost", { type: "button", onclick: () => geoSheet(ctx, c, !!d.geo, () => { load(); if (o.onChanged) o.onChanged(); }) }, icon("pin", "sm"), d.geo ? "แก้หมุด" : "วางลิงก์แผนที่"))));
     kvAdd("เครดิต", c.credit_days ? c.credit_days + " วัน" : "");
     if (d.aliases.length) kvAdd("ชื่ออื่นที่เคยใช้", d.aliases.join(" · "));
+    const hint = !c.route_code && d.route_hint ? h("div.icard", h("div.row", icon("route", "sm"), h("b.grow", d.route_hint.route ? "แนะนำสาย " + d.route_hint.route : "ยังแนะนำสายไม่ได้")),
+      h("span.small.muted", d.route_hint.basis + (d.route_hint.route ? " — ระบบแนะนำ คนยืนยัน (ไม่เขียนเอง)" : " — ยังไม่ชัดพอ เลือกเองในแก้ข้อมูล")),
+      d.route_hint.route ? h("div.acts", h("button.btn", { type: "button", onclick: async () => { const r = await write(ctx, "office.route_apply", { items: [{ id: c.id, version: c.version, route_code: d.route_hint.route }] }, { label: "ใช้สาย " + d.route_hint.route + " · " + c.name }); if (r) { forget("office.customers"); load(); if (o.onChanged) o.onChanged(); } } }, icon("check", "sm"), "ใช้สาย " + d.route_hint.route)) : null) : null;
     const owe = d.owing.n ? h("div.icard", h("div.row", icon("coin", "sm"), h("b.grow", "ค้างชำระ " + d.owing.n + " บิล" + (d.owing.overdue ? " · เลยกำหนด " + d.owing.overdue : "")), h("b", "฿" + baht(d.owing.satang))),
       h("span.small.muted", d.owing.period)) : null;
     const actions = [h("button.btn.pri", { type: "button", onclick: () => { if (S) S.close(); ctx.go("new/cust:" + c.id); } }, icon("plus", "sm"), "ลงออเดอร์ให้ร้านนี้"),
@@ -80,7 +88,7 @@ export function showCustomer(ctx, id, host, opt) {
     put(box, 
       host ? h("h2.name", c.name) : null,
       h("div.row", c.needs_review ? ui.pill("รอตรวจชื่อ — มาจากออเดอร์เก่าที่จับคู่ทะเบียนไม่ได้", "warn", "flag") : null, c.merged_into ? ui.pill("รวมเข้ารายอื่นแล้ว", "mute") : null, c.status !== "ใช้งาน" ? ui.pill(c.status, "mute") : null),
-      c.note ? h("div.cust-note", icon("alert", "sm"), h("span", "หมายเหตุการค้า: " + c.note)) : null, kv, owe,
+      c.note ? h("div.cust-note", icon("alert", "sm"), h("span", "หมายเหตุการค้า: " + c.note)) : null, kv, hint, owe,
       ...(S ? [] : [h("div.acts", actions)]),
       d.usual.length ? h("div.lbl", "เคยสั่ง (บ่อยสุดก่อน)") : null,
       d.usual.length ? h("div.usual", d.usual.map(u => h("div.icard", h("div.row", h("b.grow", labelOf(u)), h("span.small.muted", n0(u.n) + " ครั้ง")),
@@ -146,3 +154,51 @@ function mergeSheet(ctx, c, list, done) {
   }) }, "รวม")));
 }
 export { nameKey };
+
+/** วางลิงก์แผนที่ (ลิงก์ที่ลูกค้าส่งในไลน์ · ลิงก์ย่อก็ได้) หรือพิมพ์พิกัด → หลังบ้านแกะพิกัดเอง · อ่านไม่ได้ = เก็บลิงก์ + ธง */
+function geoSheet(ctx, c, had, done) {
+  const S = ui.sheet({ title: (had ? "แก้หมุด · " : "หมุดร้าน · ") + c.name, modal: true, foot: true });
+  const inp = h("input", { type: "url", maxlength: 600, placeholder: "วางลิงก์ Google Maps หรือ 18.2888, 99.4908", "aria-label": "ลิงก์แผนที่" });
+  const msg = h("p.err", { role: "alert" });
+  add(S.body, h("p.muted", "วางลิงก์ที่ลูกค้าส่งในไลน์ได้เลย (maps.app.goo.gl / share.google ก็ได้) — แอปอ่านพิกัดให้เอง"), h("label.field", h("span.lbl", "ลิงก์แผนที่"), inp),
+    had ? h("p.hint", "ร้านนี้มีหมุดแล้ว — แก้ได้ แต่ต้องบอกเหตุผล (เก็บประวัติ)") : null, msg);
+  add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"), h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
+    const url = inp.value.trim();
+    if (!url) { msg.textContent = "วางลิงก์ก่อน"; return; }
+    const r = await write(ctx, "office.customer_geo", { id: c.id, version: c.version, url }, { label: "หมุดร้าน " + c.name, reasonKind: "geo_fix", reasonTitle: "แก้หมุดเดิม — ใส่เหตุผล" });
+    if (!r) return;
+    forget("office.customers");
+    if (r.data && r.data.ok === false) ui.toast("เก็บลิงก์แล้ว แต่อ่านพิกัดไม่ได้ (" + r.data.why + ")", "warn");
+    S.close("ok"); done();
+  }) }, "บันทึก")));
+  setTimeout(() => inp.focus(), 60);
+}
+
+/** แนะนำสายให้ลูกค้าที่มีแค่อำเภอ (เรียนจากลูกค้าที่มีทั้งสองช่อง) — เลือกแล้วยืนยันทีเดียว · ไม่เขียนทับรายที่มีสาย */
+async function routeSuggestSheet(ctx, done) {
+  const S = ui.sheet({ title: "แนะนำสายจากอำเภอ", modal: true, foot: true });
+  add(S.body, ui.skeleton(2));
+  let d;
+  try { d = await ctx.api.read("office.route_suggest"); } catch (e) { put(S.body, ui.errorBox("โหลดไม่สำเร็จ: " + e.message)); return; }
+  const pick = new Map();
+  const ok = d.list.filter(x => x.route);
+  ok.forEach(x => pick.set(x.id, x));
+  const rows = ok.map(x => h("button.icard", { type: "button", "aria-pressed": "true", style: { textAlign: "left" }, onclick: e => {
+    const on = !pick.has(x.id); if (on) pick.set(x.id, x); else pick.delete(x.id);
+    e.currentTarget.setAttribute("aria-pressed", String(on)); e.currentTarget.querySelector(".ck").replaceChildren(icon(on ? "check-circle" : "x-circle", "sm")); count();
+  } }, h("div.row", h("span.ck", icon("check-circle", "sm")), h("b.grow", x.name), ui.pill("สาย " + x.route + (x.area ? " " + x.area : ""), "brand", "route")), h("span.small.muted", x.basis)));
+  const btn = h("button.btn.pri", { type: "button" });
+  const count = () => { btn.textContent = "ยืนยันสาย " + pick.size + " ราย"; btn.disabled = !pick.size; };
+  put(S.body, h("p.muted", "ยังไม่มีสาย " + n0(d.counts.no_route) + " ราย · แนะนำได้ " + n0(d.counts.suggest) + " · ไม่มีอำเภอเลย " + n0(d.counts.nothing) + " (รอปักหมุดตอนส่ง)"),
+    h("p.hint", "แนะนำเมื่อลูกค้าอำเภอเดียวกันส่วนใหญ่ (≥ 60% และอย่างน้อย 2 ราย) อยู่สายเดียวกัน — แตะเพื่อเอาออกก่อนยืนยัน"),
+    ...(rows.length ? rows.slice(0, 60) : [ui.empty("ไม่มีรายที่แนะนำได้")]), ok.length > 60 ? h("p.hint", "แสดง 60 รายแรก — ยืนยันแล้วเปิดใหม่เพื่อดูที่เหลือ") : null,
+    d.list.filter(x => !x.route).length ? h("details.more", h("summary.btn.ghost", icon("chev", "sm"), "แนะนำไม่ได้ (" + d.list.filter(x => !x.route).length + ")"),
+      h("div.stack", d.list.filter(x => !x.route).slice(0, 80).map(x => h("div.small", h("b", x.name), " · " + x.basis)))) : null);
+  count();
+  add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"), btn));
+  btn.addEventListener("click", () => ui.busy(btn, async () => {
+    const items = [...pick.values()].slice(0, 60).map(x => ({ id: x.id, version: x.version, route_code: x.route }));
+    const r = await write(ctx, "office.route_apply", { items }, { label: "ยืนยันสาย " + items.length + " ราย" });
+    if (r) { forget("office.customers"); S.close("ok"); done(); }
+  }));
+}

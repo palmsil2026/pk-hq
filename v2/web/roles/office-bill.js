@@ -37,7 +37,8 @@ export function billSheet(ctx, d, opt) {
     total.textContent = "฿" + baht(t);
   }
   add(S.body, h("div.lbl", "ประเภทบิล (ต้องเลือก)"), kinds, dueRow, h("div.lbl", "รายการในบิล"), rows, blockChip, h("label.field", h("span.lbl", "หมายเหตุบนบิล"), noteIn),
-    h("div.row", h("span.muted.grow", "ยอดบิล"), total), msg);
+    h("div.row", h("span.muted.grow", "ยอดบิล"), total),
+    d.deposit_satang ? h("div.banner.t-warn", icon("coin"), h("span", "ออเดอร์นี้มัดจำแล้ว ฿" + baht(d.deposit_satang) + " — ระบบไม่หักให้เอง ยอดบิลคือยอดเต็ม · ออกบิลแล้วฝ่ายบัญชีจะเห็นเรื่องนี้เพื่อตรวจ")) : null, msg);
   add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
     h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
       if (!kind) { msg.textContent = "เลือกก่อนว่าเป็นบิลเงินสดหรือบิลเครดิต"; return; }
@@ -67,6 +68,7 @@ export async function billDoc(ctx, billNo, opt) {
   S.title = "บิล" + b.kind + " · " + b.customer_name;
   const doc = docEl(d);
   put(S.body, h("div.row", ui.statusPill(ctx.vocab, "bills.status", b.status), b.paper_no ? ui.pill("เลขบิลกระดาษ " + b.paper_no, "mute") : ui.pill("ยังไม่ผูกเลขบิลกระดาษ", "warn")),
+    d.deposit_satang ? h("div.banner.t-warn", icon("coin"), h("span", "มัดจำแล้ว ฿" + baht(d.deposit_satang) + " (" + d.deposits.map(x => thDayLong(x.paid_day)).join(", ") + ") — ยังไม่ได้หักในบิลนี้ ให้ฝ่ายบัญชีตัดสิน")) : null,
     h("div.doc-wrap", doc), h("p.ref", "รหัสอ้างอิง " + b.bill_no));
   const canCancel = b.src === "v2" && b.status === "ค้างชำระ" && !b.paid_satang && !b.paper_no && !b.stmt_no;
   add(S.foot, h("div.acts",

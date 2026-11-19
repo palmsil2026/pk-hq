@@ -10,7 +10,8 @@ const { h, icon } = ui;
 
 export const MONEY_PILL = { unbilled: ["ยังไม่ออกบิล", "warn", "bill"], owing: ["บิลค้างชำระ", "brand", "coin"], overdue: ["เลยกำหนดชำระ", "bad", "alert"] };
 export function duePill(o, today) {
-  if (!o.due_day) return ui.pill("ยังไม่กำหนดส่ง", "mute", "calendar");
+  if (o.wait_next) return ui.pill("ทยอย · รอนัดเที่ยวถัดไป", "warn", "calendar");
+  if (!o.due_day) return ui.pill(o.reserve ? "จอง · ยังไม่นัดส่ง" : "ยังไม่กำหนดส่ง", "mute", "calendar");
   if (o.late) return ui.pill(dueWords(o.due_day, today), "bad", "alert");
   if (o.due_day === today) return ui.pill("ส่งวันนี้", "warn", "truck");
   return ui.pill(dueWords(o.due_day, today), "mute", "calendar");
@@ -32,6 +33,8 @@ export function orderCard(ctx, o, onOpen, opt) {
     h("div.foot", ui.statusPill(ctx.vocab, "orders.status", o.status), o.status === "ส่งแล้ว" || o.status === "ยกเลิก" ? null : duePill(o, p.today), m ? ui.pill(m[0], m[1], m[2]) : null,
       o.design_status === "รอแบบ" || o.design_status === "แก้ไขแบบ" ? ui.pill(o.design_status, "warn", "brush") : null,
       o.pay_status === "รอโอนเงิน" ? ui.pill("รอโอนเงิน", "warn", "coin") : null,
+      o.hold ? ui.pill("รอยืนยัน", "warn", "clock") : null,
+      o.round ? ui.pill("งวด " + o.round.seq + "/" + o.round.n + (o.round.carried ? " +ส่วนขาด" : ""), "brand", "truck") : null,
       h("span.when", "ลง " + thDayLong(o.order_day))));
 }
 
@@ -43,7 +46,7 @@ export function orderText(o) {
   const L = ["ใบสั่ง โรงขวด P&K · " + thDayLong(o.order_day)];
   L.push("ลูกค้า: " + o.customer + (o.tag ? " (" + o.tag + ")" : ""));
   if (o.brand) L.push("งาน/แบรนด์: " + o.brand);
-  L.push("กำหนดส่ง: " + (o.due_day ? thDayLong(o.due_day) : "ยังไม่กำหนด") + (o.urgent ? " · ด่วน" : ""));
+  L.push(o.plan_text ? "นัดส่ง: " + o.plan_text.replace(/^นัดส่ง /, "") + (o.urgent ? " · ด่วน" : "") : "กำหนดส่ง: " + (o.due_day ? thDayLong(o.due_day) : "ยังไม่นัด (จอง)") + (o.urgent ? " · ด่วน" : ""));
   let pcs = 0;
   const units = new Set();
   (o.items || []).forEach((it, i) => {

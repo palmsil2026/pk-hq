@@ -4,7 +4,7 @@
 //  · write(): ยืนยัน (ถ้ามี) → บันทึก → หลังบ้านขอเหตุผล = แผ่นชิปเหตุผลแล้วส่งซ้ำ → ถูกกัน = แผ่นบอกเหตุ + ทางทำต่อ → แถบ "ย้อน"
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
-import { withReason } from "../parts/kit.js";
+import { withReason, add } from "../parts/kit.js";
 const { h, icon } = ui;
 
 const mem = {};
@@ -32,7 +32,7 @@ export function blockedSheet(message, title) {
  */
 export async function write(ctx, action, input, o) {
   const opt = o || {};
-  let reason = "";
+  let reason = opt.reason || "";   // เหตุผลที่ถามมาก่อนแล้ว (เช่น สาเหตุเลื่อนวันส่งจากแผ่นเลือกวัน)
   if (opt.confirm) {
     const c = await ui.confirmSheet(opt.confirm);
     if (!c) return null;
