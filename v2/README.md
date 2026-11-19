@@ -34,6 +34,7 @@ node --no-warnings --test tests/*.test.mjs        # หลังบ้าน + �
 node --no-warnings --test tests/ui/run.mjs        # หน้าจอจริง Playwright (ใช้ Chromium ที่ติดตั้งในเครื่อง — ห้าม playwright install ใหม่)
 node tools/check.mjs                               # ไวยากรณ์ · ไม่มี DELETE · ไม่มีอีโมจิ · ไม่มีความลับ · ไฟล์สร้างอัตโนมัติตรง
 node --no-warnings tools/shots.mjs /ที่เก็บภาพ      # ภาพหน้าจอทุกบทบาท 390 + 1366
+node tools/build-demo.mjs && node --no-warnings tools/demo/smoke.mjs   # เดโมทั้งระบบเป็นไฟล์ HTML เดียว (dist/demo/ · ดู STATUS › เดโมทั้งระบบ)
 ```
 
 - dev server ใช้ **หลังบ้านตัวจริง** (`server/`) บน SQLite + **สะพาน PIN ตัวจริง** (`gas/Code.gs` รันใน Node กับชีตจำลอง) — โปรโตคอลเดียวกับของจริงทุกอย่าง
