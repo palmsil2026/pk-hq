@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # ============================================================
-#  ส่ง Worker นาฬิกาปลุก (ซิงก์ชีทบัญชีวันละครั้ง) ขึ้น Cloudflare — เรียกต่อจาก tools/deploy-cf.sh ใน CI
+#  ส่ง Worker นาฬิกาปลุก (ซิงก์ชีทบัญชี 20:00 · นำเข้ารอบผลิตแอปเดิม 06:30/18:30) ขึ้น Cloudflare — เรียกต่อจาก tools/deploy-cf.sh ใน CI
 #  ต้องมี env: CLOUDFLARE_API_TOKEN · CLOUDFLARE_ACCOUNT_ID · PK_SYNC_KEY (ไม่มี = ข้ามพร้อมบอก)
 #  ชื่อแยกจากโรงน้ำ: Worker pk-v2-cron · ผูก D1 pk-v2 ตัวเดียวกับแอป
 # ============================================================
@@ -17,12 +17,12 @@ ID="$($W d1 list --json 2>/dev/null | node -e 'let s="";process.stdin.on("data",
 cat > cron/wrangler.toml <<TOML
 # สร้างโดย tools/deploy-cron.sh — ไม่ commit
 name = "$NAME"
-main = "acct-sync.mjs"
+main = "worker.mjs"
 compatibility_date = "2026-11-01"
 workers_dev = false
 
 [triggers]
-crons = ["0 13 * * *"]   # 20:00 เวลาไทย
+crons = ["0 13 * * *", "30 23 * * *", "30 11 * * *"]   # 20:00 ซิงก์บัญชี · 06:30 + 18:30 นำเข้ารอบผลิตแอปเดิม (เวลาไทย — ดู cron/worker.mjs)
 
 [vars]
 PK_GAS_URL = "$GAS_URL"
@@ -34,4 +34,4 @@ database_id = "$ID"
 TOML
 (cd cron && $W deploy)
 printf '%s' "$PK_SYNC_KEY" | (cd cron && $W secret put PK_SYNC_KEY --name "$NAME") >/dev/null && echo "ตั้ง secret PK_SYNC_KEY ให้ $NAME แล้ว"
-echo "✅ นาฬิกาปลุกซิงก์ชีทบัญชี: ทุกวัน 20:00 (ปิดได้ในแอปประธาน › ทีม › ค่าตั้ง ACCT_SYNC_AUTO)"
+echo "✅ นาฬิกาปลุก: ซิงก์ชีทบัญชี 20:00 (ค่าตั้ง ACCT_SYNC_AUTO) · นำเข้ารอบผลิตแอปเดิม 06:30/18:30 (ค่าตั้ง LEGACY_RUNS_AUTO) — ปิดได้ในแอปประธาน › ทีม › ค่าตั้ง"

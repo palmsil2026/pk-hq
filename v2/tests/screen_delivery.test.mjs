@@ -174,7 +174,7 @@ test("สกรีน · รายการ: คิวด่วนขึ้น�
   await W.call(T.screen, "screen.done", { id: "J1", version: 1, team: "ทีม 2" });
   const t = await W.call(T.screen, "screen.list", { tab: "today" });
   assert.equal(t.data.jobs.length, 1); assert.equal(t.data.jobs[0].done_nick, "จอย"); assert.ok(t.data.jobs[0].undo_id);
-  assert.deepEqual(t.data.doneToday, [{ team: "ทีม 2", jobs: 1, pcs: 4000 }]);
+  assert.deepEqual(t.data.doneToday, [{ team: "ทีม 2", jobs: 1, parts: 0, pcs: 4000 }]);
   W.tick(864e5);
   const h = await W.call(T.screen, "screen.list", { tab: "history" });
   assert.equal(h.data.jobs.length, 1);

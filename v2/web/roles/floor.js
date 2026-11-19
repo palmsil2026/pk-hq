@@ -5,6 +5,7 @@
 //   ข้อมูลจาก action prod.floor / prod.machine (ทีมผลิต · ประธาน · ออฟฟิศ อ่านได้)
 // ═══════════════════════════════════════════════════════════════════════
 import * as ui from "../assets/ui.js";
+import { stopStats, eventRow, shareBtn, durWords } from "./repair.js";   // 0110 หยุดบ่อยเพราะอะไร · คนแก้ · แชร์ลงไลน์
 const { h, icon } = ui;
 // ใส่ลูกลง DOM โดยข้าม null/undefined/false (append/replaceChildren ของเบราว์เซอร์จะพิมพ์คำว่า "null" ลงจอ)
 const clean = k => k.flat(Infinity).filter(x => x !== null && x !== undefined && x !== false);
@@ -188,6 +189,7 @@ export function infoSheet(ctx, m) {
   ensureCss();
   const sh = ui.sheet({ title: m.name });
   add(sh.body, h("p", h("b", m.kind), m.sub ? " · " + m.sub : ""), infoText(m) ? h("p", infoText(m)) : null,
+    m.stop ? h("div.rp-warn", h("b", "จอดอยู่ · " + [m.stop.reason || "ไม่ระบุ", m.stop.part].filter(Boolean).join(" · ")), h("span", "ตั้งแต่ " + ui.thTime(m.stop.started_at) + " (" + durWords(Date.now() - Date.parse(m.stop.started_at)) + ")" + (m.kind === "สกรีน" ? " · กดซ่อมเสร็จในแอปทีมสกรีน" : "")), m.stop.share ? shareBtn(m.stop.share) : null) : null,
     h("div.pf-missing", h("b", "ยังไม่มีข้อมูลสด"), h("br"), "ต่อมิเตอร์ไฟ/ตัวนับที่เครื่องแล้ว สถานะจะขึ้นเอง (ของที่เครื่องวัดได้ ไม่ต้องให้คนกรอก)"),
     h("p.ref", "รหัสอ้างอิง " + m.id + " · " + (m.plant || "ยังไม่ระบุโรง")));
   return sh;
@@ -226,10 +228,11 @@ export function machineSections(ctx, d, opt) {
   const o = opt || {};
   const now = Date.now();
   const out = [];
-  const evs = d.events.filter(e => e.kind === "จอดเครื่อง");
+  const evs = d.events.filter(e => e.kind === "จอดเครื่อง" || e.kind === "เปลี่ยนโมลด์");
   out.push(h("section.pf-sec", h("h3", "วันนี้", h("small", d.runs.length + " รอบ · สีแถบ = สีขวด · ลายเฉียง = จอด")), timeline(d, now),
     d.runs.length ? h("div.pf-runs", d.runs.map(r => runRow(r, o.onRun))) : h("p.muted", "ยังไม่ได้เปิดรอบวันนี้"),
-    evs.length ? h("div.stack", evs.map(e => h("p.small", icon("pause", "sm"), " จอด " + ui.thTime(e.started_at) + "–" + (e.ended_at ? ui.thTime(e.ended_at) : "ตอนนี้") + " · " + (e.reason || "ไม่ระบุ") + (e.by ? " · " + e.by : "")))) : null));
+    evs.length ? h("div.stack", evs.map(eventRow)) : null));
+  if (d.stops) out.push(stopStats(d.stops));
   // ยอดผลิต
   let range = "day";
   const tbl = h("div");
