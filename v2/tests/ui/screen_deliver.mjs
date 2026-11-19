@@ -115,6 +115,9 @@ test("ส่งของ: เส้นทาง (timeline วัน → สา�
   await p.waitForSelector(".sheet.on h2:has-text('ส่งแล้ว · ร้านตัวอย่าง D')");
   await p.locator(".sheet.on .sheet-foot .btn.ok").click();
   await p.waitForSelector(".snack.on button:has-text('ย้อน')");
+  // 0310: ร้านที่ยังไม่มีหมุด → แอปถาม "ปักหมุดร้านนี้" (ไม่บังคับ) — ข้าม
+  await p.locator(".sheet.on .btn", { hasText: "ข้าม" }).click();
+  await p.waitForFunction(() => !document.querySelector(".sheet.on"));
   assert.equal(one("SELECT delivered_pcs FROM order_items WHERE order_id = 'OD004'").delivered_pcs, 3000);   // ออเดอร์ตัวอย่าง (ไม่ใช่ v2) สถานะไม่ไหล — กติกาออฟฟิศ
   await p.locator("nav.nav a[data-key='done']").click();
   await p.locator(".stopsdone button.card", { hasText: "ร้านตัวอย่าง D" }).click();

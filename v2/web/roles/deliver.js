@@ -343,6 +343,8 @@ export default {
 function geoPrompt(ctx, s) {
   if (!navigator.geolocation) return;
   const sh = ui.sheet({ title: "ปักหมุดร้านนี้", foot: true });
+  const away = () => sh.close();   // ไปหน้าอื่น = ข้าม (ไม่ค้างทับจอ)
+  window.addEventListener("hashchange", away, { once: true });
   const msg = h("p.err", { role: "alert" });
   const btn = h("button.btn.pri.block", { type: "button" }, icon("pin", "sm"), "ปักหมุดตรงนี้");
   put(sh.body, h("p", h("b", s.customer), " ยังไม่มีหมุดในระบบ"), h("p.muted", "ถ้ายืนอยู่ที่ร้าน แตะปุ่มเดียว แอปใช้ GPS มือถือเก็บตำแหน่งร้านให้ — ครั้งหน้าเปิดนำทางได้เลย"), msg);
