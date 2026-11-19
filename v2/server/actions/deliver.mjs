@@ -10,6 +10,8 @@
 //  เงิน: ยังไม่เก็บเงินในหน้าส่งของ (รอคุณปาล์มตอบว่าคนขับเก็บเงินสดไหม) — การส่ง 1 ครั้งมี stop_id ไว้ผูกการรับเงินภายหลัง
 // ============================================================
 import { bad, conflict, notFound, need, int, text, iso, thaiDay, thaiHm, Fail, addDays, day as dayIn } from "../core.mjs";
+import { planState } from "./office-plan-lib.mjs";   // 0310: วันส่ง = วันของงวดที่ถึงคิว (งวดส่งของออฟฟิศ)
+import { mapsUrl } from "./geo-lib.mjs";
 import { OPEN_ORDER_SQL, ON_TRUCK, ON_TRUCK_SQL, plainKey, screenKey, itemName, qtyText, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL, billAfterGuard } from "./deliver_common.mjs";
 
 const ROLES = ["deliver", "office"];
@@ -92,10 +94,11 @@ export function defineDeliver(R) {
     async run(X) {
       const today = thaiDay(X.now);
       const onTruckOrders = `SELECT order_id FROM delivery_loads WHERE status IN ${ON_TRUCK_SQL}`;
-      const [orders, items, jobs, loads, vehicles, done] = await X.db.reads([
-        [`SELECT o.id, o.version, o.order_day, o.due_day, o.status, o.urgent, o.brand, o.note, o.pay_status, o.has_screen,
-            c.name AS customer, c.route_code, c.district, c.phone, c.address, c.map_url, c.note AS customer_note, r.name AS route_name, r.pos AS route_pos
-          FROM orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN routes r ON r.code = c.route_code
+      const [orders, items, jobs, loads, vehicles, done, rounds, sent] = await X.db.reads([
+        [`SELECT o.id, o.version, o.order_day, o.due_day, o.status, o.urgent, o.brand, o.note, o.pay_status, o.has_screen, o.plan_mode, o.plan_cap_pcs,
+            c.name AS customer, c.route_code, c.district, c.phone, c.address, c.map_url, c.note AS customer_note, r.name AS route_name, r.pos AS route_pos,
+            c.id AS customer_id, c.version AS customer_version, c.geo_lat_e6, c.geo_lng_e6, c.geo_src, a.name AS area_name
+          FROM orders o JOIN customers c ON c.id = o.customer_id LEFT JOIN routes r ON r.code = c.route_code LEFT JOIN route_areas a ON a.route_code = c.route_code AND a.status = 'ใช้งาน'
           WHERE o.status IN ${OPEN_ORDER_SQL} OR o.id IN (${onTruckOrders})
           ORDER BY CASE WHEN o.due_day = '' THEN '9999' ELSE o.due_day END, o.urgent DESC, c.route_code, c.name LIMIT 400`],
         [`SELECT i.id, i.version, i.order_id, i.line_no, i.type, i.size, i.neck, i.shape, i.color, i.screen_color, i.cap_color, i.label, i.bags, i.per_bag, i.extra_pcs, i.qty_pcs,
@@ -108,7 +111,12 @@ export function defineDeliver(R) {
           WHERE l.status IN ${ON_TRUCK_SQL} ORDER BY l.loaded_at`],
         ["SELECT id, name, plate FROM vehicles WHERE active = 1 ORDER BY id"],
         ["SELECT count(DISTINCT stop_id) AS stops FROM delivery_loads WHERE status = 'ส่งแล้ว' AND done_day = ? AND stop_id <> ''", today],
+        [`SELECT d.* FROM order_rounds d JOIN orders o ON o.id = d.order_id WHERE d.status = 'ใช้งาน' AND o.status IN ${OPEN_ORDER_SQL}`],
+        [`SELECT l.order_id, l.order_item_id, l.qty_pcs, l.done_day FROM delivery_loads l JOIN orders o ON o.id = l.order_id WHERE l.status = 'ส่งแล้ว' AND o.status IN ${OPEN_ORDER_SQL}`],
       ]);
+      const roundsBy = {}, sentBy = {};
+      rounds.forEach(r => { (roundsBy[r.order_id] = roundsBy[r.order_id] || []).push(r); });
+      sent.forEach(l => { (sentBy[l.order_id] = sentBy[l.order_id] || []).push(l); });
       const itemsBy = {}, jobsBy = {}, loadsBy = {};
       items.forEach(i => { (itemsBy[i.order_id] = itemsBy[i.order_id] || []).push({ ...i, left_pcs: Math.max(0, i.qty_pcs - i.delivered_pcs - i.onboard_pcs) }); });
       jobs.forEach(j => { (jobsBy[j.order_id] = jobsBy[j.order_id] || []).push(j); });
@@ -117,13 +125,21 @@ export function defineDeliver(R) {
         const its = itemsBy[o.id] || [], ld = loadsBy[o.id] || [], sj = jobsBy[o.id] || [];
         const left = its.reduce((s, i) => s + i.left_pcs, 0), onboard = ld.reduce((s, l) => s + l.qty_pcs, 0);
         const screenPending = sj.filter(j => j.status !== "เสร็จแล้ว");
+        // งวดส่ง: วันในเส้นทาง = วันนัดของงวดที่ถึงคิว (ส่งไม่ครบงวดก่อน = ส่วนขาดรวมมางวดนี้) · ต้องส่งงวดนี้ต่อรายการ
+        const plan = planState(o, roundsBy[o.id], its.map(i => ({ ...i, delivered: i.delivered_pcs })), sentBy[o.id]);
+        const cur = plan.current;
+        if (cur) its.forEach(i => { const n = cur.need.find(x => x.item_id === i.id); i.round_pcs = n ? Math.min(n.pcs, i.left_pcs + i.onboard_pcs) : i.left_pcs; });
+        const { plan_mode, plan_cap_pcs, geo_lat_e6, geo_lng_e6, ...row } = o;
         return {
-          ...o, urgent: !!o.urgent, items: its, loads: ld, left_pcs: left, onboard_pcs: onboard,
+          ...row, due_day: plan.due, order_due: o.due_day, reserve: plan.reserve,
+          round: cur && plan.n > 1 ? { seq: cur.seq, n: plan.n, carried: cur.carried } : null, plan_mode: plan_mode || "", wait_next: cur ? cur.wait_next : false,
+          has_geo: geo_lat_e6 !== null && geo_lat_e6 !== undefined, map_open: geo_lat_e6 !== null && geo_lat_e6 !== undefined ? mapsUrl(geo_lat_e6, geo_lng_e6) : "",
+          urgent: !!o.urgent, items: its, loads: ld, left_pcs: left, onboard_pcs: onboard,
           vehicles: [...new Set(ld.map(l => l.vehicle_id || ""))].filter(Boolean),
           failed: ld.filter(l => l.status === "ส่งไม่ได้").map(l => l.fail_reason)[0] || "",
           screen_pending: screenPending.length, screen_team: (screenPending.find(j => j.team) || {}).team || "",
           ready: o.status === "พร้อมส่ง" || o.status === "ส่งบางส่วน",
-          late: !!o.due_day && o.due_day < today,
+          late: !!plan.due && plan.due < today,
         };
       }).filter(s => s.left_pcs > 0 || s.onboard_pcs > 0);
       return { asOf: iso(X.now), today, tomorrow: addDays(today, 1), stops, vehicles, deliveredToday: done[0] ? done[0].stops : 0 };
