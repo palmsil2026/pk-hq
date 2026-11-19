@@ -1,7 +1,7 @@
 // ============================================================
 //  ข้อมูลสมมติเพิ่มของโมดูลสกรีน + ส่งของ (เรียกจาก seed-demo.mjs บรรทัดเดียว) — ชื่อร้าน/ยอดไม่ใช่ของจริง
 //  ทำให้หน้าส่งของ/สกรีนในเครื่องนักพัฒนา · พรีวิว · เทสต์หน้าจอ มีของครบทุกสถานะ:
-//    บนรถ (รถ 04) · ส่งไม่ได้ (รถ 05) · ส่งแล้ววันนี้ · ส่งบางส่วนเมื่อวาน · งานสกรีนเสร็จวันนี้ · ยอดยกมาในคลัง
+//    บนรถ (รถ 04) · ส่งไม่ได้ (รถ 05) · ส่งแล้ววันนี้ · ส่งบางส่วนเมื่อวาน · งานสกรีนเสร็จวันนี้ · งานสกรีนหลายวัน (ทำบางส่วน) · ยอดยกมาในคลัง
 // ============================================================
 import { iso, thaiDay, addDays, specKey, specLabel } from "../server/core.mjs";
 
@@ -28,6 +28,15 @@ export async function seedScreenDeliver(X, apply, now) {
   ops.push({ op: "insert", table: "orders", row: { id: "OD011", order_day: addDays(today, -2), customer_id: "CDE", due_day: addDays(today, 1), status: "พร้อมส่ง", has_screen: 1, brand: "น้ำดื่มตัวอย่าง", purchase_type: "ขายราคาโรงงาน", taker_staff_id: "S102", src: "demo" } });
   ops.push({ op: "insert", table: "order_items", row: { id: "OD011-1", order_id: "OD011", line_no: 1, ...b250, screen_color: "เขียวเข้ม", spec_key: specKey(b250), label: specLabel(b250), bags: 20, per_bag: 252, qty_pcs: 5040, src: "demo" } });
   ops.push({ op: "insert", table: "screen_jobs", row: { id: "SJD11", order_id: "OD011", order_item_id: "OD011-1", team: "ทีม 1", colors: "เขียวเข้ม", qty_pcs: 5040, due_day: addDays(today, 1), status: "เสร็จแล้ว", done_at: at(2 * H), done_day: today, done_by: "S121", src: "demo" } });
+  // ร้าน B: งานสกรีนหลายวัน (ทำบางส่วน) — เมื่อวาน 18 ถุง · วันนี้ 12 ถุง · ค้าง 70 ถุง (งานยังอยู่ในคิว)
+  ops.push({ op: "insert", table: "orders", row: { id: "OD012", order_day: addDays(today, -4), customer_id: "CDB", due_day: addDays(today, 3), status: "กำลังสกรีน", has_screen: 1, brand: "น้ำดื่มตัวอย่าง", purchase_type: "ขายราคาโรงงาน", taker_staff_id: "S101", src: "demo" } });
+  ops.push({ op: "insert", table: "order_items", row: { id: "OD012-1", order_id: "OD012", line_no: 1, ...b600, screen_color: "น้ำเงิน", spec_key: specKey(b600), label: specLabel(b600), bags: 100, per_bag: 200, qty_pcs: 20000, src: "demo" } });
+  ops.push({ op: "insert", table: "screen_jobs", row: { id: "SJD12", order_id: "OD012", order_item_id: "OD012-1", team: "ทีม 1", colors: "น้ำเงิน", qty_pcs: 20000, done_pcs: 6000, due_day: addDays(today, 3), status: "เตรียมการสกรีน", src: "demo", version: 3 } });
+  ops.push({ op: "insert", table: "screen_parts", row: { id: "SPD121", job_id: "SJD12", order_id: "OD012", team: "ทีม 1", qty_pcs: 3600, at: at(25 * H), day: addDays(today, -1), by: "S121", job_ver: 2, src: "demo" } });
+  ops.push({ op: "insert", table: "screen_parts", row: { id: "SPD122", job_id: "SJD12", order_id: "OD012", team: "ทีม 1", qty_pcs: 2400, at: at(1.5 * H), day: today, by: "S121", job_ver: 3, src: "demo" } });
+  ops.push({ op: "move", item_key: "spec:" + specKey(b600), label: specLabel(b600), grade: "A", qty_pcs: 20000, move_type: "ยอดยกมา", ref_entity: "demo", ref_id: "seed-b", src: "demo" });
+  ops.push({ op: "move", item_key: "spec:" + specKey(b600), label: specLabel(b600), grade: "A", qty_pcs: -6000, move_type: "เบิกสกรีน", ref_entity: "screen_jobs", ref_id: "SJD12", src: "demo" });
+  ops.push({ op: "move", item_key: "spec:" + specKey(b600) + "|สกรีน น้ำเงิน", label: specLabel(b600) + " สกรีน น้ำเงิน", grade: "A", qty_pcs: 6000, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: "SJD12", src: "demo" });
   // คลัง: ยอดยกมา (ทีมผลิตจะเริ่มนับจริงตอนย้ายมา)
   for (const [it, n] of [[b600, 12000], [b250, 6000]]) ops.push({ op: "move", item_key: "spec:" + specKey(it), label: specLabel(it), grade: "A", qty_pcs: n, move_type: "ยอดยกมา", ref_entity: "demo", ref_id: "seed", src: "demo" });
   ops.push({ op: "move", item_key: "spec:" + specKey(b250) + "|สกรีน เขียวเข้ม", label: specLabel(b250) + " สกรีน เขียวเข้ม", grade: "A", qty_pcs: 5040, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: "SJD11", src: "demo" });

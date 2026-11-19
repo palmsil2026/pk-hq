@@ -136,11 +136,16 @@ test("ทีมผลิต: ปิดรอบด้วยแป้นตัว
   await p.locator(".sheet.on.modal .chip", { hasText: "ลม/ปั๊มลม" }).click();
   await p.locator(".sheet.on.modal .btn.pri", { hasText: "จอดเครื่อง" }).click();
   await pin(p, "เก่ง");
+  await p.waitForSelector(".snack.on .share");
   await p.waitForSelector(".pf-tile.s-stop .nm:text-is('PET 2')");
   assert.match(await tile(p, "PET 2").innerText(), /ลม\/ปั๊มลม/);
   await tile(p, "PET 2").click();
-  await p.locator(".sheet.on .btn.pri", { hasText: "เดินเครื่องต่อ" }).click();
+  await p.locator(".sheet.on .btn.pri", { hasText: "ซ่อมเสร็จ" }).first().click();
+  await p.waitForSelector(".sheet.on.modal .chip");
+  await p.locator(".sheet.on.modal .chip", { hasText: "ลม" }).first().click();   // ชิ้นส่วน (ไม่บังคับ)
+  await p.locator(".sheet.on.modal .btn.pri", { hasText: "เดินเครื่องต่อ" }).click();
   await pin(p, "เก่ง");
+  await p.waitForSelector(".snack.on .share");   // ปุ่มแชร์ลงไลน์ในแถบบันทึกแล้ว
   await p.waitForSelector(".pf-tile.s-run .nm:text-is('PET 2')");
   assert.deepEqual(p.errors, []);
 });

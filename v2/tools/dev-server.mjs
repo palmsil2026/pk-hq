@@ -77,7 +77,7 @@ export async function startDev(opt) {
   });
   await new Promise(r => server.listen(o.port || 0, "127.0.0.1", r));
   const port = server.address().port;
-  return { port, url: "http://127.0.0.1:" + port + "/", close: () => new Promise(r => server.close(r)), d1, G };
+  return { port, url: "http://127.0.0.1:" + port + "/", close: () => new Promise(r => server.close(r)), d1, G, env, gasFetch, clock };
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

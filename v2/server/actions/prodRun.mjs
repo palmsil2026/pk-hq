@@ -11,6 +11,7 @@
 //         รอบค้าง (เปิดนานเกิน RUN_STALE_HOURS หรือค้างจากแอปเดิม) ปิดย้อนหลังได้ + เหตุผล + ธง
 // ============================================================
 import { bad, conflict, notFound, need, text, int, oneOf, iso, thaiDay, thaiHm, thDate, thDateTime, specKey, specLabel, newId } from "../core.mjs";
+import { stopPlan, resumePlan, moldText } from "./repair.mjs";   // 0110 ชิ้นส่วน · ซ่อมเสร็จ · ข้อความแชร์ลงไลน์
 import { readSpec, readWhen, readCrew, crewOps, produceMoves, negativeFlag, stockKey, jobsOps, JOB_OF_RUN, RUN_KINDS, OPEN_RUN } from "./prodLib.mjs";
 
 const ROLES = ["prod"];   // ประธานใช้แอปทีมผลิตได้เอง (as=prod) ตามกติกากลาง
@@ -274,10 +275,10 @@ export function defineProdRuns(R) {
     },
   });
 
-  // ── จอดเครื่อง + สาเหตุ (ชิป reason.machine_stop) → เดินเครื่องต่อ ──────────────────
+  // ── จอดเครื่อง + สาเหตุ (ชิป reason.machine_stop) + ชิ้นส่วน (ไม่บังคับ) → ซ่อมเสร็จ/เดินเครื่องต่อ (จดคนแก้) ── repair.mjs
   R.define({
     name: "run.stop", roles: ROLES, write: true, gate: true, reason: "required", label: "จอดเครื่อง",
-    input: (raw, X) => ({ machine: need(raw.machine, "เครื่อง", 40), at: readWhen(raw.at, X.now, "เวลาจอด", 12), note: text(raw.note, 300) }),
+    input: (raw, X) => ({ machine: need(raw.machine, "เครื่อง", 40), at: readWhen(raw.at, X.now, "เวลาจอด", 12), note: text(raw.note, 300), part: text(raw.part, 60, "ชิ้นส่วน") }),
     async load(X, input) {
       const [m, ev, run] = await X.db.reads([
         ["SELECT * FROM machines WHERE id = ?", input.machine],
@@ -287,33 +288,17 @@ export function defineProdRuns(R) {
       return { m: m[0], stop: ev[0], run: run[0] };
     },
     onUnique: () => conflict("เครื่องนี้เพิ่งถูกกดจอดไปพร้อมกัน — โหลดใหม่"),
-    async run(X, input, ctx) {
-      const m = ctx.m;
-      if (!m || m.status === "เลิกใช้") throw notFound("ไม่พบเครื่องนี้");
-      if (ctx.stop) throw conflict(m.name + " จอดอยู่แล้ว ตั้งแต่ " + thaiHm(Date.parse(ctx.stop.started_at)) + " (" + (ctx.stop.reason || "ไม่ระบุ") + ")", { stop: { id: ctx.stop.id, version: ctx.stop.version } });
-      const at = input.at || iso(X.now);
-      const id = "E" + X.newId();
-      return { result: { id }, label: "จอด " + m.name + " · " + X.reason, ops: [{ op: "insert", table: "machine_events", row: {
-        id, machine_id: m.id, run_id: ctx.run ? ctx.run.id : null, kind: "จอดเครื่อง", reason: X.reason, detail: input.note, started_at: at, started_day: thaiDay(Date.parse(at)), by: X.staff.id, src: "v2" } }] };
-    },
+    run: (X, input, ctx) => stopPlan(X, ctx.m, ctx.stop, ctx.run, input),
   });
   R.define({
     name: "run.resume", roles: ROLES, write: true, gate: true, label: "เดินเครื่องต่อ",
-    input: (raw, X) => ({ event: need(raw.event, "เรื่องที่จอด", 40), version: int(raw.version, "รุ่นของรายการ", { min: 1 }), at: readWhen(raw.at, X.now, "เวลาเดินต่อ", 12) }),
+    input: (raw, X) => ({ event: need(raw.event, "เรื่องที่จอด", 40), version: int(raw.version, "รุ่นของรายการ", { min: 1 }), at: readWhen(raw.at, X.now, "เวลาเดินต่อ", 12),
+      part: text(raw.part, 60, "ชิ้นส่วน"), note: text(raw.note, 300) }),
     async load(X, input) {
       const [e] = await X.db.reads([["SELECT e.*, m.name AS machine_name FROM machine_events e JOIN machines m ON m.id = e.machine_id WHERE e.id = ?", input.event]]);
       return { e: e[0] };
     },
-    async run(X, input, ctx) {
-      const e = ctx.e;
-      if (!e || e.kind !== "จอดเครื่อง") throw notFound("ไม่พบเรื่องที่จอด");
-      if (e.ended_at || e.status !== "ใช้งาน") throw conflict("เครื่องนี้เดินต่อไปแล้ว — โหลดใหม่");
-      if (e.version !== input.version) throw conflict();
-      const at = input.at || iso(X.now);
-      if (at < e.started_at) throw bad("เวลาเดินต่ออยู่ก่อนเวลาที่จอด (" + thaiHm(Date.parse(e.started_at)) + ")");
-      const { machine_name, ...old } = e;
-      return { result: { id: e.id }, label: "เดินเครื่องต่อ " + machine_name, ops: [{ op: "update", table: "machine_events", id: e.id, expect: e.version, before: old, set: { ended_at: at } }] };
-    },
+    run: (X, input, ctx) => resumePlan(X, ctx.e, input),
   });
 
   // ── เปลี่ยนโมลด์: จะเปลี่ยน → กำลังเปลี่ยน (เครื่องหยุด) → เสร็จ (ขยับโมลด์ที่ติดอยู่) · ยกเลิก ──────────
@@ -338,7 +323,7 @@ export function defineProdRuns(R) {
       if (!ev) {
         if (st === "เสร็จ" || st === "ยกเลิก") throw conflict("ยังไม่มีเรื่องเปลี่ยนโมลด์ที่ค้างอยู่ของ " + m.name + " — โหลดใหม่");
         const id = "E" + X.newId();
-        return { result: { id, stage: st }, label: (st === "จะเปลี่ยน" ? "แจ้งจะเปลี่ยนโมลด์ " : "เริ่มเปลี่ยนโมลด์ ") + m.name + (input.mold_to ? " → " + input.mold_to : ""), ops: [{ op: "insert", table: "machine_events", row: {
+        return { result: { id, stage: st, share: moldText(m.name, st, null, at, input.mold_to) }, label: (st === "จะเปลี่ยน" ? "แจ้งจะเปลี่ยนโมลด์ " : "เริ่มเปลี่ยนโมลด์ ") + m.name + (input.mold_to ? " → " + input.mold_to : ""), ops: [{ op: "insert", table: "machine_events", row: {
           id, machine_id: m.id, kind: "เปลี่ยนโมลด์", stage: st, mold_from: m.mold || "", mold_to: input.mold_to, detail: input.note, started_at: at, started_day: thaiDay(X.now), work_at: st === "กำลังเปลี่ยน" ? at : "", by: X.staff.id, src: "v2" } }] };
       }
       if (input.event && input.event !== ev.id) throw conflict("เรื่องเปลี่ยนโมลด์ของเครื่องนี้เปลี่ยนไปแล้ว — โหลดใหม่");
@@ -352,7 +337,7 @@ export function defineProdRuns(R) {
       if (input.note) set.detail = (ev.detail ? ev.detail + " · " : "") + input.note;
       const ops = [{ op: "update", table: "machine_events", id: ev.id, expect: ev.version, before: ev, set }];
       if (st === "เสร็จ" && to && to !== m.mold) ops.push({ op: "update", table: "machines", id: m.id, expect: m.version, before: m, set: { mold: to } });
-      return { result: { id: ev.id, stage: st }, label: (st === "ยกเลิก" ? "ยกเลิกเปลี่ยนโมลด์ " : st === "เสร็จ" ? "เปลี่ยนโมลด์เสร็จ " : "เริ่มเปลี่ยนโมลด์ ") + m.name + (to && st !== "ยกเลิก" ? " → " + to : ""), ops };
+      return { result: { id: ev.id, stage: st, share: moldText(m.name, st, ev, at, to) }, label: (st === "ยกเลิก" ? "ยกเลิกเปลี่ยนโมลด์ " : st === "เสร็จ" ? "เปลี่ยนโมลด์เสร็จ " : "เริ่มเปลี่ยนโมลด์ ") + m.name + (to && st !== "ยกเลิก" ? " → " + to : ""), ops };
     },
   });
 

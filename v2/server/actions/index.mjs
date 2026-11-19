@@ -13,6 +13,8 @@ import { defineDeliver } from "./deliver.mjs"; // 0300 สกรีน + ส่�
 import { defineProduction } from "./prod.mjs";   // 0100 ทีมผลิต
 import { defineExec } from "./exec.mjs";          // 0400 ประธาน + บัญชี
 import { defineAccount } from "./account.mjs";    // 0400 ประธาน + บัญชี
+import { defineScreenProgress } from "./screen-progress.mjs";   // 0320 สกรีนทำบางส่วน (ออฟฟิศอ่านความคืบหน้า)
+import { defineRepair } from "./repair.mjs";                   // 0110/0321 ซ่อมเสร็จ · ชิ้นส่วน · เครื่องสกรีน
 
 export function buildRegistry(extra) {
   const R = createRegistry();
@@ -26,6 +28,8 @@ export function buildRegistry(extra) {
   defineDeliver(R);      // 0300 สกรีน + ส่งของ
   defineExec(R);         // 0400 ประธาน + บัญชี
   defineAccount(R);      // 0400 ประธาน + บัญชี
+  defineScreenProgress(R); // 0320 สกรีนทำบางส่วน
+  defineRepair(R);         // 0110/0321 ซ่อมเสร็จ · เครื่องสกรีน
   if (typeof extra === "function") extra(R);   // เทสต์ใส่ action ตัวอย่างเพิ่มได้
   return R;
 }

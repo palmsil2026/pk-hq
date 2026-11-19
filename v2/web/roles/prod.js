@@ -5,6 +5,7 @@
 //              งาน: เริ่มผลิตงานนี้ · ค้าง+สาเหตุ · ทำครบแล้ว · สต๊อก: รับเข้า · นับปรับ · ประวัติ: แก้ยอด · ผูกงาน
 //   ไม่มีหน้าเข้าระบบทุกวัน — กดบันทึก = ถามใครบันทึก + PIN ทุกครั้ง (ctx.save ทำให้เอง) · ทุกปุ่มมีแถบ "ย้อน"
 // ═══════════════════════════════════════════════════════════════════════
+import { stopSheet, resumeSheet, shareBtn, shareSnack, eventRow } from "./repair.js";   // 0110 ชิ้นส่วน · ซ่อมเสร็จ · แชร์ลงไลน์
 import * as ui from "../assets/ui.js";
 import { floorView, ensureCss, STATE, swatch, bagsText, machineSections, runRow, durText, infoSheet, machineTile, put, add } from "./floor.js";
 const { h, icon } = ui;
@@ -135,7 +136,8 @@ function machineSheet(ctx, m) {
     h("div.small.muted", "เริ่ม " + ui.thTime(m.run.started_at) + (ui.thDayOf(m.run.started_at) !== ui.thDay(thaiToday()) ? " (" + ui.thDayOf(m.run.started_at) + ")" : "") + " · เดินมา " + durText(now - Date.parse(m.run.started_at)) + " · " + (m.run.crew || "ไม่ระบุคน")),
     m.run.job_id ? h("div.small", icon("list", "sm"), " ผูกกับงานรอผลิต") : h("div.small.muted", "ผลิตเข้าสต๊อก"),
     m.run.legacy ? h("div.small", { style: { color: "var(--warn-ink)" } }, icon("alert", "sm"), " รอบนี้ลงในแอปเดิม — ปิดในแอปเดิมได้ ระบบจะตามเองรอบซิงก์ถัดไป") : null));
-  if (m.stop) head.push(h("div.pf-warn", h("b", "จอดอยู่ · " + (m.stop.reason || "ไม่ระบุ")), h("span", "ตั้งแต่ " + ui.thTime(m.stop.started_at) + " (" + durText(now - Date.parse(m.stop.started_at)) + ")")));
+  if (m.stop) head.push(h("div.pf-warn", h("b", "จอดอยู่ · " + [m.stop.reason || "ไม่ระบุ", m.stop.part].filter(Boolean).join(" · ")), h("span", "ตั้งแต่ " + ui.thTime(m.stop.started_at) + " (" + durText(now - Date.parse(m.stop.started_at)) + ")"),
+    m.stop.share ? shareBtn(m.stop.share) : null));
   if (m.moldEv) head.push(h("div.pf-warn", h("b", (m.moldEv.stage === "จะเปลี่ยน" ? "จะเปลี่ยนโมลด์" : "กำลังเปลี่ยนโมลด์") + (m.moldEv.mold_to ? " → " + m.moldEv.mold_to : "")), h("span", "แจ้งเมื่อ " + ui.thTime(m.moldEv.started_at))));
   if (m.state === "ค้างปิด") head.push(h("div.pf-warn", h("b", "เปิดรอบไว้นาน " + durText(now - Date.parse(m.run.started_at)) + " — ลืมกดปิดไหม"), h("span", "ปิดย้อนหลังได้ เลือกเวลาที่ปิดจริง + เหตุผล (ระบบขึ้นธงให้ประธานเห็น)")));
   add(sh.body, ...head);
@@ -148,14 +150,14 @@ function machineSheet(ctx, m) {
   const open = () => openRunSheet(ctx, m, {}, done);
   const close = late => closeRunSheet(ctx, m.run.id, { machine: m.name, late }, done);
   const color = () => colorSheet(ctx, m, done);
-  const stop = () => ctx.save("run.stop", { machine: m.id }, { label: "จอด " + m.name, after: done,
-    confirm: { title: "จอด " + m.name, detail: "เลือกสาเหตุ — ไฟเครื่องจะเป็นสีเหลืองจนกว่าจะกด \"เดินเครื่องต่อ\"", reasons: ctx.reasons("machine_stop"), need: "required", okText: "จอดเครื่อง" } }).catch(() => {});
-  const resume = () => ctx.save("run.resume", { event: m.stop.id, version: m.stop.version }, { label: "เดินเครื่องต่อ " + m.name, after: done }).catch(() => {});
+  // จอด = สาเหตุ (บังคับ) + ชิ้นส่วน (ไม่บังคับ) · เดินต่อ = ซ่อมเสร็จ (คนใส่ PIN = คนแก้) → ปุ่มแชร์ลงไลน์ในแถบบันทึกแล้ว
+  const stop = () => stopSheet(ctx, { action: "run.stop", machine: m.id, name: m.name, reasonKind: "machine_stop", partKind: "machine", after: done });
+  const resume = () => resumeSheet(ctx, { action: "run.resume", name: m.name, stop: m.stop, partKind: "machine", after: done });
   const mold = () => moldSheet(ctx, m, done);
   let pri = null, more = [];
   const legacyRun = m.run && m.run.legacy;
   if (m.state === "โมลด์") { pri = B("เปลี่ยนโมลด์เสร็จ", "check", mold, true); }
-  else if (m.state === "จอด") { pri = m.run ? B("เดินเครื่องต่อ", "play", resume, true) : B("เปิดรอบ (เดินเครื่องต่อ)", "play", open, true); more = [m.run && !legacyRun ? B("ปิดรอบ", "stop", () => close(false)) : null, !m.run ? B("ยกเลิกการจอด", "play", resume) : null, B("เปลี่ยนโมลด์", "gear", mold)]; }
+  else if (m.state === "จอด") { pri = m.run ? B("ซ่อมเสร็จ · เดินต่อ", "play", resume, true) : B("เปิดรอบ (เดินเครื่องต่อ)", "play", open, true); more = [m.run && !legacyRun ? B("ปิดรอบ", "stop", () => close(false)) : null, !m.run ? B("ซ่อมเสร็จ (ยังไม่เปิดรอบ)", "play", resume) : null, B("เปลี่ยนโมลด์", "gear", mold)]; }
   else if (m.state === "ค้างปิด") { pri = B("ปิดรอบย้อนหลัง", "stop", () => close(true), true); more = [legacyRun ? null : B("เปลี่ยนสี", "swap", color), B("จอดเครื่อง", "pause", stop)]; }
   else if (m.state === "เดิน" && legacyRun) { pri = B("เปิดรอบในแอปใหม่", "play", open, true); more = [B("ปิดรอบนี้", "stop", () => close(true)), B("จอดเครื่อง", "pause", stop)]; }
   else if (m.state === "เดิน") { pri = B("ปิดรอบ", "stop", () => close(false), true); more = [B("เปลี่ยนสี", "swap", color), B("จอดเครื่อง", "pause", stop), B("เปลี่ยนโมลด์", "gear", mold)]; }
@@ -347,7 +349,7 @@ function moldSheet(ctx, m, done) {
       try {
         const res = await ctx.save("mold.step", { machine: m.id, stage, event: ev ? ev.id : "", version: ev ? ev.version : "", mold_to: to.value.trim() }, { label: label + " · " + m.name,
           confirm: stage === "ยกเลิก" ? { title: "ยกเลิกการเปลี่ยนโมลด์?", reasons: false, okText: "ยกเลิกการเปลี่ยน" } : null });
-        if (res) { sh.close(); (done || ctx.refresh)(); }
+        if (res) { sh.close(); (done || ctx.refresh)(); shareSnack(res.data && res.data.share); }
       } catch (e) {
         if (e.detail && e.detail.open) put(banner, h("div.pf-warn", h("b", "ต้องปิดรอบที่เดินอยู่ก่อน"), h("span", e.detail.open.label), h("button.btn", { type: "button", onclick: () => { sh.close(); closeRunSheet(ctx, e.detail.open.id, { machine: m.name }, done); } }, "ไปปิดรอบ")));
         throw e;
@@ -595,7 +597,7 @@ function historyPage(ctx, view) {
       h("div.card", h("div.row", h("span.big.md", fmt(T.good)), h("span.muted", "ใบดี · " + T.runs + " รอบที่ปิดวันที่ " + ui.thDay(d.day))), h("span.small.muted", "เกรด B " + fmt(T.b) + " · เสีย " + fmt(T.waste))),
       byM.size ? h("div.stack.pf-cols", [...byM.entries()].map(([name, g]) => h("section.card.pf-sec", h("h3", name, h("small", g.runs.length + " รอบ")),
         h("div.pf-runs", g.runs.map(r => runRow(r, x => runSheet(ctx, x.id, fin)))),
-        g.evs.map(e => h("p.small", { style: { color: "var(--warn-ink)" } }, icon(e.kind === "จอดเครื่อง" ? "pause" : "gear", "sm"), " " + e.kind + " " + ui.thTime(e.started_at) + "–" + (e.ended_at ? ui.thTime(e.ended_at) : "ยังไม่จบ") + " · " + (e.reason || e.mold_to || "") + (e.by ? " · " + e.by : "")))))) : ui.empty("ไม่มีรอบในวันนี้", "เลือกวันอื่นด้านบน"));
+        g.evs.length ? h("div.stack", g.evs.map(eventRow)) : null))) : ui.empty("ไม่มีรอบในวันนี้", "เลือกวันอื่นด้านบน"));
   }, histDay ? { day: histDay } : {});
 }
 

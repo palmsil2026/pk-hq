@@ -7,6 +7,7 @@ import { bad, notFound, need, text, iso, thaiDay, atThai, addDays, isDay, specLa
 import { FLOOR } from "../import/reference.generated.mjs";
 import { runState, runHours, OPEN_RUN, RUN_KINDS, PROD_TYPES } from "./prodLib.mjs";
 import { loadJobs } from "./prodStock.mjs";
+import { stopSummary, stopText, eventOut, STOP_ROWS_SQL } from "./repair.mjs";   // 0110 ชิ้นส่วน · ซ่อมเสร็จ · แชร์ลงไลน์
 
 const READ = ["prod", "exec", "office"];
 const CREW = "(SELECT group_concat(name_text, ' , ') FROM run_crew c WHERE c.run_id = r.id AND c.status = 'ใช้งาน') AS crew";
@@ -25,7 +26,7 @@ export async function floorData(X) {
         ["SELECT id, name, map_label, sub, kind, plant, pos_x, pos_y, w, h, tracked, status, makes, rating, mold, version FROM machines WHERE status <> 'เลิกใช้' ORDER BY plant, pos_y, pos_x"],
         [`SELECT r.id, r.machine_id, r.type, r.size, r.neck, r.shape, r.color, r.started_at, r.status, CASE WHEN j.status IN ('รอผลิต','กำลังผลิต') THEN r.job_id END AS job_id, r.src, r.version, ${CREW}
            FROM machine_runs r LEFT JOIN production_jobs j ON j.id = r.job_id WHERE r.status IN ${OPEN_RUN} ORDER BY r.started_at DESC`],   // งานถูกยกเลิก/จบแล้ว = แผนผังไม่บอกว่ายังผูกงาน
-        ["SELECT id, machine_id, kind, reason, stage, mold_to, started_at, work_at, version FROM machine_events WHERE ended_at = '' AND status = 'ใช้งาน'"],
+        ["SELECT id, machine_id, kind, reason, part, detail, stage, mold_to, started_at, work_at, version FROM machine_events WHERE ended_at = '' AND status = 'ใช้งาน'"],
         [`SELECT r.machine_id, sum(r.good_pcs) AS good, sum(r.grade_b_pcs) AS b FROM machine_runs r WHERE r.status = 'ปิดแล้ว' AND ${DAYOF} = ? GROUP BY r.machine_id`, today],
         ["SELECT dedupe_key FROM flags WHERE status = 'เปิด' AND instr(dedupe_key, 'stale:') = 1"],
         ["SELECT count(*) AS n FROM production_jobs WHERE status IN ('รอผลิต','กำลังผลิต')"],
@@ -54,7 +55,7 @@ export async function floorData(X) {
         return { id: m.id, name: m.name, label: m.map_label || m.name, sub: m.sub, kind: m.kind, plant: m.plant, x: m.pos_x, y: m.pos_y, w: m.w, h: m.h, tracked: m.tracked, status: m.status, mold: m.mold,
           state: st, runnable: RUN_KINDS.indexOf(m.kind) >= 0,
           run: run ? { id: run.id, label: specLabel(run), type: run.type, size: run.size, neck: run.neck, shape: run.shape, color: run.color, started_at: run.started_at, crew: run.crew || "", job_id: run.job_id, version: run.version, legacy: run.status !== "กำลังผลิต" } : null,
-          stop: s ? { id: s.id, reason: s.reason, started_at: s.started_at, version: s.version } : null,
+          stop: s ? { id: s.id, reason: s.reason, part: s.part || "", started_at: s.started_at, version: s.version, share: stopText(m.name, s) } : null,
           moldEv: md ? { id: md.id, stage: md.stage, mold_to: md.mold_to, started_at: md.started_at, work_at: md.work_at, version: md.version } : null,
           today: madeBy[m.id] || { good: 0, b: 0 }, stuck };
       });
@@ -88,11 +89,11 @@ export function defineProdRead(R) {
       const id = input.id;
       const agg = cond => [`SELECT r.type, r.size, r.neck, r.shape, r.color, sum(r.good_pcs) AS good, sum(r.grade_b_pcs) AS b, sum(r.waste_pcs) AS waste, count(*) AS runs, max(ts.per_bag) AS per_bag
         FROM machine_runs r LEFT JOIN type_sizes ts ON ts.type = r.type AND ts.size = r.size WHERE r.machine_id = ? AND r.status = 'ปิดแล้ว' ${cond} GROUP BY r.type, r.size, r.neck, r.shape, r.color ORDER BY good DESC LIMIT 12`];
-      const [m, runs, evs, aDay, aMonth, aAll, tot, top, rate, crew, notes, stuck, devs, molds, slots] = await X.db.reads([
+      const [m, runs, evs, aDay, aMonth, aAll, tot, top, rate, crew, notes, stuck, devs, molds, slots, stopRows] = await X.db.reads([
         ["SELECT * FROM machines WHERE id = ?", id],
         [`SELECT r.*, ${CREW}, ts.per_bag FROM machine_runs r LEFT JOIN type_sizes ts ON ts.type = r.type AND ts.size = r.size
            WHERE r.machine_id = ? AND r.status <> 'ยกเลิก' AND (r.started_day = ? OR r.ended_day = ? OR (r.status IN ${OPEN_RUN} AND r.started_day <= ?)) ORDER BY r.started_at LIMIT 60`, id, day, day, day],
-        ["SELECT e.*, s.nick AS by_nick FROM machine_events e LEFT JOIN staff s ON s.id = e.by WHERE e.machine_id = ? AND e.status = 'ใช้งาน' AND (e.started_day = ? OR e.ended_at = '' OR e.ended_at >= ?) ORDER BY e.started_at LIMIT 40", id, day, dayStart],
+        ["SELECT e.*, s.nick AS by_nick, f.nick AS fixed_nick FROM machine_events e LEFT JOIN staff s ON s.id = e.by LEFT JOIN staff f ON f.id = e.fixed_by WHERE e.machine_id = ? AND e.status = 'ใช้งาน' AND (e.started_day = ? OR e.ended_at = '' OR e.ended_at >= ?) ORDER BY e.started_at LIMIT 40", id, day, dayStart],
         [...agg(`AND ${DAYOF} = ?`), id, day],
         [...agg(`AND substr(${DAYOF}, 1, 7) = ?`), id, month],
         [...agg(""), id],
@@ -107,6 +108,7 @@ export function defineProdRead(R) {
         ["SELECT d.id, d.kind, d.name, d.unit, (SELECT value FROM device_readings x WHERE x.device_id = d.id ORDER BY x.at DESC LIMIT 1) AS last, (SELECT at FROM device_readings x WHERE x.device_id = d.id ORDER BY x.at DESC LIMIT 1) AS last_at FROM devices d WHERE d.machine_id = ? AND d.status = 'ใช้งาน'", id],
         ["SELECT e.kind, e.stage, e.mold_from, e.mold_to, e.started_at, e.ended_at, e.reason FROM machine_events e WHERE e.machine_id = ? AND e.kind IN ('เปลี่ยนโมลด์','ซ่อม') AND e.status = 'ใช้งาน' ORDER BY e.started_at DESC LIMIT 5", id],
         ["SELECT id, name, map_label, plant FROM machines WHERE kind = ? AND tracked = 0 AND status = 'ใช้งาน' AND plant <> '' ORDER BY name", "ฉีด"],
+        [STOP_ROWS_SQL, id, iso(X.now - 30 * 864e5)],
       ]);
       const mm = m[0];
       if (!mm) throw notFound("ไม่พบเครื่องนี้");
@@ -120,7 +122,8 @@ export function defineProdRead(R) {
         machine: { id: mm.id, name: mm.name, label: mm.map_label || mm.name, sub: mm.sub, kind: mm.kind, plant: mm.plant, makes: mm.makes, rating: mm.rating, mold: mm.mold, legacy_name: mm.legacy_name, note: mm.note,
           model: mm.model, bought: mm.bought, molds: mm.molds, capacity: mm.capacity, tracked: mm.tracked, status: mm.status, version: mm.version, runnable: RUN_KINDS.indexOf(mm.kind) >= 0, placed: !!mm.plant },
         runs: runs.map(runOut),
-        events: evs.map(e => ({ id: e.id, kind: e.kind, reason: e.reason, stage: e.stage, mold_from: e.mold_from, mold_to: e.mold_to, started_at: e.started_at, work_at: e.work_at, ended_at: e.ended_at, detail: e.detail, by: e.by_nick || "", version: e.version })),
+        events: evs.map(e => eventOut(e, mm.name, X.now)),
+        stops: stopSummary(stopRows, X.now),   // หยุดบ่อยเพราะอะไร (ครั้ง + ชม. ต่อชิ้นส่วน 7/30 วัน)
         totals: { day: out(aDay), month: out(aMonth), all: out(aAll) },
         info: {
           runs: t.runs, hours: Math.round(t.hours * 10) / 10, first_day: t.first_day || "", good: t.good, b: t.b, waste: t.waste, bad_time: t.bad_time || 0,
@@ -190,7 +193,7 @@ export function defineProdRead(R) {
       const [runs, evs, stuck, stuckN] = await X.db.reads([
         [`SELECT r.*, m.name AS machine_name, ${CREW}, ts.per_bag FROM machine_runs r JOIN machines m ON m.id = r.machine_id LEFT JOIN type_sizes ts ON ts.type = r.type AND ts.size = r.size
            WHERE r.status <> 'ยกเลิก' AND (r.started_day = ? OR r.ended_day = ?)${mf} ORDER BY m.plant, m.name, r.started_at LIMIT 300`, day, day, ...ma],
-        [`SELECT e.*, m.name AS machine_name, s.nick AS by_nick FROM machine_events e JOIN machines m ON m.id = e.machine_id LEFT JOIN staff s ON s.id = e.by
+        [`SELECT e.*, m.name AS machine_name, s.nick AS by_nick, f.nick AS fixed_nick FROM machine_events e JOIN machines m ON m.id = e.machine_id LEFT JOIN staff s ON s.id = e.by LEFT JOIN staff f ON f.id = e.fixed_by
            WHERE e.status = 'ใช้งาน' AND e.started_day = ?${input.machine ? " AND e.machine_id = ?" : ""} ORDER BY e.started_at LIMIT 200`, day, ...ma],
         [`SELECT r.*, m.name AS machine_name, ${CREW}, ts.per_bag FROM machine_runs r JOIN machines m ON m.id = r.machine_id LEFT JOIN type_sizes ts ON ts.type = r.type AND ts.size = r.size
            WHERE (r.status = 'ค้างจากระบบเดิม' OR (r.status = 'กำลังผลิต' AND r.started_at < ?))${mf} ORDER BY r.started_at DESC LIMIT 60`, cut, ...ma],
@@ -202,7 +205,7 @@ export function defineProdRead(R) {
         asOf: iso(X.now), day, today, days: Array.from({ length: 14 }, (_, i) => addDays(today, -i)),
         totals: { good: sum("good_pcs"), b: sum("grade_b_pcs"), waste: sum("waste_pcs"), runs: closed.length, period: "รอบที่ปิดวันที่ " + day },
         runs: runs.map(runOut),
-        events: evs.map(e => ({ id: e.id, machine_id: e.machine_id, machine: e.machine_name, kind: e.kind, reason: e.reason, stage: e.stage, mold_to: e.mold_to, started_at: e.started_at, ended_at: e.ended_at, by: e.by_nick || "", detail: e.detail })),
+        events: evs.map(e => ({ ...eventOut(e, e.machine_name, X.now), machine_id: e.machine_id, machine: e.machine_name })),
         stuck: stuck.map(runOut), stuckTotal: stuckN[0].n,
       };
     },
