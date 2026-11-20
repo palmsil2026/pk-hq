@@ -14,7 +14,7 @@ import { plainKey, screenKey, negativeStockFlags, billAfterGuard } from "./deliv
 import { PROD_TYPES } from "./prodLib.mjs";
 import { planInput, wantInput, planState } from "./office-plan-lib.mjs";
 import { roundRows, planCols } from "./office-plan.mjs";
-import { depositRemindFlag } from "./office-deposits.mjs";
+import { depositRemindFlag, depositLeft, depositLeftFlag, BILL_DEPOSIT_SQL } from "./office-deposits.mjs";
 
 export const ROLES_OFFICE = ["office", "exec"];
 const PURCHASE = ["", "ขายราคาโรงงาน", "ขายหน้าร้าน"], PRICE_MODE = ["", "มาตรฐาน", "พิเศษ"];
@@ -353,7 +353,7 @@ export function defineOfficeOrders(R) {
   R.define({
     name: "office.order_cancel", roles: ROLES_OFFICE, write: true, reason: "required",
     input: raw => ({ id: need(raw.id, "ออเดอร์", 40), version: int(raw.version, "รุ่นของออเดอร์", { min: 1 }) }),
-    load: (X, input) => loadOrder(X, input.id),
+    load: (X, input) => loadOrder(X, input.id, [["SELECT amount_satang, status FROM order_deposits WHERE order_id = ?", input.id], [BILL_DEPOSIT_SQL, input.id]]),
     async run(X, input, ctx) {
       const o = ctx.o;
       if (o.version !== input.version) throw conflict();
@@ -386,6 +386,9 @@ export function defineOfficeOrders(R) {
           total_satang: kept.every(i => i.price_satang !== null) ? kept.reduce((s, i) => s + i.price_satang * Math.min(i.delivered, i.qty_pcs), 0) : null };
       } else set = { status: "ยกเลิก", cancel_reason: X.reason };
       ops.unshift({ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set });
+      // มัดจำคงเหลือ = ธงให้ประธาน/บัญชีตัดสินเรื่องคืนเงิน (ระบบไม่คืนเอง)
+      const left = depositLeftFlag(o.id, ctx.cust ? ctx.cust.name : o.customer_text, depositLeft(ctx.more[0], ctx.more[1]), partial ? "ปิดออเดอร์ (รับแค่ที่ส่ง)" : "ยกเลิกออเดอร์");
+      if (left) ops.push(left);
       for (const t of startedTeams) ops.push({ op: "flag", kind: "แก้ออเดอร์หลังเริ่มงาน", team: t, entity: "orders", entity_id: o.id,
         title: (ctx.cust ? ctx.cust.name : "") + ": ออฟฟิศยกเลิกออเดอร์ที่" + (t === "prod" ? "ทีมผลิต" : "ทีมสกรีน") + "เริ่มทำแล้ว", detail: "เหตุผล: " + X.reason + (t === "prod" ? " · ของที่ผลิตแล้วอยู่ในสต๊อก" : "") });
       return { label: (partial ? "ปิดออเดอร์ (รับแค่ที่ส่ง) " : "ยกเลิกออเดอร์ ") + (ctx.cust ? ctx.cust.name : ""), ops, result: { id: o.id, status: set.status, partial } };

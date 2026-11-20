@@ -14,6 +14,7 @@ const screenUndoGuard = stockGuard((have, n) => "ขวดสกรีนจา�
 import { plainKey, screenKey, itemName, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 import { registerTable } from "../db.mjs";
 import { amountText } from "./screen-progress.mjs";
+import { orderRanks, byRank } from "./order-rank.mjs";   // ลำดับคิวกลาง (คุณปาล์มเคาะ 19 พ.ย.)
 registerTable("screen_parts", { pk: "id", void: { status: "ยกเลิก" } });
 
 const ROLES = ["screen", "office"];
@@ -101,7 +102,7 @@ export function defineScreen(R) {
       const due = "coalesce(nullif(j.due_day, ''), o.due_day)";
       const [rows, todayRows, teams, parts, mstops] = await X.db.reads([
         input.tab === "queue"
-          ? [`SELECT ${cols} ${from} WHERE j.status IN ('รอดำเนินการ','เตรียมการสกรีน') ORDER BY o.urgent DESC, CASE WHEN ${due} = '' THEN '9999' ELSE ${due} END, j.created_at LIMIT 200`, now, now, now]
+          ? [`SELECT ${cols} ${from} WHERE j.status IN ('รอดำเนินการ','เตรียมการสกรีน') ORDER BY o.urgent DESC, CASE WHEN ${due} = '' THEN '9999' ELSE ${due} END, j.created_at LIMIT 400`, now, now, now]
           : input.tab === "today"
             ? [`SELECT ${cols} ${from} WHERE j.status = 'เสร็จแล้ว' AND j.done_day = ? ORDER BY j.done_at DESC LIMIT 200`, now, now, now, today]
             : [`SELECT ${cols} ${from} WHERE j.status = 'เสร็จแล้ว' AND j.done_at < ? ORDER BY j.done_at DESC LIMIT 60`, now, now, now, input.before || "9999"],
@@ -117,10 +118,14 @@ export function defineScreen(R) {
         // เครื่องสกรีนที่จอดอยู่ (แถบ "เครื่องสกรีน" บนหน้าคิว — แตะแล้วเปิดแผ่นจอด/เดินต่อ)
         ["SELECT m.name, e.reason, e.part, e.started_at FROM machine_events e JOIN machines m ON m.id = e.machine_id WHERE m.kind = 'สกรีน' AND m.status = 'ใช้งาน' AND e.kind = 'จอดเครื่อง' AND e.ended_at = '' AND e.status = 'ใช้งาน' ORDER BY m.name"],
       ]);
+      // คิว: ลำดับเดียวกับงานรอผลิต (งวดที่นัดใกล้สุด → ลงคิวก่อน → ของจองท้าย · ออฟฟิศปรับมือได้) — order-rank.mjs
+      const ranks = input.tab === "queue" ? await orderRanks(X) : new Map();
       const jobs = rows.map(r => {
-        const due = r.job_due || r.order_due || "";
-        return { ...r, due_day: due, late: !!due && due < today && r.status !== "เสร็จแล้ว", urgent: !!r.urgent };
+        const rk = ranks.get(r.order_id);
+        const due = rk ? rk.due : (r.job_due || r.order_due || "");
+        return { ...r, due_day: due, late: !!due && due < today && r.status !== "เสร็จแล้ว", urgent: !!r.urgent, rank_no: rk ? rk.no : 0, prio: rk ? rk.priority : 0, reserve: rk ? rk.reserve : false };
       });
+      if (input.tab === "queue") jobs.sort(byRank(ranks, j => j.order_id, j => ({ id: j.id, due: j.due_day, urgent: j.urgent, queued_at: j.created_at })));
       return {
         asOf: now, today, tab: input.tab, jobs, teams: teams.map(t => t.code),
         doneToday: todayRows.map(t => ({ team: t.team || "", jobs: t.jobs, parts: t.parts, pcs: t.pcs })),

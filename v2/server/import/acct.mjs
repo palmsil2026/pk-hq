@@ -13,6 +13,7 @@
 //
 //  รันซ้ำกี่รอบก็ไม่เบิ้ล (คีย์ = เลขบิลเดิม · ค่าไม่เปลี่ยน = ข้าม) · หน้าเดียว = batch เดียว (ล้มทั้งหน้า ไม่ครึ่ง ๆ กลาง ๆ)
 // ============================================================
+import { moneyMatch, netOf } from "../actions/account-lib.mjs";
 import { iso, thaiDay, thDate } from "../core.mjs";
 import { thaiDate, satangOf, matchCustomer } from "./legacy.mjs";
 import { importCustomers } from "./importers.mjs";
@@ -33,7 +34,7 @@ async function byIds(X, ids) {
 async function v2ByPaper(X, nos) {
   const m = new Map();
   for (const part of chunk([...new Set(nos.filter(Boolean))], 90)) {
-    (await X.db.all(`SELECT bill_no, bill_day, paper_no, total_satang, status FROM bills WHERE src = 'v2' AND status <> 'ยกเลิก' AND paper_no IN (${part.map(() => "?").join(",")})`, ...part))
+    (await X.db.all(`SELECT bill_no, bill_day, paper_no, total_satang, deposit_satang, status FROM bills WHERE src = 'v2' AND status <> 'ยกเลิก' AND paper_no IN (${part.map(() => "?").join(",")})`, ...part))
       .forEach(r => { if (!m.has(r.paper_no)) m.set(r.paper_no, []); m.get(r.paper_no).push(r); });
   }
   return m;
@@ -94,7 +95,7 @@ export async function importAcct(X, page) {
       ops.push({ op: "insert", table: "bills", undo: false, row: { bill_no: id, ...row, ...meta, same_as: twin ? twin.bill_no : "", customer_id: hit ? hit.id : null, paid_satang: row.status === "ชำระแล้ว" ? row.total_satang : 0, src: "acct:" + tab } });
       st.inserted++;
       seen.push(id);
-      if (twin && twin.total_satang !== row.total_satang) ops.push(diffFlag(id, row, twin));
+      if (twin && !moneyMatch(row.total_satang, twin)) ops.push(diffFlag(id, row, twin));   // ชีทลงยอดเต็มของบิลที่หักมัดจำ = ต่างเพราะมัดจำ ไม่ใช่ยอดไม่ตรง
     } else if (String(b.src).indexOf("acct:") === 0) {
       const set = {};
       for (const f of SYNC_FIELDS) if (String(b[f] ?? "") !== String(row[f] ?? "")) set[f] = row[f];
@@ -105,7 +106,7 @@ export async function importAcct(X, page) {
       if (b.status === "ยกเลิก" && set.status) set.cancel_reason = "";   // กลับมาในชีทแล้ว (เคยหาย)
       if (Object.keys(set).length) { ops.push({ op: "update", table: "bills", id, expect: b.version, before: b, set, undo: false }); st.updated++; } else st.skipped++;
       const total = set.total_satang !== undefined ? set.total_satang : b.total_satang;
-      if (twin && twin.total_satang !== total && (set.same_as || set.total_satang !== undefined)) ops.push(diffFlag(id, { ...b, ...set }, twin));   // เตือนครั้งเดียวตอนเพิ่งเจอคู่/ยอดเพิ่งเปลี่ยน (ไม่ทวงทุกวัน)
+      if (twin && !moneyMatch(total, twin) && (set.same_as || set.total_satang !== undefined)) ops.push(diffFlag(id, { ...b, ...set }, twin));   // เตือนครั้งเดียวตอนเพิ่งเจอคู่/ยอดเพิ่งเปลี่ยน (ไม่ทวงทุกวัน)
     } else st.skipped++;   // บิลที่ v2 ลงเอง — ไม่แตะเด็ดขาด
   }
   ops.push(...seenSql([...new Set(seen)], iso(X.now)));
@@ -119,7 +120,7 @@ const money = s => (Number(s) / 100).toLocaleString("en-US", { minimumFractionDi
 function diffFlag(acctId, row, twin) {
   return { op: "flag", kind: "ชีทบัญชีไม่ตรงแอป", team: "account", severity: "ดู", entity: "bills", entity_id: twin.bill_no,
     title: "ยอดในชีทบัญชีไม่ตรงกับบิลในแอป: " + row.customer_name + " เลข " + (row.paper_no || "") ,
-    detail: "ชีทบัญชี " + money(row.total_satang) + " บ. · ในแอป " + money(twin.total_satang) + " บ. (บิลวันที่ " + thDate(row.bill_day) + ") — ตรวจว่าตัวไหนถูก แล้วแก้ที่ต้นทาง",
+    detail: "ชีทบัญชี " + money(row.total_satang) + " บ. · ในแอป " + money(netOf(twin)) + " บ." + (twin.deposit_satang ? " (หลังหักมัดจำ " + money(twin.deposit_satang) + " บ.)" : "") + " (บิลวันที่ " + thDate(row.bill_day) + ") — ตรวจว่าตัวไหนถูก แล้วแก้ที่ต้นทาง",
     dedupe_key: "acctdiff:" + acctId };
 }
 

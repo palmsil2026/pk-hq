@@ -10,7 +10,7 @@ import { Fail, bad, conflict, notFound, need, text, int, day as dayOf, iso, thai
 import { nameKey } from "../import/legacy.mjs";
 import {
   MONEY_ROLES, AR_WHERE, sourceOf, billOut, payDay, channelOf, MONEY_IN_SQL, moneyInArgs, byChannel, monthStart, monthEnd,
-  nextDoc, paperNo, baht, dayGap, isAcct, NO_CHANNEL,
+  nextDoc, paperNo, baht, dayGap, isAcct, NO_CHANNEL, netOf, moneyMatch, depositNote,
 } from "./account-lib.mjs";
 import { defineAccountSync } from "./account-sync.mjs";
 
@@ -117,14 +117,20 @@ export function defineAccount(R) {
            OR (entity = 'bill_payments' AND entity_id IN (SELECT id FROM bill_payments WHERE bill_no = ?)) ORDER BY id DESC LIMIT 20`, input.bill_no, input.bill_no],
       ]);
       if (!b) throw notFound("ไม่พบบิลนี้");
-      const [order, items, stmt] = await X.db.reads([
+      const [order, items, stmt, deps, obills] = await X.db.reads([
         ["SELECT o.id, o.order_day, o.due_day, o.brand, o.status, o.total_satang FROM orders o WHERE o.id = ?", b.order_id || "-"],
         ["SELECT label, type, size, color, bags, per_bag, qty_pcs, price_satang FROM order_items WHERE order_id = ? AND status = 'ใช้งาน' ORDER BY line_no", b.order_id || "-"],
         ["SELECT stmt_no, stmt_day, status, collect_day, total_satang, version FROM statements WHERE stmt_no = ?", b.stmt_no || "-"],
+        ["SELECT amount_satang, channel, paid_day, status FROM order_deposits WHERE order_id = ? ORDER BY paid_day", b.order_id || "-"],
+        ["SELECT bill_no, status, deposit_satang FROM bills WHERE src = 'v2' AND order_id = ?", b.order_id || "-"],
       ]);
+      // มัดจำของออเดอร์ (คุณปาล์มเคาะ 19 พ.ย.: หักในบิลเลย) — บิลนี้หักไปเท่าไร · ออเดอร์เหลือมัดจำเท่าไร
+      const active = deps.filter(d => d.status === "ใช้งาน");
+      const depSum = active.reduce((s2, d) => s2 + d.amount_satang, 0), used = obills.filter(x => x.status !== "ยกเลิก").reduce((s2, x) => s2 + x.deposit_satang, 0);
       return {
         asOf: iso(X.now), bill: billOut(b), payments: pays, twins: twins.map(billOut),
         order: order[0] ? Object.assign(order[0], { items }) : null, statement: stmt[0] || null, history: audit,
+        deposit: b.order_id ? { this_bill: Number(b.deposit_satang) || 0, total: depSum, left: Math.max(0, depSum - used), list: active } : null,
       };
     },
   });
@@ -169,15 +175,17 @@ export function defineAccount(R) {
       const relink = !!b.paper_no;
       if (relink && b.paper_no === input.paper_no) throw conflict("บิลนี้ผูกเลข #" + b.paper_no + " ไว้แล้ว");
       if (relink && !X.reason) throw bad("บิลนี้ผูกเลข #" + b.paper_no + " ไว้แล้ว — เปลี่ยนเลขต้องมีเหตุผล");
-      if (input.paper_satang !== b.total_satang) {
-        throw new Fail(409, "mismatch", "ยอดไม่ตรง — บนบิลกระดาษ ฿" + baht(input.paper_satang) + " แต่ในระบบ ฿" + baht(b.total_satang) + " · บัญชีไม่ต้องแก้บิลจากออเดอร์ ส่งให้ออฟฟิศเช็ค",
-          { paper_satang: input.paper_satang, bill_satang: b.total_satang, bill_no: b.bill_no });
+      // มัดจำหักในบิล: กระดาษควรตรง "ยอดหลังหักมัดจำ" · ลงยอดเต็ม = ต่างเพราะมัดจำ (ผูกได้ + บอกเหตุ ไม่ใช่ยอดไม่ตรง)
+      const pm = moneyMatch(input.paper_satang, b);
+      if (!pm) {
+        throw new Fail(409, "mismatch", "ยอดไม่ตรง — บนบิลกระดาษ ฿" + baht(input.paper_satang) + " แต่ในระบบ ฿" + baht(netOf(b)) + (b.deposit_satang ? " (หลังหักมัดจำ ฿" + baht(b.deposit_satang) + " จากยอดเต็ม ฿" + baht(b.total_satang) + ")" : "") + " · บัญชีไม่ต้องแก้บิลจากออเดอร์ ส่งให้ออฟฟิศเช็ค",
+          { paper_satang: input.paper_satang, bill_satang: netOf(b), total_satang: b.total_satang, deposit_satang: b.deposit_satang || 0, bill_no: b.bill_no });
       }
       const twins = pickTwins(ctx.sheet, b.bill_day, b.bill_no);
-      const off = twins.find(a => a.total_satang !== b.total_satang);
+      const off = twins.find(a => !moneyMatch(a.total_satang, b));
       if (off) {
-        throw new Fail(409, "mismatch_sheet", "ยอดไม่ตรงกับชีทบัญชี — บิลเลข #" + input.paper_no + " ในชีทลงไว้ ฿" + baht(off.total_satang) + " แต่บิลนี้ ฿" + baht(b.total_satang) + " — ตรวจที่ชีทบัญชีก่อน",
-          { sheet_satang: off.total_satang, bill_satang: b.total_satang });
+        throw new Fail(409, "mismatch_sheet", "ยอดไม่ตรงกับชีทบัญชี — บิลเลข #" + input.paper_no + " ในชีทลงไว้ ฿" + baht(off.total_satang) + " แต่บิลนี้ ฿" + baht(netOf(b)) + (b.deposit_satang ? " (หลังหักมัดจำ)" : "") + " — ตรวจที่ชีทบัญชีก่อน",
+          { sheet_satang: off.total_satang, bill_satang: netOf(b) });
       }
       const dup = dupOf(ctx.dups, b.bill_day, b.bill_no);
       if (dup && !input.force_dup) throw dupFail(dup, input.paper_no);
@@ -197,8 +205,10 @@ export function defineAccount(R) {
       for (const t of ctx.oldTwins) if (!keep.has(t.bill_no)) ops.push({ op: "update", table: "bills", id: t.bill_no, expect: t.version, before: t, set: { same_as: "" } });
       for (const a of twins) if (a.same_as !== b.bill_no) ops.push({ op: "update", table: "bills", id: a.bill_no, expect: a.version, before: a, set: { same_as: b.bill_no } });
       if (dup) ops.push(dupFlag(b, input.paper_no, dup, X.reason));
+      const gross = pm === "gross" || twins.some(a => moneyMatch(a.total_satang, b) === "gross");
+      if (gross) ops.push({ op: "note", entity: "bills", entity_id: b.bill_no, after: { deposit_note: depositNote(b) } });
       return { label: "ผูกเลข #" + input.paper_no + " · " + b.customer_name + (paid ? " · รับเงิน " + (input.channel === "เงินสด" ? "เงินสด" : input.channel) : ""),
-        result: { bill_no: b.bill_no, paid, twin: twins.length > 0 }, ops };
+        result: { bill_no: b.bill_no, paid, twin: twins.length > 0, deposit_note: gross ? depositNote(b) : "" }, ops };
     },
   });
 
@@ -240,7 +250,7 @@ export function defineAccount(R) {
     async run(X, input, ctx) {
       const b = ctx.b;
       if (b.src !== "v2") throw bad(sourceOf(b).why);
-      if (input.paper_satang === b.total_satang) throw bad("ยอดตรงกันแล้ว — ผูกเลขได้เลย");
+      if (moneyMatch(input.paper_satang, b)) throw bad(moneyMatch(input.paper_satang, b) === "gross" ? depositNote(b) + " — ผูกเลขได้เลย" : "ยอดตรงกันแล้ว — ผูกเลขได้เลย");
       return {
         label: "ส่งให้ออฟฟิศเช็คยอด " + b.customer_name, result: { bill_no: b.bill_no },
         ops: [
@@ -558,8 +568,8 @@ export function defineAccount(R) {
             SELECT 'pay' AS kind, p.id AS id, p.day AS day, p.channel AS channel, p.amount_satang AS satang, b.customer_name, b.paper_no, b.bill_no, p.at AS at, s.nick AS by_nick, p.version AS version, b.src AS src
               FROM bill_payments p JOIN bills b ON b.bill_no = p.bill_no LEFT JOIN staff s ON s.id = p.by WHERE p.status = 'ใช้ได้' AND b.status <> 'ยกเลิก' AND p.day BETWEEN ? AND ?
             UNION ALL
-            SELECT 'bill', b.bill_no, b.paid_day, CASE WHEN trim(b.pay_channel) = '' THEN '${NO_CHANNEL}' ELSE b.pay_channel END, b.total_satang, b.customer_name, b.paper_no, b.bill_no, b.updated_at, '', b.version, b.src
-              FROM bills b WHERE b.status = 'ชำระแล้ว' AND b.same_as = '' AND b.paid_day BETWEEN ? AND ?
+            SELECT 'bill', b.bill_no, b.paid_day, CASE WHEN trim(b.pay_channel) = '' THEN '${NO_CHANNEL}' ELSE b.pay_channel END, b.total_satang - b.deposit_satang, b.customer_name, b.paper_no, b.bill_no, b.updated_at, '', b.version, b.src
+              FROM bills b WHERE b.status = 'ชำระแล้ว' AND b.same_as = '' AND b.paid_day BETWEEN ? AND ? AND b.total_satang > b.deposit_satang
                 AND (substr(b.src, 1, 5) = 'acct:' OR NOT EXISTS (SELECT 1 FROM bill_payments q WHERE q.bill_no = b.bill_no AND q.status = 'ใช้ได้'))
           ) ORDER BY day DESC, at DESC LIMIT 400`, from, to, from, to],
       ]);

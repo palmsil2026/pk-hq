@@ -29,12 +29,21 @@ export function sourceOf(b) {
   if (b.origin === "บัญชี") return { key: "app", label: "ลงในแอปบัญชี", payable: true, editable: true, why: "" };
   return { key: "v2", label: "ลงในแอป", payable: true, editable: false, why: "บิลนี้ลงจากส่วนอื่นของแอป — แก้ที่ต้นทาง (บัญชีรับชำระได้)" };
 }
+/** ยอดหลังหักมัดจำ (คุณปาล์มเคาะ 19 พ.ย.: มัดจำหักในบิลเลย) — ยอดที่ควรตรงกับบิลกระดาษ/ชีทบัญชี */
+export const netOf = b => (Number(b.total_satang) || 0) - (Number(b.deposit_satang) || 0);
+/** ยอดจากกระดาษ/ชีท เทียบกับบิล: "ok" = ตรงยอดหลังหักมัดจำ · "gross" = ลงยอดเต็ม (ต่างเพราะมัดจำ — ไม่ใช่ยอดไม่ตรง) · "" = ไม่ตรง */
+export function moneyMatch(satang, b) {
+  if (satang === netOf(b)) return "ok";
+  if (Number(b.deposit_satang) > 0 && satang === b.total_satang) return "gross";
+  return "";
+}
+export const depositNote = b => "ต่างเพราะมัดจำ — ยอดเต็ม ฿" + baht(b.total_satang) + " หักมัดจำ ฿" + baht(b.deposit_satang) + " เหลือ ฿" + baht(netOf(b));
 /** แถวบิลที่ส่งให้หน้าจอ (ไม่มีอะไรลับ — ส่งเฉพาะบทบาทเงิน) */
 export function billOut(b) {
   const s = sourceOf(b);
   return {
     bill_no: b.bill_no, bill_day: b.bill_day, customer_id: b.customer_id || null, customer_name: b.customer_name, order_id: b.order_id || null,
-    total_satang: b.total_satang, paid_satang: b.paid_satang, due_satang: Math.max(0, b.total_satang - b.paid_satang), kind: b.kind, status: b.status,
+    total_satang: b.total_satang, paid_satang: b.paid_satang, due_satang: Math.max(0, b.total_satang - b.paid_satang), deposit_satang: Number(b.deposit_satang) || 0, kind: b.kind, status: b.status,
     pay_channel: b.pay_channel, paid_day: b.paid_day, due_day: b.due_day, stmt_no: b.stmt_no, paper_no: b.paper_no, note: b.note,
     same_as: b.same_as || "", acct_kind: b.acct_kind || "", version: b.version, src: s.key, src_label: s.label, payable: s.payable && b.status === "ค้างชำระ", editable: s.editable && b.status !== "ยกเลิก", why: s.why,
   };
@@ -60,8 +69,8 @@ export const MONEY_IN_SQL = `SELECT day, channel, sum(satang) AS satang, count(*
     SELECT p.day AS day, p.channel AS channel, p.amount_satang AS satang FROM bill_payments p JOIN bills b ON b.bill_no = p.bill_no
       WHERE p.status = 'ใช้ได้' AND b.status <> 'ยกเลิก' AND p.day BETWEEN ? AND ?
     UNION ALL
-    SELECT b.paid_day, CASE WHEN trim(b.pay_channel) = '' THEN '${NO_CHANNEL}' ELSE b.pay_channel END, b.total_satang FROM bills b
-      WHERE b.status = 'ชำระแล้ว' AND b.same_as = '' AND b.paid_day BETWEEN ? AND ?
+    SELECT b.paid_day, CASE WHEN trim(b.pay_channel) = '' THEN '${NO_CHANNEL}' ELSE b.pay_channel END, b.total_satang - b.deposit_satang FROM bills b
+      WHERE b.status = 'ชำระแล้ว' AND b.same_as = '' AND b.paid_day BETWEEN ? AND ? AND b.total_satang > b.deposit_satang
         AND (substr(b.src, 1, 5) = 'acct:' OR NOT EXISTS (SELECT 1 FROM bill_payments q WHERE q.bill_no = b.bill_no AND q.status = 'ใช้ได้'))
   ) GROUP BY day, channel`;
 export const moneyInArgs = (from, to) => [from, to, from, to];

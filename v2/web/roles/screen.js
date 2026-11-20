@@ -126,7 +126,7 @@ async function askCounts(j) {
 
 function jobCard(ctx, j, d, teams) {
   const head = h("button.cardhead", { type: "button", "aria-label": "รายละเอียด " + j.customer, onclick: () => jobSheet(ctx, j, d, teams) },
-    h("div.row", h("span.name.grow", j.customer), j.urgent ? ui.pill("ด่วน", "bad", "bolt") : null, duePill(j.due_day, d.today)),
+    h("div.row", h("span.name.grow", j.customer), j.urgent ? ui.pill("ด่วน", "bad", "bolt") : null, j.prio ? ui.pill(j.prio > 0 ? "ออฟฟิศดันขึ้นก่อน" : "ออฟฟิศเลื่อนลง", j.prio > 0 ? "warn" : "mute", "flag") : null, duePill(j.due_day, d.today)),
     h("div.row", amount(j), colorOf(j) ? h("span.scr", icon("brush", "sm"), "สกรีน " + colorOf(j)) : null, j.brand ? h("span.muted.small", "งาน " + j.brand) : null),
     h("div.row", j.team ? ui.pill(j.team + " กำลังทำ", "brand", "users") : ui.pill("รอจ่ายทีม", "warn")), progress(j));
   const btns = h("div.btns.jobbtns", teams.map(t => h("button.btn" + (j.team === t ? ".pri" : ""), { type: "button", "aria-pressed": String(j.team === t), onclick: e => assign(ctx, j, t, e.currentTarget) }, t)),

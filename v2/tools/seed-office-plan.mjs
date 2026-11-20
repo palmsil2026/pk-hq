@@ -38,5 +38,7 @@ export async function seedOfficePlan(X, apply, now) {
     order(id, c, { status: "ส่งแล้ว", purchase_type: "ขายหน้าร้าน", order_day: addDays(today, d) }, lines);
     lines.forEach((l, k) => ops.push({ op: "insert", table: "delivery_loads", row: { id: "LW" + i + k, order_id: id, order_item_id: id + "-" + (k + 1), qty_pcs: l[1] * l[2], status: "ส่งแล้ว", loaded_at: at(H), done_at: at(H), done_day: addDays(today, d), src: "demo", note: "ลูกค้ารับที่โรงงาน" } }));
   });
+  // ลำดับคิวที่ออฟฟิศดันขึ้น (ป้าย "ดันขึ้นก่อน")
+  ops.push({ op: "raw", sql: "UPDATE orders SET priority = 1 WHERE id = 'OD007'", args: [] });
   await apply(X, ops);
 }

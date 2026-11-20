@@ -11,6 +11,7 @@ const IN_PT = "(" + PROD_TYPES.map(t => "'" + t + "'").join(",") + ")";
 const fmt = n => Number(n || 0).toLocaleString("en-US");
 
 /** คิวงานรอผลิต (ใช้ทั้งหน้า "งานรอผลิต" และตัวเลือกตอนเปิดรอบ) — 1 รอบคุยกับฐาน */
+import { orderRanks, rankOf, byRank } from "./order-rank.mjs";
 export async function loadJobs(X, opt) {
   const o = opt || {};
   const since = iso(X.now - 3 * 864e5);
@@ -37,8 +38,13 @@ export async function loadJobs(X, opt) {
       type: i.type, size: i.size, neck: i.neck, shape: i.shape, color: i.color, spec_key: i.spec_key, label: specLabel(i), target_pcs: i.qty_pcs,
       per_bag: i.per_bag || i.ts_per_bag || 0, made_pcs: 0, made_b: 0, running: [], due_day: i.due_day, urgent: i.urgent, status: "รอผลิต", pending_reason: "", note: "", version: 0, done_at: "" })),
   ].map(x => ({ ...x, late: !!x.due_day && x.due_day < today && x.status !== "เสร็จ" }));
-  const rank = s => (s === "เสร็จ" ? 1 : 0);
-  list.sort((a, b) => rank(a.status) - rank(b.status) || (b.urgent - a.urgent) || ((a.due_day || "9999") < (b.due_day || "9999") ? -1 : (a.due_day || "9999") > (b.due_day || "9999") ? 1 : 0) || (a.customer < b.customer ? -1 : 1));
+  // ลำดับ (คุณปาล์มเคาะ 19 พ.ย.): ตามงวดที่นัดใกล้สุด → ลงคิวก่อน → ของจองท้าย · ออฟฟิศดันขึ้น/เลื่อนลงได้ — ชุดเดียวกับคิวสกรีน/สต๊อก (order-rank.mjs)
+  const ranks = await orderRanks(X);
+  const fb = x => ({ id: x.key, due: x.due_day, urgent: x.urgent });
+  list.forEach(x => { const r = rankOf(ranks, x.order, fb(x)); x.rank_no = r.no || 0; x.prio = r.priority || 0; if (x.order && r.due !== undefined && !r.stock) { x.due_day = r.due; x.reserve = r.reserve; x.late = !!r.due && r.due < today && x.status !== "เสร็จ"; } });
+  const done = s => (s === "เสร็จ" ? 1 : 0);
+  const cmp = byRank(ranks, x => x.order, fb);
+  list.sort((a, b) => done(a.status) - done(b.status) || cmp(a, b));
   return list;
 }
 

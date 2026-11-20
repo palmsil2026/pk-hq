@@ -196,7 +196,7 @@ test("รอยืนยัน: ตั้ง/ยกเลิกได้ก่�
 });
 
 // ── มัดจำ ───────────────────────────────────────────────────────────────
-test("มัดจำ: หลายครั้ง · ช่องทางต้องเลือกเอง · เห็นเฉพาะบทบาทที่เห็นเงิน · ยกเลิกต้องมีเหตุผล · ย้อน · ไม่หักยอดบิล + ธงตอนออกบิล", async () => {
+test("มัดจำ: หลายครั้ง · ช่องทางต้องเลือกเอง · เห็นเฉพาะบทบาทที่เห็นเงิน · ยกเลิกต้องมีเหตุผล · ย้อน · ออกบิลหักมัดจำ", async () => {
   const { W, ok, call, create, order, items } = await setup();
   const o = await create({ queue: true, items: [{ ...B600, bags: 40, price_satang: 120 }] });
   const a = await ok("off", "office.deposit_add", { order: o.id, amount_satang: 100000, channel: "โอน KBank", paid_day: "2026-11-16", note: "สลิปในไลน์" });
@@ -220,17 +220,109 @@ test("มัดจำ: หลายครั้ง · ช่องทางต�
   assert.equal(W.one("SELECT status, cancel_reason FROM order_deposits WHERE id = ?", dep.id).status, "ยกเลิก");
   await ok("off", "undo.run", { id: c.undo.id });
   assert.equal(W.one("SELECT status FROM order_deposits WHERE id = ?", dep.id).status, "ใช้งาน");
-  // ออกบิล: ยอดบิล = ราคา × จำนวน (ไม่หักมัดจำ) + ธงให้บัญชีตัดสิน
+  // ออกบิล (คุณปาล์มเคาะ 19 พ.ย.): หักมัดจำในบิลเลย — ยอดเต็มคงเดิม · ยอดค้าง = ยอดเต็ม − มัดจำ (ทดสอบละเอียดใน "หักมัดจำในบิล" ข้างล่าง)
   const b = await ok("off", "office.bill_create", { order_id: o.id, version: order(o.id).version, kind: "เครดิต", due_day: "2026-12-16", lines: [{ item_id: items(o.id)[0].id, qty_pcs: 8000, price_satang: 120 }] });
-  assert.equal(b.data.total_satang, 960000, "ไม่หักมัดจำเอง");
-  const f = W.one("SELECT * FROM flags WHERE kind = 'มีมัดจำ ตรวจตอนออกบิล'");
-  assert.equal(f.team, "account"); assert.match(f.title, /1,500.5/);
+  assert.equal(b.data.total_satang, 960000); assert.equal(b.data.deposit_satang, 150050); assert.equal(b.data.owe_satang, 960000 - 150050);
   const bill = await ok("off", "office.bill", { bill_no: b.data.bill_no });
-  assert.equal(bill.data.deposit_satang, 150050); assert.equal(bill.data.bill.total_satang, 960000);
+  assert.equal(bill.data.bill.deposit_satang, 150050); assert.equal(bill.data.bill.total_satang, 960000);
   // ออเดอร์ยกเลิกแล้ว = ลงมัดจำไม่ได้
   const o2 = await create();
   await ok("off", "office.order_cancel", { id: o2.id, version: order(o2.id).version }, { reason: "ลงซ้ำ" });
   assert.equal((await call("off", "office.deposit_add", { order: o2.id, amount_satang: 100, channel: "เงินสด", paid_day: "2026-11-16" })).status, 409);
+});
+
+// ── หักมัดจำในบิล (คุณปาล์มเคาะ 19 พ.ย.) — fixture ยอดหลังหักมัดจำทุกกรณี ─────────────────────────────
+async function billed(env, priceSatang, bags, deposits) {
+  const o = await env.create({ queue: true, items: [{ ...B600, bags, price_satang: priceSatang }] });
+  for (const [amt, day] of deposits) await env.ok("off", "office.deposit_add", { order: o.id, amount_satang: amt, channel: "โอน KBank", paid_day: day || "2026-11-16" });
+  const bill = qty => env.call("off", "office.bill_create", { order_id: o.id, version: env.order(o.id).version, kind: "เครดิต", due_day: "2026-12-16", lines: [{ item_id: env.items(o.id)[0].id, qty_pcs: qty, price_satang: priceSatang }] });
+  return { o, bill };
+}
+const B = (W, no) => W.one("SELECT * FROM bills WHERE bill_no = ?", no);
+
+test("หักมัดจำในบิล: มัดจำน้อยกว่าบิล = ค้างส่วนที่เหลือ · มากกว่าบิล = บิลชำระแล้ว + ส่วนเกินค้างไว้บิลถัดไป · ยกเลิกบิล = มัดจำกลับคงเหลือ · ไม่นับเป็นเงินเข้า", async () => {
+  const env = await setup();
+  const { W, ok, call, order } = env;
+  // (ก) มัดจำ 3,000 บิล 8,000 ใบ × ฿1.20 = 9,600 → ค้าง 6,600
+  const a = await billed(env, 120, 40, [[200000], [100000]]);
+  const ra = await a.bill(8000);
+  let b = B(W, ra.data.bill_no);
+  assert.equal(b.total_satang, 960000, "ยอดบิลเต็มคงเดิม (คอลัมน์ ยอดรวม ของแท็บ Bills ความหมายเดิม)");
+  assert.equal(b.deposit_satang, 300000); assert.equal(b.paid_satang, 300000); assert.equal(b.status, "ค้างชำระ"); assert.equal(b.total_satang - b.paid_satang, 660000);
+  assert.match(b.note, /หักมัดจำ 3,000 บาท/);
+  // (ข) มัดจำ 12,000 บิลแรก 9,600 → บิลชำระแล้ว (วันนี้) · คงเหลือ 2,400 ไว้บิลถัดไป
+  const c = await billed(env, 120, 40, [[1200000]]);
+  const rc = await c.bill(8000);
+  b = B(W, rc.data.bill_no);
+  assert.equal(b.deposit_satang, 960000); assert.equal(b.status, "ชำระแล้ว"); assert.equal(b.paid_day, "2026-11-16"); assert.equal(b.paid_satang, 960000);
+  let dd = await ok("off", "office.deposits", { order: c.o.id });
+  assert.equal(dd.data.left_satang, 240000); assert.equal(dd.data.used_satang, 960000);
+  // เงินเข้า (ตามวันชำระ) ไม่นับมัดจำที่หักในบิลซ้ำ
+  const acc = await ok("acc", "account.money", { period: "day", day: "2026-11-16" });
+  assert.equal(acc.data.total, 0, "บิลที่มัดจำจ่ายครบไม่นับเป็นเงินเข้าซ้ำ");
+  // ยกเลิกบิลที่หักมัดจำ (ยังไม่มีรับเงินจริง) ได้ → มัดจำกลับเป็นคงเหลือทั้งหมด
+  await ok("off", "office.bill_cancel", { bill_no: rc.data.bill_no, version: B(W, rc.data.bill_no).version }, { reason: "จำนวน/ราคาผิด" });
+  dd = await ok("off", "office.deposits", { order: c.o.id });
+  assert.equal(dd.data.left_satang, 1200000, "ยกเลิกบิล = มัดจำกลับเป็นคงเหลือ");
+  // บิลใหม่ (ส่งบางส่วน 2,000 ใบ = 2,400) ใช้มัดจำก่อน · ส่วนเกินค้างไว้บิลถัดไป
+  const rc2 = await c.bill(2000);
+  b = B(W, rc2.data.bill_no);
+  assert.equal(b.total_satang, 240000); assert.equal(b.deposit_satang, 240000); assert.equal(b.status, "ชำระแล้ว");
+  assert.equal((await ok("off", "office.deposits", { order: c.o.id })).data.left_satang, 960000);
+  // ย้อนการออกบิล = มัดจำกลับคงเหลือเหมือนยกเลิก
+  await ok("off", "undo.run", { id: rc2.undo.id });
+  assert.equal((await ok("off", "office.deposits", { order: c.o.id })).data.left_satang, 1200000);
+  // มัดจำที่ถูกหักในบิลแล้ว ยกเลิกไม่ได้ (ยกเลิกบิลก่อน)
+  const ra2 = B(W, ra.data.bill_no);
+  const dep = W.one("SELECT * FROM order_deposits WHERE order_id = ? ORDER BY amount_satang DESC LIMIT 1", a.o.id);
+  const no = await call("off", "office.deposit_cancel", { id: dep.id, version: dep.version }, { reason: "ยอด/ช่องทางผิด" });
+  assert.equal(no.status, 409); assert.match(no.error.message, /ถูกหักในบิล/);
+  void ra2; void order;
+});
+
+test("หักมัดจำ: บัญชีรับชำระส่วนที่เหลือ = ครบ · ผูกเลขกระดาษเทียบยอดหลังหักมัดจำ (ยอดเต็ม = ต่างเพราะมัดจำ ผูกได้ ไม่ใช่ยอดไม่ตรง) · บิลที่มีรับเงินจริงยกเลิกไม่ได้", async () => {
+  const env = await setup();
+  const { W, ok, call } = env;
+  const a = await billed(env, 120, 40, [[300000]]);
+  const r = await a.bill(8000);
+  let b = B(W, r.data.bill_no);
+  // ยอดกระดาษผิด (ไม่ใช่ทั้งยอดหลังหัก และยอดเต็ม) = ยอดไม่ตรง บอกทั้งสองเลข
+  const bad = await call("acc", "account.link", { bill_no: b.bill_no, version: b.version, paper_no: "501", paper_satang: 700000 });
+  assert.equal(bad.status, 409); assert.match(bad.error.message, /หลังหักมัดจำ ฿3,000/);
+  // กระดาษลงยอดเต็ม 9,600 = ต่างเพราะมัดจำ → ผูกได้ + บอกเหตุ (ไม่ขึ้นธงยอดไม่ตรง)
+  const g = await ok("acc", "account.link", { bill_no: b.bill_no, version: b.version, paper_no: "501", paper_satang: 960000 });
+  assert.match(g.data.deposit_note, /ต่างเพราะมัดจำ/);
+  assert.equal(W.q("SELECT * FROM flags WHERE kind = 'ยอดไม่ตรง' AND status = 'เปิด'").length, 0);
+  // ส่วนที่เหลือ 6,600 → รับชำระครบ
+  b = B(W, r.data.bill_no);
+  await ok("acc", "account.pay", { items: [{ bill_no: b.bill_no, version: b.version, satang: 660000 }], day: "2026-11-16", channel: "เงินสด" });
+  b = B(W, r.data.bill_no);
+  assert.equal(b.status, "ชำระแล้ว"); assert.equal(b.paid_satang, 960000); assert.equal(b.deposit_satang, 300000);
+  // ยกเลิกบิลที่รับเงินจริงแล้วไม่ได้ (ต่างจากบิลที่มีแค่มัดจำ)
+  const cx = await call("off", "office.bill_cancel", { bill_no: b.bill_no, version: b.version }, { reason: "จำนวน/ราคาผิด" });
+  assert.equal(cx.status, 409);
+  // กระดาษยอดหลังหักมัดจำ (6,600) = ตรง
+  const a2 = await billed(env, 120, 40, [[300000]]);
+  const r2 = await a2.bill(8000);
+  const b2 = B(W, r2.data.bill_no);
+  const l2 = await ok("acc", "account.link", { bill_no: b2.bill_no, version: b2.version, paper_no: "502", paper_satang: 660000 });
+  assert.equal(l2.data.deposit_note, "");
+  // หน้าบัญชีเห็นมัดจำของบิล
+  const det = await ok("acc", "account.bill", { bill_no: b2.bill_no });
+  assert.equal(det.data.bill.deposit_satang, 300000); assert.equal(det.data.deposit.this_bill, 300000); assert.equal(det.data.deposit.left, 0);
+});
+
+test("หักมัดจำ: ยกเลิก/ปิดออเดอร์ที่ยังมีมัดจำคงเหลือ = ธงให้ประธาน/บัญชีตัดสิน (ไม่คืนเงินเอง) · ไม่มีคงเหลือ = ไม่มีธง", async () => {
+  const env = await setup();
+  const { W, ok, order } = env;
+  const a = await billed(env, 120, 40, [[250000]]);
+  await ok("off", "office.order_cancel", { id: a.o.id, version: order(a.o.id).version }, { reason: "ลูกค้ายกเลิก" });
+  const f = W.one("SELECT * FROM flags WHERE kind = 'มัดจำคงเหลือ ยกเลิกออเดอร์'");
+  assert.equal(f.team, "account"); assert.match(f.title, /2,500/); assert.match(f.detail, /ไม่คืนเงินเอง/);
+  assert.equal(W.one("SELECT status FROM order_deposits WHERE order_id = ?", a.o.id).status, "ใช้งาน", "มัดจำไม่ถูกแตะ");
+  const n = await env.create();
+  await ok("off", "office.order_cancel", { id: n.id, version: order(n.id).version }, { reason: "ลงซ้ำ" });
+  assert.equal(W.q("SELECT * FROM flags WHERE kind = 'มัดจำคงเหลือ ยกเลิกออเดอร์'").length, 1);
 });
 
 test("มัดจำ: ค่าตั้ง DEPOSIT_REMIND (§9 ยังไม่ตัดสิน) — ไม่เตือน = ไม่มีธง · งานสกรีน/ทุกออเดอร์ = ธงตอนส่งเข้าคิว ไม่บล็อก", async () => {
@@ -302,4 +394,83 @@ test("หน้าออฟฟิศ/ส่งของใช้วันขอ�
   assert.equal(s.items[0].round_pcs, 5000, "งวด 2 + ส่วนขาดงวด 1");
   assert.equal(s.has_geo, false);
   assert.ok(!("price_satang" in s.items[0]), "ส่งของไม่เห็นเงิน");
+});
+
+test("เทียบยอดกับชีทบัญชี/กระดาษ: ยอดหลังหักมัดจำ = ตรง · ยอดเต็มของบิลที่หักมัดจำ = ต่างเพราะมัดจำ (ไม่ขึ้นธงยอดไม่ตรง) · อื่น = ไม่ตรง", async () => {
+  const { moneyMatch, netOf, depositNote } = await import("../server/actions/account-lib.mjs");
+  const b = { total_satang: 960000, deposit_satang: 300000 };
+  assert.equal(netOf(b), 660000);
+  assert.equal(moneyMatch(660000, b), "ok"); assert.equal(moneyMatch(960000, b), "gross"); assert.equal(moneyMatch(700000, b), "");
+  assert.equal(moneyMatch(960000, { total_satang: 960000, deposit_satang: 0 }), "ok", "ไม่มีมัดจำ = เทียบยอดเต็มแบบเดิม");
+  assert.match(depositNote(b), /ต่างเพราะมัดจำ — ยอดเต็ม ฿9,600 หักมัดจำ ฿3,000 เหลือ ฿6,600/);
+});
+
+// ── ลำดับคิว "ขวดไม่พอ ใครได้ก่อน" (คุณปาล์มเคาะ 19 พ.ย.) ─────────────────────────────────────────
+test("ลำดับคิว (ฟังก์ชันล้วน): ปรับมือชนะ → ของจองท้าย → วันนัดใกล้สุด → (วันเท่ากัน) ด่วน → ลงคิวก่อน", async () => {
+  const { compareRank } = await import("../server/actions/order-rank.mjs");
+  const rows = [
+    { id: "jong", reserve: true, due: "", queued_at: "1" },
+    { id: "d20", due: "2026-11-20", queued_at: "5" },
+    { id: "d18late", due: "2026-11-18", queued_at: "9" },
+    { id: "d18early", due: "2026-11-18", queued_at: "2" },
+    { id: "d18urgent", due: "2026-11-18", urgent: 1, queued_at: "8" },
+    { id: "down", due: "2026-11-17", priority: -1, queued_at: "0" },
+    { id: "up", reserve: true, due: "", priority: 1, queued_at: "9" },
+  ].sort(compareRank).map(r => r.id);
+  assert.deepEqual(rows, ["up", "d18urgent", "d18early", "d18late", "d20", "jong", "down"]);
+});
+
+test("ลำดับคิว: งานรอผลิต + คิวสกรีน + จัดสต๊อก ใช้ลำดับเดียวกัน · ดันขึ้น/เลื่อนลง = เหตุผลบังคับ · ย้อน · ผิดสิทธิ์ · ชนกัน · ป้ายปรับมือ", async () => {
+  const env = await setup();
+  const { W, ok, call, create, order, ex } = env;
+  const early = await create({ queue: true, plan: { mode: "ครั้งเดียว", first_day: "2026-11-20" }, items: [{ ...B600, bags: 30, screen_color: "แดง" }] });
+  const late = await create({ customer_id: "CB", queue: true, plan: { mode: "ครั้งเดียว", first_day: "2026-11-25" }, items: [{ ...B600, bags: 30, screen_color: "แดง" }] });
+  const jong = await create({ queue: true, items: [{ ...B600, bags: 30, screen_color: "แดง" }] });   // ไม่มีวันนัด = จอง
+  const jobs = async () => (await ok("prod", "prod.jobs", {})).data.jobs.filter(j => j.status !== "เสร็จ").map(j => j.order);
+  const scr = async () => (await ok("scr", "screen.list", { tab: "queue" })).data.jobs.map(j => j.order_id);
+  assert.deepEqual(await jobs(), [early.id, late.id, jong.id], "งานรอผลิต: วันนัดใกล้สุด → ของจองท้าย");
+  assert.deepEqual(await scr(), [early.id, late.id, jong.id], "คิวสกรีนลำดับเดียวกัน");
+  // สต๊อกพอแค่ใบเดียว (30 ถุง) → ใบแรกในคิวได้ · ใบที่สองไม่พอส่ง · ของจองไม่ขึ้นป้ายไม่พอ (รอคิวอยู่แล้ว)
+  ex("INSERT INTO stock_moves(at, day, item_key, label, grade, qty_pcs, move_type, by, src) VALUES (?, '2026-11-16', ?, 'x', 'A', 6000, 'ยอดยกมา', 'S9', 'v2')", AT, "spec:" + W.one("SELECT spec_key FROM order_items WHERE order_id = ?", early.id).spec_key);   // ขวดเปล่า (สกรีนยังไม่เสร็จ = ขึ้นรถจะตัดขวดเปล่า)
+  let home = (await ok("off", "office.home", {})).data.orders;
+  const H = id => home.find(r => r.id === id);
+  assert.equal(H(early.id).short_pcs, 0); assert.equal(H(late.id).short_pcs, 6000); assert.equal(H(jong.id).short_pcs, 0);
+  assert.ok(H(early.id).rank_no < H(late.id).rank_no);
+  // ดันใบหลังขึ้นก่อน: เหตุผลบังคับ · ผิดสิทธิ์ · ชนกัน
+  const nr = await call("off", "office.prio_move", { id: late.id, version: order(late.id).version, dir: "up" });
+  assert.equal(nr.error.code, "need_reason");
+  assert.equal((await call("prod", "office.prio_move", { id: late.id, version: order(late.id).version, dir: "up" }, { reason: "ลูกค้าขอด่วน" })).status, 403, "ทีมผลิตปรับลำดับไม่ได้");
+  assert.equal((await call("scr", "office.prio_move", { id: late.id, version: order(late.id).version, dir: "up" }, { reason: "ลูกค้าขอด่วน" })).status, 403);
+  const up = await ok("off", "office.prio_move", { id: late.id, version: order(late.id).version, dir: "up" }, { reason: "ลูกค้าขอด่วน" });
+  assert.equal(order(late.id).priority, 1);
+  assert.equal((await call("off2", "office.prio_move", { id: late.id, version: order(late.id).version - 1, dir: "up" }, { reason: "ลูกค้าขอด่วน" })).status, 409, "ชนกัน");
+  assert.deepEqual(await jobs(), [late.id, early.id, jong.id], "ดันขึ้น = งานรอผลิตขึ้นก่อน");
+  assert.deepEqual(await scr(), [late.id, early.id, jong.id]);
+  home = (await ok("off", "office.home", {})).data.orders;
+  assert.equal(H(late.id).short_pcs, 0, "ใบที่ดันขึ้นได้สต๊อกก่อน"); assert.equal(H(early.id).short_pcs, 6000); assert.equal(H(late.id).prio, 1);
+  const st = (await ok("off", "office.stock", {})).data.rows.find(r => r.alloc);
+  assert.deepEqual(st.alloc.map(a => [a.order_id, a.short]), [[late.id, 0], [early.id, 6000], [jong.id, 6000]]);
+  const det = await ok("off", "office.order", { id: late.id });
+  assert.equal(det.data.queue.no, 1); assert.equal(det.data.queue.priority, 1);
+  assert.ok(det.data.history.some(hh => hh.what === "ปรับลำดับคิว" && hh.reason === "ลูกค้าขอด่วน"), "ประวัติ + เหตุผล");
+  // ย้อน = กลับลำดับเดิม
+  await ok("off", "undo.run", { id: up.undo.id });
+  assert.equal(order(late.id).priority, 0);
+  assert.deepEqual(await jobs(), [early.id, late.id, jong.id]);
+  // เลื่อนลง: ใบแรกไปท้ายสุด (ต่อจากของจอง) · กลับตามวันนัดได้ไม่ต้องมีเหตุผล
+  await ok("off", "office.prio_move", { id: early.id, version: order(early.id).version, dir: "down" }, { reason: "ลูกค้ายังไม่พร้อมรับ" });
+  assert.deepEqual(await jobs(), [late.id, jong.id, early.id]);
+  await ok("off", "office.prio_move", { id: early.id, version: order(early.id).version, dir: "reset" });
+  assert.equal(order(early.id).priority, 0);
+  assert.equal((await call("off", "office.prio_move", { id: early.id, version: order(early.id).version, dir: "reset" })).status, 400, "ตามวันนัดอยู่แล้ว");
+});
+
+test("รายละเอียดออเดอร์: ความคืบหน้าสกรีนจากทีมสกรีน (ทำบางส่วน — ทำแล้ว 6/20 ถุง + ช่วงที่ทำ)", async () => {
+  const { W, ok, create } = await setup();
+  const o = await create({ queue: true, items: [{ ...B600, bags: 20, screen_color: "แดง" }] });
+  const sj = W.one("SELECT * FROM screen_jobs WHERE order_id = ?", o.id);
+  await ok("scr", "screen.part", { id: sj.id, version: sj.version, team: "ทีม 1", pcs: 1200 });
+  const d = await ok("off", "office.order", { id: o.id });
+  const sp = d.data.items[0].screen_progress;
+  assert.equal(sp.text, "ทำแล้ว 6/20 ถุง"); assert.equal(sp.parts.length, 1); assert.equal(sp.parts[0].team, "ทีม 1"); assert.equal(sp.parts[0].text, "6 ถุง");
 });

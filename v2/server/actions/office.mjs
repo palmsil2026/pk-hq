@@ -21,10 +21,12 @@ import { defineOfficeCustomers } from "./office-customers.mjs";
 import { defineOfficeBills, suggestDue } from "./office-bills.mjs";
 import { plainKey, screenKey, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 import { defineOfficePlan } from "./office-plan.mjs";          // งวดส่ง · เลื่อน · รอยืนยัน · รวมตามสินค้า · หน้าร้าน (0210)
-import { defineOfficeDeposits, DEPOSIT_SQL, depositSum } from "./office-deposits.mjs";   // มัดจำ (0210)
+import { defineOfficeDeposits, DEPOSIT_SQL, depositSum, depositUsed, depositLeft } from "./office-deposits.mjs";   // มัดจำ (0210)
 import { defineOfficeGeo } from "./office-geo.mjs";            // หมุดลูกค้า · แนะนำสาย · ชื่อสาย (0310)
 import { planState, wantRange } from "./office-plan-lib.mjs";
 import { mapsUrl, learnRoutes, districtKey } from "./geo-lib.mjs";
+import { orderRanks, ranksFrom, compareRank } from "./order-rank.mjs";
+import { screenProgress } from "./screen-progress.mjs";   // ความคืบหน้าสกรีน (ทำบางส่วน · งานหลายวัน) ของโมดูลสกรีน   // ลำดับคิวกลาง (คุณปาล์มเคาะ 19 พ.ย.)
 const sentOf = loads => (loads || []).filter(l => l.status === "ส่งแล้ว").map(l => ({ order_item_id: l.order_item_id, qty_pcs: l.qty_pcs, done_day: l.done_day }));
 
 const IN = n => "(" + Array.from({ length: n }, () => "?").join(",") + ")";
@@ -48,7 +50,7 @@ function rowOf(o, d, cust, units, today, bill, rounds) {
   if (bill && bill.status === "ค้างชำระ") money = bill.due_day && bill.due_day < today ? "overdue" : "owing";
   else if (!bill && o.src === "v2" && o.status !== "ยกเลิก" && d.delivered > 0) money = "unbilled";
   return {
-    id: o.id, version: o.version, order_day: o.order_day, due_day: open ? plan.due : o.due_day, status, hold: o.hold || 0, want_when: o.want_when || "", want_day: o.want_day || "",
+    id: o.id, version: o.version, order_day: o.order_day, due_day: open ? plan.due : o.due_day, status, hold: o.hold || 0, prio: o.priority || 0, want_when: o.want_when || "", want_day: o.want_day || "",
     reserve: open && plan.reserve, round: open && plan.current && plan.n > 1 ? { seq: plan.current.seq, n: plan.n, carried: plan.current.carried } : null, wait_next: open && plan.current ? plan.current.wait_next : false, urgent: o.urgent, brand: o.brand, pay_status: o.pay_status, design_status: o.design_status,
     src: o.src, customer_id: o.customer_id, customer: cust ? cust.name : o.customer_text, route_code: cust ? cust.route_code : null, district: cust ? cust.district : "",
     late: open && !!plan.due && plan.due < today, money, bill: bill ? { bill_no: bill.bill_no, status: bill.status, due_day: bill.due_day, kind: bill.kind } : null,
@@ -56,15 +58,21 @@ function rowOf(o, d, cust, units, today, bill, rounds) {
     items: d.items.map(i => ({ ...pick(i, ITEM_KEYS), piece_unit: units.get(i.type) || "ชิ้น" })),
   };
 }
-async function rowsFor(X, ids, today) {
+async function rowsFor(X, ids, today, hold) {
   if (!ids.length) return [];
-  const [P, units] = await Promise.all([loadOrderParts(X, ids), unitsOf(X)]);
+  const side = [];
+  for (const part of chunk(ids, 90)) {
+    side.push(["SELECT bill_no, order_id, status, due_day, kind FROM bills WHERE status <> 'ยกเลิก' AND order_id IN " + IN(part.length), ...part]);
+    side.push(["SELECT * FROM order_rounds WHERE status = 'ใช้งาน' AND order_id IN " + IN(part.length), ...part]);
+  }
+  const [P, units, sideRes] = await Promise.all([loadOrderParts(X, ids), unitsOf(X), X.db.reads(side)]);
   const custs = await customersOf(X, [...P.orders.values()].map(o => o.customer_id));
   const bills = new Map(), rounds = {};
-  for (const part of chunk(ids, 90)) {
-    (await X.db.all("SELECT bill_no, order_id, status, due_day, kind FROM bills WHERE status <> 'ยกเลิก' AND order_id IN " + IN(part.length), ...part)).forEach(b => bills.set(b.order_id, b));
-    (await X.db.all("SELECT * FROM order_rounds WHERE status = 'ใช้งาน' AND order_id IN " + IN(part.length), ...part)).forEach(r => { (rounds[r.order_id] = rounds[r.order_id] || []).push(r); });
+  for (let i = 0; i < sideRes.length; i += 2) {
+    sideRes[i].forEach(b => bills.set(b.order_id, b));
+    sideRes[i + 1].forEach(r => { (rounds[r.order_id] = rounds[r.order_id] || []).push(r); });
   }
+  if (hold) { hold.P = P; hold.rounds = rounds; }   // ผู้เรียกใช้ชิ้นส่วนเดิมต่อ (ไม่อ่านฐานซ้ำ)
   return ids.filter(id => P.orders.has(id)).map(id => {
     const o = P.orders.get(id);
     const d = deriveOrder(o, P.items[id], P.jobs[id], P.sjobs[id], P.loads[id]);
@@ -76,13 +84,13 @@ async function rowsFor(X, ids, today) {
 // ── ประวัติการแก้ (จาก audit_log) → บรรทัดที่คนอ่านรู้เรื่อง ──────────────────────────────
 const ACT_TH = {
   "office.order_create": "ลงออเดอร์", "office.order_update": "แก้ออเดอร์", "office.order_queue": "ส่งเข้าคิว", "office.order_cancel": "ยกเลิก/ปิดออเดอร์",
-  "office.order_pickup": "ลูกค้ารับของที่โรงงาน", "office.bill_create": "ออกบิล", "office.bill_cancel": "ยกเลิกบิล", "office.customer_merge": "รวมลูกค้า",
+  "office.order_pickup": "ลูกค้ารับของที่โรงงาน", "office.prio_move": "ปรับลำดับคิว", "office.plan_set": "วางงวดส่ง", "office.round_move": "นัด/เลื่อนวันส่ง", "office.hold_set": "รอยืนยัน", "office.bill_create": "ออกบิล", "office.bill_cancel": "ยกเลิกบิล", "office.customer_merge": "รวมลูกค้า",
   "undo.run": "ย้อนรายการ", "import.run": "นำเข้าจากแอปเดิม",
 };
 const ROLE_TH = { office: "ออฟฟิศ", prod: "ทีมผลิต", screen: "ทีมสกรีน", deliver: "ส่งของ", account: "บัญชี", exec: "ประธาน" };
 const FIELD_TH = { due_day: "วันส่ง", urgent: "ด่วน", brand: "ชื่องาน", note: "หมายเหตุ", pay_status: "สถานะเงิน", design_status: "สถานะแบบ", purchase_type: "ประเภทซื้อ", price_mode: "ราคา",
   block_fee_satang: "ค่าบล็อก", customer_id: "ลูกค้า", qty_pcs: "จำนวน", bags: "ถุง", extra_pcs: "เศษ", price_satang: "ราคา/หน่วย", label: "สินค้า", screen_color: "สีสกรีน", cap_color: "ฝาสี",
-  status: "สถานะ", target_pcs: "เป้าผลิต", colors: "สีสกรีน", delivered_pcs: "ส่งแล้ว", paper_no: "เลขบิลกระดาษ", team: "ทีมสกรีน" };
+  status: "สถานะ", target_pcs: "เป้าผลิต", priority: "ลำดับมือ", hold: "รอยืนยัน", plan_day: "วันนัด", want_when: "ต้องการเมื่อไร", colors: "สีสกรีน", delivered_pcs: "ส่งแล้ว", paper_no: "เลขบิลกระดาษ", team: "ทีมสกรีน" };
 function historyOf(rows) {
   const groups = [];
   for (const r of rows) {
@@ -97,6 +105,38 @@ function historyOf(rows) {
   return groups.map(({ key, ...g }) => g).reverse();
 }
 
+/**
+ * จัดสต๊อกให้ออเดอร์ตามลำดับคิวกลาง (คุณปาล์มเคาะ 19 พ.ย.: ขวดไม่พอ = ตามงวดที่นัด/คิวไว้ก่อน แต่ออฟฟิศปรับมือได้)
+ *   ใบที่อยู่ก่อนได้ของก่อน · ที่เหลือ = "ไม่พอส่ง" (บอกเฉพาะใบที่นัดส่งแล้ว — ของจองรอคิวอยู่แล้ว) · กุญแจ/เกรดเดียวกับที่ขึ้นรถตัดจริง
+ */
+function allocate(P, bal, bSet, ranks) {
+  const avail = new Map();
+  for (const b of bal) { const k = b.item_key + "#" + (b.grade === "B" ? "B" : "A"); avail.set(k, (avail.get(k) || 0) + Math.max(0, b.qty_pcs)); }
+  const ids = [...P.orders.keys()].filter(id => ranks.has(id)).sort((a, b) => compareRank(ranks.get(a), ranks.get(b)));
+  const byOrder = new Map(), byKey = new Map();
+  for (const id of ids) {
+    const o = P.orders.get(id), rk = ranks.get(id);
+    const d = deriveOrder(o, P.items[id], P.jobs[id], P.sjobs[id], P.loads[id]);
+    let short = 0;
+    for (const i of d.items) {
+      const left = Math.max(0, i.qty_pcs - i.delivered - i.on_truck);
+      if (!left) continue;
+      const sj = (P.sjobs[id] || []).find(j => j.order_item_id === i.id && j.status !== "ยกเลิก");
+      const key = sj && sj.status === "เสร็จแล้ว" ? screenKey(i, sj) : plainKey(i);
+      const ak = "spec:" + key.replace(/^spec:/, "") + "#" + gradeFor(key, i, bSet);
+      const have = avail.get(ak) || 0, got = Math.min(have, left);
+      avail.set(ak, have - got);
+      const miss = left - got;
+      if (!rk.reserve) short += miss;
+      const list = byKey.get(key) || [];
+      list.push({ order_id: id, customer_id: o.customer_id, need: left, got, short: miss, due: rk.due, reserve: rk.reserve, rank_no: rk.no, prio: rk.priority });
+      byKey.set(key, list);
+    }
+    byOrder.set(id, { short, rank_no: rk.no, prio: rk.priority });
+  }
+  return { byOrder, byKey };
+}
+
 export function defineOffice(R) {
   defineOfficeOrders(R);
   defineOfficeCustomers(R);
@@ -109,15 +149,23 @@ export function defineOffice(R) {
     name: "office.home", roles: ROLES_OFFICE,
     async run(X) {
       const today = thaiDay(X.now);
-      const [open, unbilled, owing, acct] = await X.db.reads([
+      const [open, unbilled, owing, acct, bal, bColors] = await X.db.reads([
         [`SELECT id FROM orders WHERE status IN ${OPEN_SQL} ORDER BY urgent DESC, CASE WHEN due_day = '' THEN '9999' ELSE due_day END, order_day LIMIT 400`],
         [`SELECT o.id FROM orders o WHERE o.src = 'v2' AND o.status <> 'ยกเลิก' AND NOT EXISTS (SELECT 1 FROM bills b WHERE b.order_id = o.id AND b.status <> 'ยกเลิก')
            AND (EXISTS (SELECT 1 FROM delivery_loads l WHERE l.order_id = o.id AND l.status = 'ส่งแล้ว') OR EXISTS (SELECT 1 FROM order_items i WHERE i.order_id = o.id AND i.delivered_pcs > 0)) LIMIT 200`],
         ["SELECT order_id AS id FROM bills WHERE status = 'ค้างชำระ' AND order_id IS NOT NULL ORDER BY due_day LIMIT 300"],
         ["SELECT count(*) AS n FROM bills WHERE status = 'ค้างชำระ' AND order_id IS NULL"],
+        ["SELECT item_key, grade, qty_pcs FROM stock_balance WHERE substr(item_key, 1, 5) = 'spec:'"],
+        [B_COLORS_SQL],
       ]);
       const ids = [...new Set([...open, ...unbilled, ...owing].map(r => r.id))];
-      const rows = await rowsFor(X, ids, today);
+      const hold = {};
+      const rows = await rowsFor(X, ids, today, hold);
+      const P0 = hold.P || { orders: new Map(), items: {}, loads: {} };
+      const ranks = ranksFrom([...P0.orders.values()], hold.rounds || {}, P0.items, P0.loads);   // ใบที่ยังไม่จบอยู่ในหน้านี้ครบแล้ว — ไม่อ่านฐานซ้ำ
+      // ลำดับคิว + ใบที่นัดแล้วแต่สต๊อกตอนนี้ไม่พอ (จัดสต๊อกตามลำดับคิวกลาง)
+      const A = allocate(hold.P || { orders: new Map() }, bal, bColors.map(b => b.value), ranks);
+      rows.forEach(r => { const a = A.byOrder.get(r.id); if (a) { r.rank_no = a.rank_no; r.prio = a.prio; r.short_pcs = bal.length ? a.short : 0; } });
       const Q = {
         new: r => r.status === "ออเดอร์ใหม่", prod: r => r.status === "รอผลิต" || r.status === "กำลังผลิต", screen: r => r.status === "รอสกรีน" || r.status === "กำลังสกรีน",
         deliver: r => r.status === "พร้อมส่ง" || r.status === "ส่งบางส่วน", money: r => !!r.money,
@@ -180,7 +228,7 @@ export function defineOffice(R) {
            OR (entity = 'production_jobs' AND entity_id IN (SELECT id FROM production_jobs WHERE order_id = ?)) OR (entity = 'screen_jobs' AND entity_id IN (SELECT id FROM screen_jobs WHERE order_id = ?))
            OR (entity = 'bills' AND entity_id IN (SELECT bill_no FROM bills WHERE order_id = ?)) OR (entity = 'delivery_loads' AND entity_id IN (SELECT id FROM delivery_loads WHERE order_id = ?))
            ORDER BY id LIMIT 400`, id, id, id, id, id, id],
-        ["SELECT bill_no, bill_day, kind, status, total_satang, paid_satang, due_day, paper_no, src, by_name, cancel_reason, version FROM bills WHERE order_id = ? ORDER BY created_at DESC", id],
+        ["SELECT bill_no, bill_day, kind, status, total_satang, paid_satang, deposit_satang, due_day, paper_no, src, by_name, cancel_reason, version FROM bills WHERE order_id = ? ORDER BY created_at DESC", id],
         ["SELECT code, piece_unit FROM product_types"],
         ["SELECT s.nick, s.id FROM staff s JOIN orders o ON o.taker_staff_id = s.id WHERE o.id = ?", id],
         ["SELECT b.item_key, b.grade, b.qty_pcs FROM stock_balance b WHERE b.item_key IN (SELECT 'spec:' || spec_key FROM order_items WHERE order_id = ?)", id],
@@ -196,6 +244,8 @@ export function defineOffice(R) {
       const o = c.o;
       const d = deriveOrder(o, c.items, c.jobs, c.sjobs, c.loads);
       const plan = planState(o, rounds, d.items, sentOf(c.loads));
+      const [ranksAll, sprog] = await Promise.all([OPEN_STATUSES.indexOf(d.status) >= 0 ? orderRanks(X) : null, d.items.some(i => i.screen) ? screenProgress(X, { orders: [o.id] }) : new Map()]);
+      const rk = ranksAll ? ranksAll.get(o.id) : null;
       const U = new Map(units.map(u => [u.code, u.piece_unit]));
       const activeBill = bills.find(b => b.status !== "ยกเลิก") || null;
       const started = d.items.some(i => (i.job && (i.job.status !== "รอผลิต" || i.job.good_pcs > 0)) || (i.screen && (i.screen.status !== "รอดำเนินการ" || i.screen.team)));
@@ -215,10 +265,11 @@ export function defineOffice(R) {
         asOf: iso(X.now), today,
         order: { ...o, status: d.status, stored_status: o.status, taker: taker[0] ? taker[0].nick : o.taker_text, due_day: OPEN_STATUSES.indexOf(d.status) >= 0 ? plan.due : o.due_day,
           late: !!plan.due && plan.due < today && OPEN_STATUSES.indexOf(d.status) >= 0, want_range: wantRange(o.order_day, o.want_when, o.want_day) },
-        plan, reschedules: moves, deposits, deposit_satang: depositSum(deposits),
+        queue: rk ? { no: rk.no, of: rk.of, priority: rk.priority, reserve: rk.reserve } : null,
+        plan, reschedules: moves, deposits, deposit_satang: depositSum(deposits), deposit_used: depositUsed(bills), deposit_left: depositLeft(deposits, bills),
         customer: c.cust ? { ...pick(c.cust, ["id", "name", "phone", "district", "subdistrict", "route_code", "address", "map_url", "note", "credit_days", "status", "version", "geo_src"]),
           map_open: c.cust.geo_lat_e6 !== null && c.cust.geo_lat_e6 !== undefined ? mapsUrl(c.cust.geo_lat_e6, c.cust.geo_lng_e6) : "" } : null,
-        items: d.items.map(i => ({ ...i, piece_unit: U.get(i.type) || "ชิ้น", stock_a: (stock.find(s => s.item_key === "spec:" + i.spec_key && s.grade === "A") || {}).qty_pcs || 0,
+        items: d.items.map(i => ({ ...i, piece_unit: U.get(i.type) || "ชิ้น", screen_progress: sprog.get(i.id) || null, stock_a: (stock.find(s => s.item_key === "spec:" + i.spec_key && s.grade === "A") || {}).qty_pcs || 0,
           stock_b: (stock.find(s => s.item_key === "spec:" + i.spec_key && s.grade === "B") || {}).qty_pcs || 0 })),
         cancelled_items: c.items.filter(i => i.status === "ยกเลิก").map(i => ({ id: i.id, label: i.label, qty_pcs: i.qty_pcs })),
         loads: c.loads.filter(l => l.status !== "ยกเลิก").map(l => ({ id: l.id, order_item_id: l.order_item_id, qty_pcs: l.qty_pcs, status: l.status, done_day: l.done_day, trip: !!l.trip_id, note: l.note, fail_reason: l.fail_reason })),
@@ -314,6 +365,10 @@ export function defineOffice(R) {
       ]);
       const P = await loadOrderParts(X, open.map(r => r.id));
       const bSet = bColors.map(b => b.value);
+      const ranks = await orderRanks(X);
+      const A = allocate(P, bal, bSet, ranks);
+      const custIds = new Set(); for (const l of A.byKey.values()) l.forEach(x => custIds.add(x.customer_id));
+      const custs = await customersOf(X, [...custIds]);
       const need = new Map();
       for (const [id, o] of P.orders) {
         const d = deriveOrder(o, P.items[id], P.jobs[id], P.sjobs[id], P.loads[id]);
@@ -338,6 +393,8 @@ export function defineOffice(R) {
         by.set(b.item_key, r);
       }
       for (const [k, n] of need) { const r = by.get(k) || { item_key: k, label: n.label, a: 0, b: 0, updated_at: "" }; Object.assign(r, { need: n.need, orders: n.orders, soonest: n.soonest, type: n.type, size: n.size, grade: n.grade }); by.set(k, r); }
+      // ใครได้ก่อน (ลำดับคิวกลาง): ใบที่ได้ของครบ/ขาด เรียงตามลำดับ
+      for (const [k, list] of A.byKey) { const r = by.get(k); if (r) r.alloc = list.map(x => ({ ...x, customer: (custs.get(x.customer_id) || {}).name || "" })); }
       const rows = [...by.values()].map(r => {
         const [type, size] = r.item_key.slice(5).split("|");
         return { ...r, type: r.type || type, size: r.size || size, need: r.need || 0, orders: r.orders || 0, short: Math.max(0, (r.need || 0) - Math.max(0, r.grade === "B" ? r.b : r.a)) };

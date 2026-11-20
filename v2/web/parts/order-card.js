@@ -34,6 +34,8 @@ export function orderCard(ctx, o, onOpen, opt) {
       o.design_status === "รอแบบ" || o.design_status === "แก้ไขแบบ" ? ui.pill(o.design_status, "warn", "brush") : null,
       o.pay_status === "รอโอนเงิน" ? ui.pill("รอโอนเงิน", "warn", "coin") : null,
       o.hold ? ui.pill("รอยืนยัน", "warn", "clock") : null,
+      o.short_pcs ? ui.pill("ไม่พอส่ง " + n0(o.short_pcs), "bad", "alert") : null,
+      o.prio ? ui.pill(o.prio > 0 ? "ดันขึ้นก่อน" : "เลื่อนลง", o.prio > 0 ? "warn" : "mute", "flag") : null,
       o.round ? ui.pill("งวด " + o.round.seq + "/" + o.round.n + (o.round.carried ? " +ส่วนขาด" : ""), "brand", "truck") : null,
       h("span.when", "ลง " + thDayLong(o.order_day))));
 }

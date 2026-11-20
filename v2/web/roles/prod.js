@@ -440,7 +440,7 @@ function jobCard(ctx, j, today) {
   const due = !j.due_day ? ui.pill("ยังไม่กำหนดส่ง", "mute") : j.late ? ui.pill("เลยกำหนด " + ui.thDay(j.due_day), "bad", "alert") : j.due_day === today ? ui.pill("ส่งวันนี้", "warn") : ui.pill("ส่ง " + ui.thDay(j.due_day), "mute", "calendar");
   const pct = j.target_pcs ? Math.min(100, Math.round(j.made_pcs / j.target_pcs * 100)) : 0;
   return h("button.card", { type: "button", onclick: () => jobSheet(ctx, j) },
-    h("div.row", h("span.name.grow", j.customer || "ผลิตเข้าสต๊อก"), j.urgent ? ui.pill("ด่วน", "bad", "bolt") : null),
+    h("div.row", h("span.name.grow", j.customer || "ผลิตเข้าสต๊อก"), j.urgent ? ui.pill("ด่วน", "bad", "bolt") : null, j.prio ? ui.pill(j.prio > 0 ? "ออฟฟิศดันขึ้นก่อน" : "ออฟฟิศเลื่อนลง", j.prio > 0 ? "warn" : "mute", "flag") : null),   // ลำดับคิวกลาง: ปรับมือขึ้นป้าย
     h("div.row", swatch(j.color), h("span", j.label), h("span.r", ui.qty("", j.per_bag ? Math.round(j.target_pcs / j.per_bag) : j.target_pcs, j.per_bag ? "ถุง" : "ใบ"))),
     h("div.pf-prog", { role: "img", "aria-label": "ทำแล้ว " + pct + "%" }, h("i", { style: { width: pct + "%" } })),
     h("div.row.small", h("span.grow.muted", "ทำแล้ว " + bagsText(j.made_pcs, j.per_bag) + (j.status === "เสร็จ" ? "" : " · เหลือ " + bagsText(Math.max(0, j.target_pcs - j.made_pcs), j.per_bag))),

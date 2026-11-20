@@ -260,10 +260,13 @@ export async function billSheet(ctx, billNo, opt) {
   sh.body.replaceChildren(
     h("div.row", statusPill(ctx, b), srcPill(b), ui.pill(b.kind, "mute"), b.stmt_no ? ui.pill("ใบวางบิล " + b.stmt_no, "brand") : null),
     h("div.row", h("span.muted.grow", b.status === "ค้างชำระ" ? "ค้างชำระ" : "ยอดบิล"), h("span.big.md", money(b.status === "ค้างชำระ" ? b.due_satang : b.total_satang))),
-    h("div.kv", kv("ยอดบิล", money(b.total_satang)), b.paid_satang ? kv("รับแล้ว", money(b.paid_satang)) : null, kv("วันที่บิล", TH_DAY(b.bill_day)), kv("เลขบิลกระดาษ", b.paper_no ? "#" + b.paper_no : "ยังไม่ผูก"),
+    h("div.kv", kv("ยอดบิล", money(b.total_satang)), b.deposit_satang ? kv("หักมัดจำ", money(b.deposit_satang)) : null, b.paid_satang - (b.deposit_satang || 0) > 0 ? kv("รับแล้ว", money(b.paid_satang - (b.deposit_satang || 0))) : null, kv("วันที่บิล", TH_DAY(b.bill_day)), kv("เลขบิลกระดาษ", b.paper_no ? "#" + b.paper_no : "ยังไม่ผูก"),
       kv("กำหนดชำระ", b.due_day ? TH_DAY(b.due_day) : ""), kv("ชำระเมื่อ", b.paid_day ? TH_DAY(b.paid_day) : ""), kv("ช่องทาง", b.pay_channel ? chLabel(ctx, b.pay_channel) : "")),
     b.why ? h("p.small.muted", b.why) : "",
     b.note ? h("p.small", b.note) : "");
+  // มัดจำ (คุณปาล์มเคาะ 19 พ.ย.: หักในบิลเลย) — บิลนี้หักไปเท่าไร · ออเดอร์ยังเหลือมัดจำเท่าไร · เทียบกระดาษ/ชีทด้วยยอดหลังหักมัดจำ
+  if (d.deposit && d.deposit.total) sh.body.append(h("div.banner.t-brand", icon("coin", "sm"), h("span", "มัดจำของออเดอร์ " + money(d.deposit.total) + " · หักในบิลนี้ " + money(d.deposit.this_bill) +
+    " · คงเหลือ " + money(d.deposit.left) + (d.deposit.this_bill ? " — บิลกระดาษ/ชีทควรเป็นยอดหลังหักมัดจำ " + money(b.total_satang - d.deposit.this_bill) + " (ถ้าลงยอดเต็ม ระบบรู้ว่าต่างเพราะมัดจำ)" : ""))));
   if (d.order) sh.body.append(h("div.card", h("div.lbl", "ออเดอร์ " + TH_DAY(d.order.order_day) + (d.order.brand ? " · งาน " + d.order.brand : "")), h("div.items", (d.order.items || []).map(ui.itemQty))));
   for (const t of d.twins) sh.body.append(h("div.banner.t-brand", icon("list", "sm"), h("span", (b.src === "acct" ? "ใบเดียวกับบิลในแอป: " : "ใบเดียวกันในชีทบัญชี (" + (t.acct_kind === "รายวัน" ? "แท็บรายวัน" : "แท็บลูกหนี้") + "): ") + t.customer_name + " " + money(t.total_satang) + " · " + t.status + " — นับครั้งเดียว")));
   if (d.payments.length) {

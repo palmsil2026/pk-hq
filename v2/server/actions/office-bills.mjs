@@ -10,7 +10,7 @@
 import { Fail, bad, conflict, notFound, need, text, int, oneOf, day, thaiDay, addDays } from "../core.mjs";
 import { loadOrder, ROLES_OFFICE } from "./office-orders.mjs";
 import { deriveOrder } from "./office-lib.mjs";
-import { depositBillFlag } from "./office-deposits.mjs";
+import { depositLeft, BILL_DEPOSIT_SQL } from "./office-deposits.mjs";
 
 const locked = (msg, extra) => new Fail(409, "locked", msg, extra);
 const money = s => (Number(s) / 100).toLocaleString("en-US", { maximumFractionDigits: 2 });
@@ -33,7 +33,7 @@ export function defineOfficeBills(R) {
     async load(X, input) {
       const prefix = "PK2-" + thaiDay(X.now).slice(0, 4) + "-";
       const c = await loadOrder(X, input.order_id, [["SELECT max(CAST(substr(bill_no, ?) AS INTEGER)) AS n FROM bills WHERE substr(bill_no, 1, ?) = ?", prefix.length + 1, prefix.length, prefix],
-        ["SELECT amount_satang, status FROM order_deposits WHERE order_id = ?", input.order_id]]);
+        ["SELECT amount_satang, status FROM order_deposits WHERE order_id = ?", input.order_id], [BILL_DEPOSIT_SQL, input.order_id]]);
       c.billNo = prefix + String((Number(c.more[0][0] && c.more[0][0].n) || 0) + 1).padStart(4, "0");
       return c;
     },
@@ -70,16 +70,18 @@ export function defineOfficeBills(R) {
       if (total <= 0) throw bad("ยอดบิลเป็น 0 — ใส่ราคาต่อหน่วย");
       if (why.length && !X.reason) throw new Fail(400, "need_reason", "ต้องใส่เหตุผล: " + why.join(" · "), { needReason: true, why });
       const custName = (ctx.cust && ctx.cust.name) || o.customer_text;
+      // มัดจำ (คุณปาล์มเคาะ 19 พ.ย.): หักในบิลเลย — ใช้มัดจำคงเหลือของออเดอร์ได้ไม่เกินยอดบิล · เกิน = ค้างไว้บิลถัดไป
+      //   ยอดบิล (total) = ยอดเต็มเหมือนเดิม · มัดจำที่หักนับเป็นส่วนที่ชำระแล้ว → ยอดค้าง = ยอดบิล − มัดจำ · หักครบทั้งใบ = ชำระแล้ว
+      const dep = Math.min(depositLeft(ctx.more[1], ctx.more[2]), total);
       const row = { bill_no: ctx.billNo, bill_day: today, customer_id: o.customer_id, customer_name: custName, order_id: o.id, total_satang: total, kind: input.kind,
-        pay_channel: "", status: "ค้างชำระ", due_day: due, paid_day: "", paid_satang: 0, items_json: JSON.stringify(lines), note: input.note, src: "v2", by_name: X.staff.nick };
+        pay_channel: "", status: dep >= total ? "ชำระแล้ว" : "ค้างชำระ", due_day: due, paid_day: dep >= total ? today : "", paid_satang: dep, deposit_satang: dep,
+        items_json: JSON.stringify(lines), note: [input.note, dep ? "หักมัดจำ " + money(dep) + " บาท" : ""].filter(Boolean).join(" · "), src: "v2", by_name: X.staff.nick };
       const ops = [
         { op: "guard", sql: "SELECT 1 FROM orders WHERE id = ? AND version = ?", args: [o.id, o.version] },
         { op: "insert", table: "bills", row },
       ];
-      const dep = depositBillFlag(o.id, custName, ctx.more[1], row.bill_no, total);   // มีมัดจำ = ธงให้บัญชีตัดสิน (ไม่หักยอดเอง)
-      if (dep) ops.push(dep);
       if (why.length) ops.push({ op: "flag", kind: "ยอดไม่ตรง", team: "office", entity: "bills", entity_id: row.bill_no, title: custName + ": บิลไม่ตรงกับออเดอร์", detail: why.join(" · ") + " · เหตุผล: " + X.reason });
-      return { label: "ออกบิล " + custName + " ฿" + money(total), ops, result: { bill_no: row.bill_no, total_satang: total, kind: input.kind, due_day: due },
+      return { label: "ออกบิล " + custName + " ฿" + money(total), ops, result: { bill_no: row.bill_no, total_satang: total, deposit_satang: dep, owe_satang: total - dep, kind: input.kind, due_day: due },
         conflictMessage: "ออเดอร์นี้เพิ่งถูกแก้ — โหลดใหม่ แล้วเช็คจำนวน/ราคาในบิลอีกครั้ง" };
     },
   });
@@ -97,11 +99,12 @@ export function defineOfficeBills(R) {
       if (b.version !== input.version) throw conflict();
       if (b.status === "ยกเลิก") throw new Fail(409, "already", "บิลนี้ยกเลิกไปแล้ว");
       if (b.src !== "v2") throw locked("บิลนี้มาจากชีทบัญชี/ระบบเดิม — ยกเลิกที่ต้นทาง");
-      if (ctx.paid || b.paid_satang > 0 || b.status === "ชำระแล้ว") throw locked("บิลนี้มีรับชำระแล้ว — ให้ฝ่ายบัญชีจัดการ (ยกเลิกรับชำระก่อน)");
+      // มัดจำที่หักในบิลไม่นับเป็นการรับเงิน — ยกเลิกบิลได้ มัดจำกลับเป็นคงเหลือของออเดอร์เอง
+      if (ctx.paid || b.paid_satang - (b.deposit_satang || 0) > 0 || (b.status === "ชำระแล้ว" && (b.deposit_satang || 0) < b.total_satang)) throw locked("บิลนี้มีรับชำระแล้ว — ให้ฝ่ายบัญชีจัดการ (ยกเลิกรับชำระก่อน)");
       if (b.paper_no) throw locked("ฝ่ายบัญชีผูกเลขบิลกระดาษ " + b.paper_no + " แล้ว — ให้ฝ่ายบัญชียกเลิก");
       if (b.stmt_no) throw locked("บิลอยู่ในใบวางบิล " + b.stmt_no + " — จัดการใบวางบิลก่อน");
       return { label: "ยกเลิกบิล " + b.customer_name, result: { bill_no: b.bill_no },
-        ops: [{ op: "update", table: "bills", id: b.bill_no, expect: b.version, before: b, set: { status: "ยกเลิก", cancel_reason: X.reason } }] };
+        ops: [{ op: "update", table: "bills", id: b.bill_no, expect: b.version, before: b, set: { status: "ยกเลิก", cancel_reason: X.reason + (b.deposit_satang ? " · มัดจำ " + money(b.deposit_satang) + " บาทกลับเป็นคงเหลือ" : "") } }] };
     },
   });
 }

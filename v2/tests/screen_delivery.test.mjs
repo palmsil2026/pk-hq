@@ -166,11 +166,19 @@ test("สกรีน · กดเสร็จแล้วอีกคนกด�
   assert.equal((await W.call(T.screen, "screen.assign", { id: "ไม่มี", version: 1, team: "ทีม 1" })).status, 404);
 });
 
-test("สกรีน · รายการ: คิวด่วนขึ้นก่อนแล้วเรียงวันส่ง · เสร็จวันนี้รวมต่อทีม · ประวัติ · ปุ่มย้อนของคนทำ", async () => {
+test("สกรีน · รายการ: คิวตามวันนัด (ด่วนตัดสินเมื่อวันเท่ากัน) · ดันขึ้นได้ · เสร็จวันนี้รวมต่อทีม · ประวัติ · ปุ่มย้อนของคนทำ", async () => {
   const { W, T } = await setup({ stock: { [PLAIN]: 99999 } });
   const q = await W.call(T.screen, "screen.list", { tab: "queue" });
-  assert.deepEqual(q.data.jobs.map(j => j.id), ["J3", "J1", "J2"], "ด่วน (J3) ขึ้นก่อน แล้วตามวันส่ง");
-  assert.equal(q.data.jobs[0].customer, "ร้านทดสอบ ค"); assert.equal(q.data.jobs[0].per_bag, 200); assert.deepEqual(q.data.teams, ["ทีม 1", "ทีม 2", "ทีม 3"]);
+  // ลำดับคิวกลาง (คุณปาล์มเคาะ 19 พ.ย.): งวด/วันนัดใกล้สุดก่อน (ด่วนเป็นตัวตัดสินเมื่อวันเท่ากัน) → ลงคิวก่อน → ของจองท้าย · ออฟฟิศดันขึ้นได้
+  assert.deepEqual(q.data.jobs.map(j => j.id), ["J1", "J2", "J3"], "วันนัด 17 (OB) ก่อน 18 (OC ด่วน)");
+  assert.equal(q.data.jobs[0].customer, "ร้านทดสอบ ข"); assert.ok(q.data.jobs[0].rank_no > 0 && q.data.jobs[0].rank_no < q.data.jobs[2].rank_no, "ลำดับในคิวกลาง"); assert.deepEqual(q.data.teams, ["ทีม 1", "ทีม 2", "ทีม 3"]);
+  const oc = W.one("SELECT version FROM orders WHERE id = 'OC'");
+  const up = await W.call(T.office, "office.prio_move", { id: "OC", version: oc.version, dir: "up" }, { reason: "ลูกค้าขอด่วน" });
+  assert.equal(up.status, 200, JSON.stringify(up.error));
+  const q2 = await W.call(T.screen, "screen.list", { tab: "queue" });
+  assert.deepEqual(q2.data.jobs.map(j => j.id), ["J3", "J1", "J2"], "ออฟฟิศดันขึ้น = ขึ้นก่อน");
+  assert.equal(q2.data.jobs[0].prio, 1); assert.equal(q2.data.jobs[0].per_bag, 200);
+  await W.call(T.office, "undo.run", { id: up.undo.id });
   await W.call(T.screen, "screen.done", { id: "J1", version: 1, team: "ทีม 2" });
   const t = await W.call(T.screen, "screen.list", { tab: "today" });
   assert.equal(t.data.jobs.length, 1); assert.equal(t.data.jobs[0].done_nick, "จอย"); assert.ok(t.data.jobs[0].undo_id);

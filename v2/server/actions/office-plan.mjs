@@ -157,6 +157,26 @@ export function defineOfficePlan(R) {
     },
   });
 
+  // ══ ลำดับคิว: ดันขึ้นก่อน / เลื่อนลง / กลับตามวันนัด (คุณปาล์มเคาะ 19 พ.ย. — ค่าตั้งต้นตามงวดที่นัด/คิวไว้ก่อน แต่ปรับเปลี่ยนได้) ══
+  //   เหตุผลบังคับ (ยกเว้นกลับเป็นค่าตั้งต้น) · ประวัติอยู่ใน audit_log · ย้อนได้ · มีผลกับงานรอผลิต · คิวสกรีน · การจัดสต๊อก "ไม่พอส่ง"
+  R.define({
+    name: "office.prio_move", roles: ROLES_OFFICE, write: true,
+    input: raw => ({ id: need(raw.id, "ออเดอร์", 40), version: int(raw.version, "รุ่นของออเดอร์", { min: 1 }), dir: oneOf(raw.dir || "", ["up", "down", "reset"], "ทิศ (ดันขึ้น/เลื่อนลง/ตามวันนัด)") }),
+    async load(X, input) { const o = await X.db.first("SELECT * FROM orders WHERE id = ?", input.id); if (!o) throw notFound("ไม่พบออเดอร์นี้"); return { o }; },
+    async run(X, input, ctx) {
+      const o = ctx.o;
+      if (o.version !== input.version) throw conflict();
+      if (notOpen(o)) throw locked(notOpen(o) + " — ไม่มีคิวให้ปรับ");
+      const cur = Number(o.priority) || 0;
+      const next = input.dir === "reset" ? 0 : Math.max(-99, Math.min(99, cur + (input.dir === "up" ? 1 : -1)));
+      if (next === cur) throw bad(input.dir === "reset" ? "ใช้ลำดับตามวันนัดอยู่แล้ว" : "ปรับได้ถึงขีดสุดแล้ว");
+      if (input.dir !== "reset" && !X.reason) throw new Fail(400, "need_reason", "ปรับลำดับคิวต้องใส่เหตุผล", { needReason: true, why: [input.dir === "up" ? "ดันออเดอร์นี้ขึ้นก่อนคิวตามวันนัด" : "เลื่อนออเดอร์นี้ลงจากคิวตามวันนัด"], kind: "priority" });
+      const what = input.dir === "up" ? "ดันขึ้นก่อน" : input.dir === "down" ? "เลื่อนลง" : "กลับลำดับตามวันนัด";
+      return { label: what + " · " + o.customer_text, result: { id: o.id, priority: next },
+        ops: [{ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set: { priority: next } }] };
+    },
+  });
+
   // ══ ออเดอร์รวมตามสินค้า: ของที่ยังต้องส่ง (สั่ง − ส่งแล้ว) ═════════════════════════════
   R.define({
     name: "office.tree", roles: ROLES_OFFICE,

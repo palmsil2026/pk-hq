@@ -135,10 +135,24 @@ test("รายละเอียด: งวดส่ง (ส่งไม่ค�
   await p.locator(".sheet.on .btn.pri", { hasText: "บันทึกมัดจำ" }).click();
   await p.waitForFunction(() => /มัดจำ\s*฿5,000/.test(document.querySelector(".md-detail").innerText) || /฿5,000/.test(document.querySelector(".md-detail").innerText), null, { timeout: 8000 });
   assert.equal(S.d1.one("SELECT sum(amount_satang) s FROM order_deposits WHERE order_id = 'OP001' AND status = 'ใช้งาน'").s, 950000);
-  // ออกบิล: แผ่นบอกว่ามีมัดจำ ไม่หักให้เอง
+  // ลำดับคิว: ดันขึ้นก่อน = เหตุผล → ป้ายปรับมือ (คุณปาล์มเคาะ 19 พ.ย.)
+  assert.match(await p.locator(".md-detail .qline").innerText(), /ลำดับคิว #\d+ จาก \d+ ใบ/);
+  await p.locator(".md-detail .btn", { hasText: "ดันขึ้นก่อน" }).click();
+  await p.locator(".sheet.on .chip", { hasText: "ลูกค้าขอด่วน" }).click();
+  await p.locator(".sheet.on .btn.pri").last().click();
+  await p.waitForFunction(() => /ปรับมือ/.test((document.querySelector(".md-detail .qline") || {}).innerText || ""), null, { timeout: 8000 })
+    .catch(async e => { throw new Error("qline: " + await p.locator(".md-detail .qline").innerText().catch(() => "?") + " · sheet: " + await p.locator(".sheet.on").innerText().catch(() => "-") + " · " + e.message); });
+  assert.equal(S.d1.one("SELECT priority FROM orders WHERE id = 'OP001'").priority, 1);
+  // ออกบิล (คุณปาล์มเคาะ 19 พ.ย.): หักมัดจำในบิลเลย — แผ่นออกบิลบอกยอดหักมัดจำ + ค้างชำระ
   await p.locator(".md-detail .btn", { hasText: "ออกบิล" }).click();
-  await p.waitForSelector(".sheet.on .banner");
-  assert.match(await p.locator(".sheet.on").innerText(), /มัดจำแล้ว ฿9,500 — ระบบไม่หักให้เอง/);
+  await p.waitForSelector(".sheet.on .money-big");
+  await p.locator(".sheet.on .chip", { hasText: "เครดิต" }).click();
+  await p.waitForFunction(() => /หักมัดจำ \(คงเหลือ ฿9,500\)/.test(document.querySelector(".sheet.on").innerText), null, { timeout: 8000 });
+  await p.locator(".sheet.on .btn.pri", { hasText: "ออกบิล" }).click();
+  await p.waitForSelector(".sheet.on .billdoc", { timeout: 8000 });
+  assert.match(await p.locator(".sheet.on .billdoc").innerText(), /หักมัดจำ[\s\S]*ยอดค้างชำระ/);
+  const bill = S.d1.one("SELECT * FROM bills WHERE order_id = 'OP001' AND status <> 'ยกเลิก'");
+  assert.ok(bill.deposit_satang > 0 && bill.deposit_satang <= 950000);
   assert.ok(await noHScroll(p)); await clean(p);
   assert.deepEqual(p.errors, []);
 });

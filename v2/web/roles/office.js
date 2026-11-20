@@ -168,12 +168,15 @@ export default {
           if (only === "short") rows = rows.filter(r => r.short > 0); else if (only) rows = rows.filter(r => r.type === only);
           const pill = r => (r.need ? (r.short > 0 ? ui.pill("ขาด " + n0(r.short), "bad", "alert") : ui.pill("พอส่ง", "ok", "check")) : ui.pill("ไม่มีออเดอร์รอ", "mute"));
           const name = r => (r.label || r.item_key.slice(5).replace(/\|+/g, " ")) + (r.item_key.includes("|สกรีน ") ? "" : "");
+          // ใครได้ก่อน (ลำดับคิวกลาง — ตามงวดที่นัด/คิวไว้ก่อน · ออฟฟิศปรับได้ในรายละเอียดออเดอร์) — โชว์เมื่อมีใบที่ขาด
+          const alloc = r => (r.alloc && r.alloc.some(a => a.short > 0) ? h("div.small.alloc", h("span.muted", "ได้ก่อนตามคิว: "), r.alloc.slice(0, 6).map((a, i) =>
+            h("span", (i ? " · " : "") + (a.customer || "ลูกค้า") + (a.prio ? " (ปรับมือ)" : a.reserve ? " (จอง)" : "") + " ", a.short ? h("b.bad-ink", "ขาด " + n0(a.short)) : h("b", "ครบ"))), r.alloc.length > 6 ? " · อีก " + (r.alloc.length - 6) + " ใบ" : null) : null);
           put(tableBox, 
             h("table.ntable", h("thead", h("tr", h("th", "สินค้า"), h("th", "เกรด A"), h("th", "เกรด B"), h("th", "ต้องส่ง (ค้าง)"), h("th", ""))),
-              h("tbody", rows.map(r => h("tr", h("td", name(r), r.soonest ? h("div.small.muted", "ส่งเร็วสุด " + thDayLong(r.soonest) + " · " + r.orders + " ออเดอร์") : null),
+              h("tbody", rows.map(r => h("tr", h("td", name(r), r.soonest ? h("div.small.muted", "ส่งเร็วสุด " + thDayLong(r.soonest) + " · " + r.orders + " ออเดอร์") : null, alloc(r)),
                 h("td", h("b", n0(r.a))), h("td", r.b ? n0(r.b) : "—"), h("td", r.need ? n0(r.need) : "—"), h("td", pill(r)))))),
             h("div.stack.stock-cards", rows.map(r => h("div.card", h("div.row", h("b.grow", name(r)), pill(r)),
-              h("div.row", ui.qty("เกรด A", r.a, "ใบ"), r.b ? ui.qty("เกรด B", r.b, "ใบ") : null, r.need ? ui.qty("ต้องส่ง", r.need, "ใบ") : null)))),
+              h("div.row", ui.qty("เกรด A", r.a, "ใบ"), r.b ? ui.qty("เกรด B", r.b, "ใบ") : null, r.need ? ui.qty("ต้องส่ง", r.need, "ใบ") : null), alloc(r)))),
             rows.length ? null : ui.empty("ไม่มีรายการ"));
         };
         search.addEventListener("input", () => { q = search.value.trim(); draw(); });

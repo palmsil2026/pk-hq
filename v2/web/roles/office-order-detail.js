@@ -44,13 +44,17 @@ export function showOrder(ctx, id, host, opt) {
       const prog = [];
       if (it.job) prog.push(h("span", "ผลิต ", h("b", n0(Math.min(it.made, it.qty_pcs))), "/" + n0(it.qty_pcs) + (it.job.status === "เสร็จ" ? " เสร็จ" : it.job.status === "กำลังผลิต" ? " กำลังทำ" : " รอคิว")));
       else if (it.source === "สต๊อก") prog.push(h("span", "ใช้ของในสต๊อก"));
-      if (it.screen) prog.push(h("span", "สกรีน " + it.screen_color + " · " + (it.screen.status === "เสร็จแล้ว" ? "เสร็จ" : it.screen.team ? it.screen.team + " กำลังทำ" : "รอทีม")));
+      // สกรีน: ความคืบหน้าจริงจากทีมสกรีน (ทำบางส่วน · งานหลายวัน) — "ทำแล้ว 6/20 ถุง" + ช่วงที่ทำ
+      const sp = it.screen_progress;
+      if (it.screen) prog.push(h("span", "สกรีน " + it.screen_color + " · " + (sp ? sp.text : it.screen.status === "เสร็จแล้ว" ? "เสร็จ" : it.screen.team ? it.screen.team + " กำลังทำ" : "รอทีม") + (sp && sp.team && sp.status !== "เสร็จแล้ว" ? " (" + sp.team + ")" : "")));
       if (it.delivered || it.on_truck) prog.push(h("span", "ส่งแล้ว ", h("b", n0(it.delivered)), it.on_truck ? " · บนรถ " + n0(it.on_truck) : ""));
       if (od.status !== "ส่งแล้ว" && od.status !== "ยกเลิก") prog.push(h("span", "สต๊อก A ", h("b", n0(it.stock_a)), it.stock_b ? " · B " + n0(it.stock_b) : ""));
       return h("div.icard", h("div.row", h("b.grow", it.label || it.type), itemBadge(it)),
         h("div.small.muted", [qtyWords(it), it.screen_color && !it.screen ? "สกรีน" + it.screen_color : "", it.cap_color ? "ฝา" + it.cap_color : "",
           it.price_satang !== null ? "฿" + baht(it.price_satang) + "/" + it.piece_unit : ""].filter(Boolean).join(" · ")),
-        prog.length ? h("div.prog", prog) : null, it.price_reason ? h("div.hint", "เหตุผลราคา: " + it.price_reason) : null);
+        prog.length ? h("div.prog", prog) : null,
+        sp && (sp.parts.length || sp.done) ? h("div.small.muted.sparts", "ช่วงที่ทำ: " + [...sp.parts.map(x => thDayLong(x.day) + " " + (x.team ? x.team + " " : "") + x.text), sp.done && sp.parts.length ? thDayLong(sp.done.day) + " เสร็จ" + (sp.done.rest_pcs ? " (อีก " + sp.done.text + ")" : "") : ""].filter(Boolean).join(" · ")) : null,
+        it.price_reason ? h("div.hint", "เหตุผลราคา: " + it.price_reason) : null);
     }), d.cancelled_items.length ? h("div.small.muted", "ยกเลิกแล้ว: " + d.cancelled_items.map(i => i.label + " " + n0(i.qty_pcs)).join(" · ")) : null);
     const kv = h("dl.kv2");
     const kvAdd = (k, v) => { if (v !== "" && v !== null && v !== undefined) add(kv, h("dt", k), h("dd", v)); };
@@ -198,6 +202,15 @@ function planCard(ctx, d, done) {
   });
   const acts = [];
   if (openOrder) acts.push(h("button.btn", { type: "button", onclick: () => replanSheet(ctx, d, done) }, icon("edit", "sm"), "วางงวดใหม่"));
+  // ลำดับคิว (คุณปาล์มเคาะ 19 พ.ย.): ตามงวดที่นัด/คิวไว้ก่อน — ออฟฟิศดันขึ้น/เลื่อนลงได้ (เหตุผล + ประวัติ + ย้อน)
+  const Q = d.queue;
+  const prio = dir => write(ctx, "office.prio_move", { id: od.id, version: od.version, dir }, { label: dir === "up" ? "ดันขึ้นก่อน" : dir === "down" ? "เลื่อนลง" : "กลับลำดับตามวันนัด", reasonKind: "priority",
+    confirm: dir === "reset" ? null : { title: dir === "up" ? "ดันขึ้นก่อนคิวตามวันนัด" : "เลื่อนลงจากคิว", detail: "ใบนี้จะ" + (dir === "up" ? "ได้ขวด/คิวผลิต/คิวสกรีนก่อนใบที่นัดใกล้กว่า" : "ไปอยู่ท้ายคิว") + " · เก็บประวัติ ย้อนได้",
+      reasons: ctx.reasons("priority"), need: "required", okText: dir === "up" ? "ดันขึ้นก่อน" : "เลื่อนลง" }, after: () => done() });
+  const qline = Q ? h("div.qline", h("span.grow", "ลำดับคิว ", h("b", "#" + Q.no), " จาก " + Q.of + " ใบ" + (Q.priority ? " · ปรับมือ" : Q.reserve ? " · ของจอง (ต่อท้าย)" : " · ตามวันนัด")),
+    Q.priority ? ui.pill(Q.priority > 0 ? "ดันขึ้นก่อน" : "เลื่อนลง", Q.priority > 0 ? "warn" : "mute", "flag") : null) : null;
+  const qacts = Q ? h("div.acts", h("button.btn", { type: "button", onclick: () => prio("up") }, "ดันขึ้นก่อน"), h("button.btn", { type: "button", onclick: () => prio("down") }, "เลื่อนลง"),
+    Q.priority ? h("button.btn.ghost", { type: "button", onclick: () => prio("reset") }, "กลับตามวันนัด") : null) : null;
   if (od.status === "ออเดอร์ใหม่") acts.push(h("button.btn", { type: "button", onclick: () => write(ctx, "office.hold_set", { id: od.id, version: od.version, hold: od.hold ? 0 : 1 }, { label: od.hold ? "ยกเลิกรอยืนยัน" : "ตั้งรอยืนยัน", after: () => done() }) }, icon("clock", "sm"), od.hold ? "ไม่ต้องรอยืนยันแล้ว" : "ตั้งรอยืนยัน"));
   const hist = (d.reschedules || []).length ? h("details.more", h("summary.btn.ghost", icon("chev", "sm"), "ประวัติเลื่อนวันส่ง (" + d.reschedules.length + ")"),
     h("div.hist", d.reschedules.map(e => h("div", h("span", h("b", (e.seq ? "งวด " + e.seq + " · " : "") + (e.from_day ? thDayLong(e.from_day) : "ยังไม่นัด") + " → " + (e.to_day ? thDayLong(e.to_day) : "ยังไม่นัด")),
@@ -206,7 +219,7 @@ function planCard(ctx, d, done) {
     P.done ? ui.pill("ส่งครบทุกงวด", "ok", "check") : null),
     want ? h("div.small.muted", want) : null, h("div.rounds", rows),
     P.reserve && openOrder ? h("p.hint", "จอง — ยังไม่มีวันนัด (ไม่ได้คิวนัดส่ง) · แตะ \"นัด\" เมื่อลูกค้ายืนยันวัน") : null,
-    acts.length ? h("div.acts", acts) : null, hist);
+    acts.length ? h("div.acts", acts) : null, qline, qacts, hist);
 }
 function replanSheet(ctx, d, done) {
   const od = d.order;
@@ -235,7 +248,7 @@ function depositCard(ctx, d, done) {
       confirm: { title: "ยกเลิกมัดจำ ฿" + baht(x.amount_satang), reasons: ctx.reasons("deposit_cancel"), need: "required", okText: "ยกเลิกรายการนี้", danger: true }, after: () => done() }) }, "ยกเลิก") : null));
   return h("section.icard", h("div.row", icon("coin", "sm"), h("b.grow", "มัดจำ"), d.deposit_satang ? h("b", "฿" + baht(d.deposit_satang)) : h("span.small.muted", "ยังไม่มี")),
     rows.length ? h("div.stack", rows) : null,
-    d.deposit_satang && d.bill ? h("p.hint", "บิลไม่ได้หักมัดจำให้เอง — ฝ่ายบัญชีตรวจตอนรับชำระ") : null,
+    d.deposit_satang ? h("p.hint", d.deposit_used ? "หักในบิลแล้ว ฿" + baht(d.deposit_used) + " · คงเหลือ ฿" + baht(d.deposit_left) + (d.deposit_left ? " (หักในบิลถัดไป)" : "") : "ออกบิลแล้วหักมัดจำในบิลให้เลย") : null,
     od.status !== "ยกเลิก" ? h("div.acts", h("button.btn", { type: "button", onclick: () => depositSheet(ctx, od, done) }, icon("plus", "sm"), "ลงมัดจำ")) : null);
 }
 async function depositSheet(ctx, od, done) {

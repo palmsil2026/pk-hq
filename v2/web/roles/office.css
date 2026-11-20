@@ -75,3 +75,6 @@ details.card[open] > summary .ic { transform: rotate(90deg); }
 .wday .ilines { display: grid; gap: 6px; }
 .wday .iline { display: flex; align-items: center; gap: var(--sp-2); min-width: 0; font-size: 14.5px; }
 .wday .iline > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--ink-2); }
+.billdoc .tot.dep { font: 600 16px var(--font-body); }
+.qline { display: flex; flex-wrap: wrap; gap: var(--sp-2); align-items: center; padding-top: var(--sp-2); border-top: 1px dashed var(--line); }
+.alloc { overflow-wrap: anywhere; } .alloc .bad-ink { color: var(--bad-ink); }

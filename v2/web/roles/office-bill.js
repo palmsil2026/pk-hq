@@ -17,6 +17,7 @@ export function billSheet(ctx, d, opt) {
   const lines = d.items.map(it => ({ it, qty: it.delivered > 0 ? it.delivered : it.qty_pcs, price: it.price_satang }));
   const S = ui.sheet({ title: "ออกบิล · " + (d.customer ? d.customer.name : od.customer_text), modal: true, foot: true });
   const total = h("div.money-big"), msg = h("p.err", { role: "alert" });
+  const depLeft = Number(d.deposit_left) || 0, depRow = h("div.row", { hidden: true });   // มัดจำคงเหลือของออเดอร์ — หักในบิลนี้เลย
   const dueBtn = h("button.qbtn", { type: "button", onclick: async () => { const v = await dateSheet({ title: "กำหนดชำระ", value: due, min: todayTh() }); if (v) { due = v; draw(); } } }, h("small", "กำหนดชำระ"), h("b"));
   const dueRow = h("div", { hidden: true }, dueBtn, h("p.hint", "ตั้งตามเครดิตของลูกค้า (หรือ " + "ค่าตั้งต้นระบบ) — แตะเพื่อเปลี่ยน"));
   const kinds = seg([["เงินสด", "บิลเงินสด"], ["เครดิต", "บิลเครดิต"]], "", v => { kind = v; draw(); }, { label: "ประเภทบิล" });
@@ -35,10 +36,13 @@ export function billSheet(ctx, d, opt) {
     }));
     const t = lines.reduce((s, l) => s + (l.price === null ? 0 : l.qty * l.price), 0) + (block ? od.block_fee_satang : 0);
     total.textContent = "฿" + baht(t);
+    const dep = Math.min(depLeft, t);
+    depRow.hidden = !dep;
+    depRow.replaceChildren(h("span.muted.grow", "หักมัดจำ (คงเหลือ ฿" + baht(depLeft) + ")"), h("b", "−฿" + baht(dep)), h("span.muted", " · ค้างชำระ "), h("b", "฿" + baht(t - dep)));
   }
   add(S.body, h("div.lbl", "ประเภทบิล (ต้องเลือก)"), kinds, dueRow, h("div.lbl", "รายการในบิล"), rows, blockChip, h("label.field", h("span.lbl", "หมายเหตุบนบิล"), noteIn),
     h("div.row", h("span.muted.grow", "ยอดบิล"), total),
-    d.deposit_satang ? h("div.banner.t-warn", icon("coin"), h("span", "ออเดอร์นี้มัดจำแล้ว ฿" + baht(d.deposit_satang) + " — ระบบไม่หักให้เอง ยอดบิลคือยอดเต็ม · ออกบิลแล้วฝ่ายบัญชีจะเห็นเรื่องนี้เพื่อตรวจ")) : null, msg);
+    depRow, msg);
   add(S.foot, h("div.btns", h("button.btn", { type: "button", onclick: () => S.close("x") }, "กลับ"),
     h("button.btn.pri", { type: "button", onclick: e => ui.busy(e.currentTarget, async () => {
       if (!kind) { msg.textContent = "เลือกก่อนว่าเป็นบิลเงินสดหรือบิลเครดิต"; return; }
@@ -68,7 +72,7 @@ export async function billDoc(ctx, billNo, opt) {
   S.title = "บิล" + b.kind + " · " + b.customer_name;
   const doc = docEl(d);
   put(S.body, h("div.row", ui.statusPill(ctx.vocab, "bills.status", b.status), b.paper_no ? ui.pill("เลขบิลกระดาษ " + b.paper_no, "mute") : ui.pill("ยังไม่ผูกเลขบิลกระดาษ", "warn")),
-    d.deposit_satang ? h("div.banner.t-warn", icon("coin"), h("span", "มัดจำแล้ว ฿" + baht(d.deposit_satang) + " (" + d.deposits.map(x => thDayLong(x.paid_day)).join(", ") + ") — ยังไม่ได้หักในบิลนี้ ให้ฝ่ายบัญชีตัดสิน")) : null,
+    b.deposit_satang ? h("div.banner.t-brand", icon("coin"), h("span", "หักมัดจำในบิลนี้ ฿" + baht(b.deposit_satang) + " · ค้างชำระ ฿" + baht(b.total_satang - b.paid_satang) + (d.deposit_satang > b.deposit_satang ? " · มัดจำทั้งออเดอร์ ฿" + baht(d.deposit_satang) : ""))) : null,
     h("div.doc-wrap", doc), h("p.ref", "รหัสอ้างอิง " + b.bill_no));
   const canCancel = b.src === "v2" && b.status === "ค้างชำระ" && !b.paid_satang && !b.paper_no && !b.stmt_no;
   add(S.foot, h("div.acts",
@@ -94,6 +98,9 @@ function docEl(d) {
       h("tbody", b.lines.map((l, i) => h("tr", h("td", String(i + 1)), h("td", l.label + (l.screen ? " · สกรีน" + l.screen : "") + (l.cap ? " · ฝา" + l.cap : "")),
         h("td.n", n0(l.qty_pcs) + " " + l.unit + (l.per_bag && l.qty_pcs % l.per_bag === 0 ? " (" + n0(l.qty_pcs / l.per_bag) + " ถุง)" : "")), h("td.n", baht(l.price_satang)), h("td.n", baht(l.amount_satang)))))),
     h("div.tot", h("span", "รวมทั้งสิ้น"), h("span", baht(b.total_satang) + " บาท")),
+    // มัดจำหักในบิล (คุณปาล์มเคาะ 19 พ.ย.) — บอกชัดว่าหักไปเท่าไร เหลือจ่ายเท่าไร
+    b.deposit_satang ? h("div.tot.dep", h("span", "หักมัดจำ"), h("span", "−" + baht(b.deposit_satang) + " บาท")) : null,
+    b.deposit_satang ? h("div.tot", h("span", "ยอดค้างชำระ"), h("span", baht(b.total_satang - b.deposit_satang) + " บาท")) : null,
     b.kind === "เครดิต" && b.due_day ? h("div", h("b", "กำหนดชำระ: "), thDayLong(b.due_day)) : null,
     b.note ? h("div", h("b", "หมายเหตุ: "), b.note) : null,
     h("div.sign", h("span", "ผู้รับของ"), h("span", "ผู้ออกบิล " + (b.by_name || ""))));
@@ -102,7 +109,7 @@ function docText(d) {
   const b = d.bill;
   return [d.company.name, (b.kind === "เครดิต" ? "ใบแจ้งหนี้" : "บิลเงินสด") + " เลขที่ " + b.bill_no + " · " + thDayLong(b.bill_day), "ลูกค้า: " + b.customer_name,
     ...b.lines.map((l, i) => (i + 1) + ". " + l.label + " " + n0(l.qty_pcs) + " " + l.unit + " × " + baht(l.price_satang) + " = " + baht(l.amount_satang)),
-    "รวมทั้งสิ้น " + baht(b.total_satang) + " บาท", b.kind === "เครดิต" && b.due_day ? "กำหนดชำระ " + thDayLong(b.due_day) : ""].filter(Boolean).join("\n");
+    "รวมทั้งสิ้น " + baht(b.total_satang) + " บาท", b.deposit_satang ? "หักมัดจำ " + baht(b.deposit_satang) + " บาท · ยอดค้างชำระ " + baht(b.total_satang - b.deposit_satang) + " บาท" : "", b.kind === "เครดิต" && b.due_day ? "กำหนดชำระ " + thDayLong(b.due_day) : ""].filter(Boolean).join("\n");
 }
 /** พิมพ์เฉพาะเอกสาร (เครื่องพิมพ์ หรือ "บันทึกเป็น PDF" ของเบราว์เซอร์) */
 export function printDoc(doc) {
@@ -117,7 +124,7 @@ export function printDoc(doc) {
 export async function docImage(d) {
   const b = d.bill, W = 900, pad = 40, lh = 34;
   const lines = b.lines.length;
-  const H = 360 + lines * lh + (b.note ? lh : 0);
+  const H = 360 + lines * lh + (b.note ? lh : 0) + (b.deposit_satang ? lh * 2 : 0);
   const cv = document.createElement("canvas");
   cv.width = W * 2; cv.height = H * 2;
   const g = cv.getContext("2d");
@@ -146,6 +153,10 @@ export async function docImage(d) {
   });
   g.fillRect(pad, y - lh + 12, W - 2 * pad, 1); y += 8;
   font(800, 22); g.textAlign = "right"; g.fillText("รวมทั้งสิ้น " + baht(b.total_satang) + " บาท", W - pad, y); g.textAlign = "left";
+  if (b.deposit_satang) {
+    y += lh; font(700, 18); g.textAlign = "right"; g.fillText("หักมัดจำ −" + baht(b.deposit_satang) + " บาท", W - pad, y);
+    y += lh; font(800, 22); g.fillText("ยอดค้างชำระ " + baht(b.total_satang - b.deposit_satang) + " บาท", W - pad, y); g.textAlign = "left";
+  }
   y += lh;
   font(400, 17);
   if (b.kind === "เครดิต" && b.due_day) { g.fillText("กำหนดชำระ " + thDayLong(b.due_day), pad, y); y += lh; }
