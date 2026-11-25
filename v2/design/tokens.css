@@ -1,0 +1,127 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   ระบบดีไซน์ โรงขวด P&K v2 · v2/design/tokens.css
+   ⚠️ ไฟล์นี้สร้างโดย gen_tokens.py — ห้ามแก้มือ (CI ตรวจว่าตรงกับสคริปต์)
+   กลไกเดียวกับระบบดีไซน์ "ละกอน" ของโรงน้ำ: tone ramp (Material 3) · spacing/type (Carbon) · แตะ ≥44px (HIG)
+   ทุกคู่สีที่ใช้จริงผ่าน WCAG AA ทั้งโหมดสว่าง/มืด (ดูผลตรวจตอนรันสคริปต์)
+   หน้าเว็บใช้ "สีตามหน้าที่" (--bg --ink --brand --ok …) · ramp (--brick-40 …) ไว้สำหรับกรณีพิเศษ
+   ═══════════════════════════════════════════════════════════════════════ */
+:root {
+  /* แดงอิฐ — สีประจำโรงขวด (ปุ่มหลัก · เมนูที่เลือก · ลิงก์) · ★ tone 50 = #B24A4F */
+  --brick-10: #310F10; --brick-15: #401618; --brick-20: #4F1E21; --brick-25: #5F2729; --brick-30: #702F32; --brick-40: #924144; --brick-50: #B24A4F; --brick-60: #D16F71; --brick-70: #E69090; --brick-80: #FAB0AF; --brick-90: #FFD8D7; --brick-94: #FFE8E7; --brick-96: #FFEFEF; --brick-98: #FFF7F7;
+  /* เทาอุ่น — ตัวหนังสือรอง · เส้น · พื้น · ★ tone 40 = #6B645E */
+  --neutral-10: #201A15; --neutral-15: #2B241F; --neutral-20: #362F29; --neutral-25: #413A34; --neutral-30: #4C453F; --neutral-40: #6B645E; --neutral-50: #7D756F; --neutral-60: #978F88; --neutral-70: #B2AAA2; --neutral-80: #CDC5BD; --neutral-90: #EAE1D9; --neutral-94: #F5ECE5; --neutral-96: #FBF2EA; --neutral-98: #FFF8F2;
+  /* เขียว — สถานะ "สำเร็จ/เดินอยู่" เท่านั้น (ความหมายเดียวกับโรงน้ำ) · ★ tone 50 = #15803D */
+  --green-10: #03230C; --green-15: #062E13; --green-20: #0C3A1B; --green-25: #124723; --green-30: #17542A; --green-40: #236F3B; --green-50: #15803D; --green-60: #51A667; --green-70: #78BE88; --green-80: #9ED7A9; --green-90: #C3F0CB; --green-94: #D1FAD8; --green-96: #DAFFE0; --green-98: #EDFFF0;
+  /* อำพัน — สถานะ "ต้องดู/ค้าง/ใกล้กำหนด" · ★ tone 50 = #B45309 */
+  --amber-10: #311100; --amber-15: #401901; --amber-20: #4F2203; --amber-25: #5F2A07; --amber-30: #6F330B; --amber-40: #924614; --amber-50: #B45309; --amber-60: #D07540; --amber-70: #E5956A; --amber-80: #F9B591; --amber-90: #FEDAC7; --amber-94: #FFE9DE; --amber-96: #FFF0E9; --amber-98: #FFF8F4;
+  /* แดงเข้ม — สถานะ "ผิดปกติ/เลยกำหนด/ยอดไม่ตรง" · ★ tone 40 = #B91C1C */
+  --red-10: #380605; --red-15: #490C0A; --red-20: #5A1310; --red-25: #6B1916; --red-30: #7E201C; --red-40: #B91C1C; --red-50: #CC3D35; --red-60: #E75E52; --red-70: #FA8377; --red-80: #FFAFA5; --red-90: #FFD8D3; --red-94: #FFE8E5; --red-96: #FFF0ED; --red-98: #FFF6F5;
+
+  /* ── สีตามหน้าที่ · โหมดสว่าง ── */
+  --bg: #FFF8F2;
+  --surface: #FFFFFF;
+  --surface-2: #FBF2EA;
+  --sunken: #F5ECE5;
+  --ink: #201A15;
+  --ink-2: #6B645E;
+  --line: #EAE1D9;
+  --edge: #7D756F;
+  --brand: #B24A4F;
+  --on-brand: #FFFFFF;
+  --brand-ink: #702F32;
+  --brand-soft: #FFE8E7;
+  --brand-tint: #FFF7F7;
+  --ok: #236F3B;
+  --ok-ink: #124723;
+  --ok-soft: #D1FAD8;
+  --warn: #B45309;
+  --warn-ink: #5F2A07;
+  --warn-soft: #FFE9DE;
+  --bad: #B91C1C;
+  --bad-ink: #6B1916;
+  --bad-soft: #FFE8E5;
+  --focus: #924144;
+  --scrim: rgba(26,18,18,.40);
+  color-scheme: light;
+
+  /* ── ระยะห่าง 8pt (Carbon) ── */
+  --sp-1: 4px; --sp-2: 8px; --sp-3: 12px; --sp-4: 16px; --sp-5: 24px; --sp-6: 32px; --sp-7: 48px;
+  /* ── ตัวอักษร: หัว/ตัวเลข = Anuphan · เนื้อ = Sarabun · ไทยต้อง line-height 1.5–1.7 ── */
+  --font-display: "Anuphan", "Noto Sans Thai", system-ui, sans-serif;
+  --font-body: "Sarabun", "Noto Sans Thai", system-ui, sans-serif;
+  --fs-label: 13px; --fs-caption: 14px; --fs-body: 16px; --fs-h3: 18px; --fs-h2: 21px; --fs-h1: 26px; --fs-num: 20px; --fs-num-lg: 32px;
+  --lh-tight: 1.25; --lh-head: 1.4; --lh-body: 1.65;
+  /* ── รูปทรง · การแตะ · โฟกัส ── */
+  --r-sm: 6px; --r-md: 10px; --r-lg: 16px; --r-xl: 22px; --r-full: 999px;
+  --tap: 44px; --tap-lg: 56px; --focus-w: 3px;
+  /* ── เงา (elevation · Material 3) ── */
+  --elev-1: 0 1px 2px rgba(32,22,22,.06), 0 1px 3px rgba(32,22,22,.08);
+  --elev-2: 0 1px 2px rgba(32,22,22,.06), 0 3px 8px rgba(32,22,22,.10);
+  --elev-3: 0 2px 4px rgba(32,22,22,.08), 0 10px 24px rgba(32,22,22,.16);
+  /* ── จังหวะเคลื่อนไหว (ปิดเองเมื่อ prefers-reduced-motion) ── */
+  --ease: cubic-bezier(.2, 0, 0, 1); --ease-out: cubic-bezier(.05, .7, .1, 1);
+  --dur-1: 120ms; --dur-2: 200ms; --dur-3: 320ms;
+  --rail-w: 232px; --nav-h: 64px;
+}
+/* ── โหมดมืด: ตามเครื่อง (เว้นแต่ผู้ใช้เลือกสว่าง) หรือเลือกมืดเอง ── */
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #201A15;
+    --surface: #2B241F;
+    --surface-2: #362F29;
+    --sunken: #201A15;
+    --ink: #FBF2EA;
+    --ink-2: #CDC5BD;
+    --line: #413A34;
+    --edge: #978F88;
+    --brand: #FAB0AF;
+    --on-brand: #401618;
+    --brand-ink: #FFD8D7;
+    --brand-soft: #5F2729;
+    --brand-tint: #4F1E21;
+    --ok: #9ED7A9;
+    --ok-ink: #C3F0CB;
+    --ok-soft: #0C3A1B;
+    --warn: #F9B591;
+    --warn-ink: #FEDAC7;
+    --warn-soft: #4F2203;
+    --bad: #FFAFA5;
+    --bad-ink: #FFD8D3;
+    --bad-soft: #5A1310;
+    --focus: #FAB0AF;
+    --scrim: rgba(0,0,0,.55);
+    color-scheme: dark;
+    --elev-1: 0 1px 2px rgba(0,0,0,.4); --elev-2: 0 2px 8px rgba(0,0,0,.45); --elev-3: 0 10px 28px rgba(0,0,0,.55);
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #201A15;
+  --surface: #2B241F;
+  --surface-2: #362F29;
+  --sunken: #201A15;
+  --ink: #FBF2EA;
+  --ink-2: #CDC5BD;
+  --line: #413A34;
+  --edge: #978F88;
+  --brand: #FAB0AF;
+  --on-brand: #401618;
+  --brand-ink: #FFD8D7;
+  --brand-soft: #5F2729;
+  --brand-tint: #4F1E21;
+  --ok: #9ED7A9;
+  --ok-ink: #C3F0CB;
+  --ok-soft: #0C3A1B;
+  --warn: #F9B591;
+  --warn-ink: #FEDAC7;
+  --warn-soft: #4F2203;
+  --bad: #FFAFA5;
+  --bad-ink: #FFD8D3;
+  --bad-soft: #5A1310;
+  --focus: #FAB0AF;
+  --scrim: rgba(0,0,0,.55);
+  color-scheme: dark;
+  --elev-1: 0 1px 2px rgba(0,0,0,.4); --elev-2: 0 2px 8px rgba(0,0,0,.45); --elev-3: 0 10px 28px rgba(0,0,0,.55);
+}
+@media (prefers-reduced-motion: reduce) {
+  :root { --dur-1: 0ms; --dur-2: 0ms; --dur-3: 0ms; }
+}

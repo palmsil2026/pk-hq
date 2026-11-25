@@ -19,3 +19,10 @@ desktop.ini
 *.tmp
 *.bak
 ~$*
+
+# ---- v2: ฐานข้อมูลเครื่องนักพัฒนา / ของที่สร้างตอน build ----
+v2/.dev/
+v2/dist/
+.wrangler/
+v2/wrangler.toml
+v2/cron/wrangler.toml

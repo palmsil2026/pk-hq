@@ -1,0 +1,78 @@
+[
+ {
+  "file": "office-390.jpg",
+  "caption": "office · 390"
+ },
+ {
+  "file": "office-1366.jpg",
+  "caption": "office · 1366"
+ },
+ {
+  "file": "prod-390.jpg",
+  "caption": "prod · 390"
+ },
+ {
+  "file": "prod-1366.jpg",
+  "caption": "prod · 1366"
+ },
+ {
+  "file": "screen-390.jpg",
+  "caption": "screen · 390"
+ },
+ {
+  "file": "screen-1366.jpg",
+  "caption": "screen · 1366"
+ },
+ {
+  "file": "deliver-390.jpg",
+  "caption": "deliver · 390"
+ },
+ {
+  "file": "deliver-1366.jpg",
+  "caption": "deliver · 1366"
+ },
+ {
+  "file": "account-390.jpg",
+  "caption": "account · 390"
+ },
+ {
+  "file": "account-1366.jpg",
+  "caption": "account · 1366"
+ },
+ {
+  "file": "exec-390.jpg",
+  "caption": "exec · 390"
+ },
+ {
+  "file": "exec-1366.jpg",
+  "caption": "exec · 1366"
+ },
+ {
+  "file": "x-sheet-390.jpg",
+  "caption": "แผ่นล่างรายละเอียดออเดอร์"
+ },
+ {
+  "file": "x-machine-390.jpg",
+  "caption": "แตะเครื่อง = แผ่นล่าง"
+ },
+ {
+  "file": "x-confirm-390.jpg",
+  "caption": "แผ่นยืนยัน + ชิปเหตุผล"
+ },
+ {
+  "file": "x-whosave-390.jpg",
+  "caption": "ทีมผลิต: ใครบันทึก + PIN"
+ },
+ {
+  "file": "x-undo-390.jpg",
+  "caption": "แถบ ย้อน หลังบันทึก"
+ },
+ {
+  "file": "x-dark-390.jpg",
+  "caption": "โหมดมืด"
+ },
+ {
+  "file": "x-login-390.jpg",
+  "caption": "เข้าระบบ: แตะการ์ดชื่อ"
+ }
+]

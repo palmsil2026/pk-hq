@@ -1,0 +1,10 @@
+{
+  "name": "โรงขวด P&K",
+  "short_name": "P&K",
+  "lang": "th",
+  "start_url": "./",
+  "display": "standalone",
+  "background_color": "#FFF8F2",
+  "theme_color": "#B24A4F",
+  "icons": [{ "src": "assets/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

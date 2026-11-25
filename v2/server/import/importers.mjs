@@ -1,0 +1,292 @@
+// ============================================================
+//  ตัวนำเข้า (รันซ้ำได้ ไม่เบิ้ล) — แปลงหนึ่งหน้าของชีตเดิม → ops ของท่อเขียนกลาง          v2/server/import/importers.mjs
+//  หลัก: import_map(source, source_key) จำว่าแถวต้นทางไหนกลายเป็นแถวไหน + ลายนิ้วมือเนื้อแถว (ไม่เปลี่ยน = ข้าม)
+//        ลูกค้า/สินค้า/เครื่อง = เติมช่องที่ว่าง ไม่ทับของเดิม (PALM-WAY §5) · พนักงาน = ชีต Staff เป็นตัวจริง (ทับได้)
+//        บิลจากชีทบัญชี = ชีทบัญชีเป็นตัวจริง → แถวที่มาจากชีทบัญชีอัปเดตตามได้ · แถวที่ v2 ลงเองไม่แตะเด็ดขาด
+//        ออเดอร์/รอบผลิตเก่า = ประวัติ ติดป้าย src · ไม่สร้างงานผลิต/สกรีน ไม่แตะสต๊อก
+// ============================================================
+import { iso, thaiDay, specKey, specLabel, newId } from "../core.mjs";
+import { sha256Hex } from "../ticket.mjs";
+import { nameKey, splitCustomerText, matchCustomer, thaiDate, thaiTime, parseLegacyNote, intOf, satangOf, colOf } from "./legacy.mjs";
+import { PRODUCTS, MACHINES } from "./reference.generated.mjs";
+import { importLegacyRuns } from "../actions/prodLegacy.mjs";   // โมดูลทีมผลิตดูแล
+
+const DEPT_ROLE = { "ออฟฟิศ": "office", "ผลิต": "prod", "สกรีน": "screen", "ส่งของ": "deliver", "บัญชี": "account", "บริหาร": "exec" };
+export const rolesOfDept = d => [...new Set(String(d || "").split(/[,/\s]+/).map(x => DEPT_ROLE[x.trim()]).filter(Boolean))];
+const chunk = (a, n) => { const out = []; for (let i = 0; i < a.length; i += n) out.push(a.slice(i, i + n)); return out; };
+const rowHash = async r => (await sha256Hex(JSON.stringify(r))).slice(0, 24);
+const fill = (cur, inc) => { const set = {}; for (const [k, v] of Object.entries(inc)) if (v !== "" && v !== null && v !== undefined && (cur[k] === "" || cur[k] === null || cur[k] === undefined)) set[k] = v; return set; };
+const mapSql = (X, source, key, entity, id, hash) => ({ op: "raw", sql: `INSERT INTO import_map(source, source_key, entity, entity_id, hash, first_at, last_at) VALUES (?,?,?,?,?,?,?)
+  ON CONFLICT(source, source_key) DO UPDATE SET entity = excluded.entity, entity_id = excluded.entity_id, hash = excluded.hash, last_at = excluded.last_at`, args: [source, key, entity, id, hash, iso(X.now), iso(X.now)] });
+
+async function loadMap(X, source, keys) {
+  const m = new Map();
+  for (const part of chunk([...new Set(keys)], 90)) {
+    if (!part.length) continue;
+    (await X.db.all(`SELECT source_key, entity_id, hash, last_at FROM import_map WHERE source = ? AND source_key IN (${part.map(() => "?").join(",")})`, source, ...part)).forEach(r => m.set(r.source_key, r));
+  }
+  return m;
+}
+async function byIds(X, table, pk, ids) {
+  const m = new Map();
+  for (const part of chunk([...new Set(ids.filter(Boolean))], 90)) {
+    (await X.db.all(`SELECT * FROM ${table} WHERE ${pk} IN (${part.map(() => "?").join(",")})`, ...part)).forEach(r => m.set(String(r[pk]), r));
+  }
+  return m;
+}
+async function customerIndex(X) {
+  const [cs, al] = await X.db.reads([["SELECT id, name_key FROM customers WHERE merged_into IS NULL"], ["SELECT alias_key, customer_id FROM customer_aliases"]]);
+  return { byKey: new Map(cs.map(c => [c.name_key, c.id])), alias: new Map(al.map(a => [a.alias_key, a.customer_id])) };
+}
+const S = () => ({ inserted: 0, updated: 0, skipped: 0 });
+
+// ── พนักงาน (ชีต Staff ผ่านสะพาน — ไม่มี PIN มีแต่ลายนิ้วมือ) ─────────────────────────
+export async function importStaff(X, page) {
+  const st = S(), ops = [], problems = [];
+  const h = page.head;
+  const at = { id: h.indexOf("Staff_ID"), name: h.indexOf("ชื่อ"), nick: h.indexOf("ชื่อเล่น"), dept: h.indexOf("แผนก"), status: h.indexOf("สถานะ"), pf: h.indexOf("pf") };
+  const rows = page.rows.filter(r => String(r[at.id] || "").trim() && String(r[at.nick] || "").trim());
+  const cur = await byIds(X, "staff", "id", rows.map(r => String(r[at.id]).trim()));
+  const roleRows = await X.db.all("SELECT staff_id, role, active FROM staff_roles");
+  const pfAt = Number(page.pfAt) || X.now;
+  for (const r of rows) {
+    const id = String(r[at.id]).trim();
+    const status = ["ทำงาน", "พัก", "ลาออก"].includes(String(r[at.status]).trim()) ? String(r[at.status]).trim() : "พัก";   // สถานะว่าง/แปลก = เข้าไม่ได้ (กันแอบเพิ่มคนผ่านชีต)
+    const row = { name: String(r[at.name] || "").trim(), nick: String(r[at.nick]).trim(), dept_th: String(r[at.dept] || "").trim(), status };
+    const pf = String(r[at.pf] || "").trim();
+    const c = cur.get(id);
+    if (!c) {
+      ops.push({ op: "insert", table: "staff", row: { id, ...row, pin_fp: pf, pf_at: pf ? pfAt : 0, src: "pk:Staff" } });
+      st.inserted++;
+    } else {
+      const set = {};
+      for (const k of Object.keys(row)) if (c[k] !== row[k]) set[k] = row[k];
+      if (pf !== c.pin_fp && pfAt > Number(c.pf_at)) { set.pin_fp = pf; set.pf_at = pfAt; }   // PIN ในชีตเปลี่ยนหลังตั๋วล่าสุด = ตั๋วเก่าตาย
+      if (Object.keys(set).length) { ops.push({ op: "update", table: "staff", id, expect: c.version, before: c, set }); st.updated++; } else st.skipped++;
+    }
+    const want = rolesOfDept(row.dept_th);
+    for (const role of want) if (!roleRows.some(x => x.staff_id === id && x.role === role && x.active === 1)) ops.push({ op: "raw", sql: "INSERT INTO staff_roles(staff_id, role, active) VALUES (?,?,1) ON CONFLICT(staff_id, role) DO UPDATE SET active = 1", args: [id, role] });
+    for (const x of roleRows) if (x.staff_id === id && x.active === 1 && !want.includes(x.role)) ops.push({ op: "raw", sql: "UPDATE staff_roles SET active = 0 WHERE staff_id = ? AND role = ?", args: [id, x.role] });
+    if (!want.length && status === "ทำงาน") problems.push(row.nick + ": แผนก \"" + row.dept_th + "\" ไม่ตรงบทบาทใน v2 — เข้าแอป v2 ไม่ได้จนกว่าจะแก้แผนก");
+  }
+  return { ops, stats: st, problems };
+}
+
+// ── ลูกค้า: P&K_ลูกค้า (มีสาย/อำเภอ) · PKSystem Customers (มีรหัส) · ชื่อในชีทบัญชี ─────────────
+export async function importCustomers(X, page, source) {
+  const st = S(), ops = [], problems = [];
+  const h = page.head;
+  const isPk = source === "pk:Customers";
+  const at = isPk
+    ? { id: h.indexOf("Customer_ID"), name: h.indexOf("ชื่อลูกค้า"), phone: h.indexOf("เบอร์โทร"), address: h.indexOf("ที่อยู่"), credit: h.indexOf("เครดิต(วัน)"), note: h.indexOf("หมายเหตุ"), route: h.indexOf("เส้นทาง"), district: h.indexOf("อำเภอ"), sub: h.indexOf("ตำบล"), map: h.indexOf("พิกัด") }
+    : { id: -1, name: h.indexOf("ลูกค้า") >= 0 ? h.indexOf("ลูกค้า") : h.indexOf("รายชื่อลูกค้า"), phone: h.indexOf("เบอร์"), address: h.indexOf("ที่อยู่"), credit: -1, note: h.indexOf("หมายเหตุ"), route: h.indexOf("เส้นทาง-2"), district: h.indexOf("อำเภอ"), sub: h.indexOf("ตำบล"), map: h.indexOf("โลเคชั่นลิงก์") };
+  const g = (r, i) => (i >= 0 ? String(r[i] == null ? "" : r[i]).trim() : "");
+  const idx = await customerIndex(X);
+  const rows = page.rows.filter(r => g(r, at.name));
+  const keys = rows.map(r => (isPk ? g(r, at.id) || nameKey(g(r, at.name)) : nameKey(g(r, at.name))));
+  const map = await loadMap(X, source, keys);
+  const routes = new Set((await X.db.all("SELECT code FROM routes")).map(r => r.code));
+  const hashes = await Promise.all(rows.map(rowHash));
+  const touched = [];
+  rows.forEach((r, i) => { const m = map.get(keys[i]); const hit = m ? m.entity_id : (matchCustomer(g(r, at.name), idx) || {}).id; if (hit) touched.push(hit); });
+  const cur = await byIds(X, "customers", "id", touched);
+  const seenNew = new Map();
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], key = keys[i];
+    const m = map.get(key);
+    if (m && m.hash === hashes[i]) { st.skipped++; continue; }
+    const name = g(r, at.name);
+    const route = g(r, at.route).replace(/\.0$/, "");
+    if (route && !routes.has(route)) { routes.add(route); ops.push({ op: "raw", sql: "INSERT INTO routes(code, name, area, pos, src, created_at, updated_at) VALUES (?,?,?,?,?,?,?) ON CONFLICT(code) DO NOTHING", args: [route, "สาย " + route, /^2/.test(route) ? "ไกล" : /^1/.test(route) ? "ใกล้" : "", Number(route) || 0, source, iso(X.now), iso(X.now)] }); }
+    const credit = intOf(g(r, at.credit));
+    const inc = { phone: g(r, at.phone), address: g(r, at.address), district: g(r, at.district), subdistrict: g(r, at.sub), route_code: route || null, map_url: g(r, at.map), note: g(r, at.note), credit_days: credit && credit > 0 && credit <= 365 ? credit : null };
+    let id = m ? m.entity_id : null;
+    if (!id) { const hit = matchCustomer(name, idx); if (hit) id = hit.id; }
+    if (!id && isPk && g(r, at.id) && !cur.has(g(r, at.id))) {
+      const ex = await X.db.first("SELECT id FROM customers WHERE id = ?", g(r, at.id));
+      if (ex) id = ex.id;
+    }
+    if (id && cur.has(id)) {
+      const set = fill(cur.get(id), inc);
+      if (set.credit_days === null) delete set.credit_days;
+      if (Object.keys(set).length) { ops.push({ op: "update", table: "customers", id, expect: cur.get(id).version, before: cur.get(id), set, undo: false }); cur.get(id).version++; Object.assign(cur.get(id), set); st.updated++; } else st.skipped++;
+    } else if (id && seenNew.has(id)) {
+      st.skipped++;
+    } else {
+      id = id || (isPk && g(r, at.id)) || "C" + newId("", X.now);
+      const row = { id, name, name_key: nameKey(name), src: source, ...Object.fromEntries(Object.entries(inc).filter(([, v]) => v !== "" && v !== null)) };
+      ops.push({ op: "insert", table: "customers", row, undo: false });
+      idx.byKey.set(row.name_key, id); seenNew.set(id, true); st.inserted++;
+    }
+    ops.push(mapSql(X, source, key, "customers", id, hashes[i]));
+  }
+  return { ops, stats: st, problems };
+}
+
+// ── สินค้า/SKU จากทะเบียนใน repo (docs/products/products-master.csv) ───────────────
+const CAT_TYPE = { BOT: "ขวด", TNK: "ถัง", CAP: "ฝา" };
+export async function importProducts(X) {
+  const st = S(), ops = [];
+  const cur = await byIds(X, "products", "id", PRODUCTS.map(p => p.SKU));
+  for (const p of PRODUCTS) {
+    const type = /PREFORM/.test(p.SKU) ? "พรีฟอร์ม" : /^PK-FLM-NECK/.test(p.SKU) ? "ฟิล์มหุ้มคอ" : /^PK-FLM-PACK/.test(p.SKU) ? "ฟิล์มแพ็คโหล" : CAT_TYPE[p["หมวด"]] || null;
+    const shape = ["เรียบ", "เพชร", "MK", "เหลี่ยม"].includes(p["ทรง/แบบ"]) ? p["ทรง/แบบ"] : "";
+    const it = { type: type || "", size: type === "ขวด" ? p["ขนาด"] : "", neck: "", shape, color: p["สี"] === "ตามแบรนด์" ? "" : p["สี"] };
+    const perPack = intOf((/^(\d[\d,]*)/.exec(p["จำนวนต่อหน่วยใหญ่"] || "") || [])[1]) || 0;
+    const row = {
+      id: p.SKU, category: p["หมวด"], name: p["ชื่อสินค้า"], type, size: it.size, neck: "", shape, color: it.color, spec_key: type ? specKey(it) : "",
+      sale_unit: p["หน่วยขาย"] || "ชิ้น", per_pack: perPack, data_status: p["สถานะข้อมูล"] === "ยืนยันแล้ว" ? "ยืนยันแล้ว" : "รอยืนยัน",
+      note: [p["หมายเหตุ"], p["ราคาอ้างอิง(บาท)"] ? "ราคาอ้างอิงจากบิลจริง " + p["ราคาอ้างอิง(บาท)"] + " บ. (ไม่ใช่ราคาตั้ง — ราคาตั้งโดยประธานเท่านั้น)" : "", p["ที่มา"] ? "ที่มา: " + p["ที่มา"] : ""].filter(Boolean).join(" · "),
+      src: "ref:products",
+    };
+    const c = cur.get(p.SKU);
+    if (!c) { ops.push({ op: "insert", table: "products", row, undo: false }); st.inserted++; continue; }
+    const set = fill(c, row);
+    if (c.src === "ref:products" && c.data_status !== row.data_status) set.data_status = row.data_status;   // ทะเบียนยืนยันเพิ่ม = ตามได้
+    if (Object.keys(set).length) { ops.push({ op: "update", table: "products", id: p.SKU, expect: c.version, before: c, set, undo: false }); st.updated++; } else st.skipped++;
+  }
+  return { ops, stats: st, problems: [] };
+}
+
+// ── เครื่องจักร + ตำแหน่งในผัง (v2/db/reference/factory.json) ────────────────────────
+export async function importMachines(X) {
+  const st = S(), ops = [];
+  const cur = await byIds(X, "machines", "id", MACHINES.map(m => m.id));
+  for (const m of MACHINES) {
+    const row = { id: m.id, name: m.name, kind: m.kind, plant: m.plant, pos_x: m.pos_x, pos_y: m.pos_y, w: m.w, h: m.h, makes: m.makes, rating: m.rating, legacy_name: m.legacy_name, note: m.note, src: "ref:factory",
+      map_label: m.map_label || "", sub: m.sub || "", tracked: m.tracked ? 1 : 0 };   // 3 ช่องหลัง = ผังจริง (โมดูลผลิต 0100)
+    const c = cur.get(m.id);
+    if (!c) { ops.push({ op: "insert", table: "machines", row, undo: false }); st.inserted++; continue; }
+    const set = fill(c, row);
+    // ตำแหน่งในผังของเครื่องที่ยังไม่มีใครย้ายในแอป (src ยังเป็นทะเบียน) = ตามทะเบียน
+    if (c.src === "ref:factory") for (const k of ["pos_x", "pos_y", "w", "h", "plant", "name", "kind", "map_label", "sub", "tracked"]) if (c[k] !== row[k]) set[k] = row[k];
+    if (Object.keys(set).length) { ops.push({ op: "update", table: "machines", id: m.id, expect: c.version, before: c, set, undo: false }); st.updated++; } else st.skipped++;
+  }
+  return { ops, stats: st, problems: [] };
+}
+
+// ── ออเดอร์เก่า (ชีต "Order" ของ AppSheet) — ประวัติ · ซิงก์ทางเดียวเป็นรอบ ๆ ได้ ─────────────────────
+//   แอปเดิมยังมีคนลงทุกวัน → รันซ้ำทุกวัน: แถวใหม่ = เพิ่ม · แถวเดิมที่เนื้อเปลี่ยน = ตามทั้งใบ (หัว + รายการ + ลูกค้า)
+//   · ออเดอร์ที่มีคนแก้ในแอปใหม่แล้ว (updated_at หลังรอบนำเข้าล่าสุด) = ไม่ทับ + บอกในผลนำเข้า (แก้ใน v2 ชนะ)
+//   · ไม่สร้างงานผลิต/สกรีน · ไม่แตะสต๊อก · ไม่เขียนกลับชีตเดิม · src = legacy:order
+//   · เริ่มกลางชีตได้ (cursor = แถวที่ n) — รอบเร็วรายวันอ่านเฉพาะหาง ๆ ชีต รอบเต็มเป็นครั้งคราว (แถวเก่าที่ถูกแก้)
+function legacyOrderRows(r, g, id, X, ctx) {
+  const day = thaiDate(g(r, "วันที่สั่งซื้อ"));
+  const n = parseLegacyNote(g(r, "หมายเหตุ"));
+  const status = g(r, "สถานะ") === "ยกเลิก" ? "ยกเลิก" : "ส่งแล้ว";   // แบบเดียวกับ importLegacyOrders ใน gas/Code.gs (ประวัติ)
+  const sp = splitCustomerText(g(r, "ลูกค้า"));
+  const type = g(r, "ประเภทสินค้า"), size = g(r, "ขนาด");
+  const it = { type, size, neck: g(r, "คอขวด"), shape: g(r, "รูปทรง"), color: g(r, "สี") };
+  const bags = intOf(g(r, "จำนวน (ถุง)")) || 0, extra = intOf(g(r, "และซื้อย่อย (ใบ)")) || 0, piece = intOf(g(r, "จำนวน (ชิ้น)")) || 0;
+  let total = intOf(g(r, "รวมทั้งหมด (ใบ)")) || 0;
+  let per = ctx.sizes.get(type + "|" + size) || 0;
+  if (!total) total = piece || (bags && per ? bags * per + extra : extra);
+  // ตัวเลขต้นทางไม่ลงตัว (ถุง × ใบต่อถุง ≠ รวม) = เก็บรวมตามจริง ไม่เดา · ถุงไปอยู่ในหมายเหตุรายการ
+  let itBags = bags, itNote = "";
+  if (bags && per && total !== bags * per + extra) { itNote = "ต้นทาง: " + bags + " ถุง + " + extra + " ใบ (รวมที่จดไว้ " + total + ")"; itBags = 0; per = 0; }
+  if (bags && !per) { itNote = "ต้นทาง: " + bags + " ถุง (ไม่รู้ใบต่อถุง)"; itBags = 0; }
+  const priceSatang = satangOf(g(r, "ราคาต่อหน่วย"));
+  const order = {
+    order_day: day, customer_text: g(r, "ลูกค้า"), brand: g(r, "แบรนด์") || sp.brand,
+    taker_staff_id: ctx.staffByNick.get(g(r, "ผู้รับออเดอร์")) || null, taker_text: g(r, "ผู้รับออเดอร์"),
+    due_day: thaiDate(g(r, "ส่งภายในวันที่")), status, purchase_type: ["ขายราคาโรงงาน", "ขายหน้าร้าน"].includes(g(r, "ประเภทการซื้อ")) ? g(r, "ประเภทการซื้อ") : "",
+    pay_status: n.pay || "", design_status: n.design || "", block_fee_satang: n.blockFeeBaht ? n.blockFeeBaht * 100 : null, urgent: n.urgent ? 1 : 0,
+    has_screen: g(r, "สีสกรีน") ? 1 : 0, screen_team: g(r, "ทีมสกรีน"), done_bags: n.doneBags || null, pending_bags: n.pendingBags || null,
+    pending_reason: n.pendingReason || "", finished_day: n.finished || "", delivered_day: status === "ส่งแล้ว" ? n.finished || "" : "",
+    total_satang: priceSatang !== null && total ? Math.round(priceSatang * total) : null,
+    note: [n.rest, sp.note].filter(Boolean).join(" · "),
+  };
+  const item = { ...it, screen_color: g(r, "สีสกรีน"), cap_color: g(r, "พร้อมฝาสี"), spec_key: specKey(it, ctx.types.get(type)), label: specLabel(it),
+    bags: itBags, per_bag: itBags ? per : 0, extra_pcs: itBags ? extra : 0, qty_pcs: total, price_satang: priceSatang, note: itNote };
+  return { day, sp, order, item };
+}
+export async function importLegacyOrders(X, page) {
+  const st = S(), ops = [], problems = [];
+  const h = page.head, c = n => h.indexOf(n);
+  const g = (r, n) => { const i = c(n); return i < 0 ? "" : String(r[i] == null ? "" : r[i]).trim(); };
+  const rows = page.rows.filter(r => g(r, "ID") && g(r, "ลูกค้า"));
+  const ids = rows.map(r => "เก่า-" + g(r, "ID"));
+  const map = await loadMap(X, "legacy:order", ids);
+  const cur = await byIds(X, "orders", "id", ids);
+  const curItems = await byIds(X, "order_items", "id", ids.map(id => id + "-1"));
+  const idx = await customerIndex(X);
+  const ctx = {
+    sizes: new Map((await X.db.all("SELECT type, size, per_bag FROM type_sizes")).map(s => [s.type + "|" + s.size, s.per_bag])),
+    types: new Map((await X.db.all("SELECT code, axes FROM product_types")).map(t => [t.code, t.axes])),
+    staffByNick: new Map((await X.db.all("SELECT id, nick FROM staff")).map(s => [s.nick, s.id])),
+  };
+  const hashes = await Promise.all(rows.map(rowHash));
+  let unmatched = 0;
+  const customerOf = (text, sp) => {
+    const hit = matchCustomer(sp.name, idx);
+    if (!hit) {
+      const id = "C" + newId("", X.now);
+      ops.push({ op: "insert", table: "customers", row: { id, name: sp.name, name_key: nameKey(sp.name), needs_review: 1, src: "legacy:order" }, undo: false });
+      idx.byKey.set(nameKey(sp.name), id);
+      unmatched++;
+      return id;
+    }
+    if (hit.how !== "ตรงตัว" || nameKey(text) !== nameKey(sp.name)) {
+      ops.push({ op: "raw", sql: "INSERT INTO customer_aliases(alias_key, alias, customer_id, src, created_at) VALUES (?,?,?,?,?) ON CONFLICT(alias_key) DO NOTHING", args: [nameKey(text), text, hit.id, "legacy:order", iso(X.now)] });
+    }
+    return hit.id;
+  };
+  for (let i = 0; i < rows.length; i++) {
+    const r = rows[i], id = ids[i];
+    const m = map.get(id);
+    if (m && m.hash === hashes[i]) { st.skipped++; continue; }
+    const L = legacyOrderRows(r, g, id, X, ctx);
+    if (!L.day) { problems.push("ออเดอร์ " + g(r, "ID") + ": วันที่สั่งซื้ออ่านไม่ได้ (\"" + g(r, "วันที่สั่งซื้อ") + "\") — ข้าม"); st.skipped++; continue; }
+    const o = cur.get(id);
+    if (o) {
+      // แถวเดิมในแอปเดิมถูกแก้ → ตามทั้งใบ · เว้นแต่มีคนแก้ในแอปใหม่หลังรอบนำเข้าล่าสุด (แก้ใน v2 ชนะ ไม่ทับ)
+      const touched = o.src !== "legacy:order" || (m && o.updated_at > m.last_at);
+      if (touched) {
+        problems.push("ออเดอร์ " + g(r, "ID") + " (" + (o.customer_text || "") + "): แอปเดิมแก้ แต่มีคนแก้ในแอปใหม่แล้ว — ไม่ทับ ตรวจสองที่ให้ตรงกันเอง");
+        st.skipped++;
+        ops.push({ op: "raw", sql: "UPDATE import_map SET hash = ? WHERE source = ? AND source_key = ?", args: [hashes[i], "legacy:order", id] });   // ไม่ขยับ last_at — แก้ใน v2 ยังชนะต่อไป
+        continue;
+      }
+      const set = {};
+      const want = { ...L.order };
+      if (nameKey(o.customer_text) !== nameKey(want.customer_text)) want.customer_id = customerOf(want.customer_text, L.sp);
+      for (const k of Object.keys(want)) if (String(want[k] ?? "") !== String(o[k] ?? "")) set[k] = want[k];
+      if (Object.keys(set).length) ops.push({ op: "update", table: "orders", id, expect: o.version, before: o, set, undo: false });
+      const ci = curItems.get(id + "-1");
+      if (ci) {
+        const iset = {};
+        for (const k of Object.keys(L.item)) if (String(L.item[k] ?? "") !== String(ci[k] ?? "")) iset[k] = L.item[k];
+        if (Object.keys(iset).length) ops.push({ op: "update", table: "order_items", id: ci.id, expect: ci.version, before: ci, set: iset, undo: false });
+      }
+      if (Object.keys(set).length || ops.some(x => x.table === "order_items" && x.id === id + "-1")) st.updated++; else st.skipped++;
+      ops.push(mapSql(X, "legacy:order", id, "orders", id, hashes[i]));
+      continue;
+    }
+    const custId = customerOf(L.order.customer_text, L.sp);
+    ops.push({ op: "insert", table: "orders", undo: false, row: { id, ...L.order, customer_id: custId, src: "legacy:order" } });
+    ops.push({ op: "insert", table: "order_items", undo: false, row: { id: id + "-1", order_id: id, line_no: 1, ...L.item, src: "legacy:order" } });
+    ops.push(mapSql(X, "legacy:order", id, "orders", id, hashes[i]));
+    st.inserted++;
+  }
+  if (unmatched) ops.push({ op: "flag", kind: "ลูกค้าจับคู่ไม่ได้", team: "office", title: "ลูกค้าจากออเดอร์เก่าจับคู่ทะเบียนไม่ได้", detail: "สร้างเป็นลูกค้า \"รอตรวจ\" ไว้ก่อน — ต้องรวมกับรายเดิม/ยืนยันเป็นรายใหม่", dedupe_key: "import:legacy:order:unmatched" });
+  if (unmatched) problems.push("ลูกค้าจับคู่ไม่ได้ " + unmatched + " ราย (สร้างเป็น \"รอตรวจ\")");
+  return { ops, stats: st, problems };
+}
+
+// ── รอบผลิตเก่า (Stock Management › ProductionLog) — ย้ายไปโมดูลทีมผลิต (หัวคอลัมน์จริง · ข้ามเที่ยงคืน/พิมพ์ผิด · ซิงก์ซ้ำได้) ──
+//    ดู server/actions/prodLegacy.mjs
+
+// ── บิลจากชีท "ระบบบัญชี" — ย้ายไป ./acct.mjs (โมดูลบัญชีดูแล: เลขกระดาษ · บิลซ้ำกับในแอป · บิลที่หายจากชีท) ──
+export { importAcct } from "./acct.mjs";
+import { importAcct } from "./acct.mjs";
+
+export const SOURCES = {
+  "ref:products": { label: "ทะเบียนสินค้า (ใน repo)", local: true, run: importProducts },
+  "ref:machines": { label: "ทะเบียนเครื่องจักร + ผัง (ใน repo)", local: true, run: importMachines },
+  "staff": { label: "พนักงาน (ชีต Staff — ไม่มี PIN)", run: importStaff },
+  "legacy:customer": { label: "ทะเบียนลูกค้าเดิม (P&K_ลูกค้า)", run: (X, p) => importCustomers(X, p, "legacy:customer") },
+  "pk:Customers": { label: "ลูกค้าในระบบปัจจุบัน (PKSystem)", run: (X, p) => importCustomers(X, p, "pk:Customers") },
+  "legacy:order": { label: "ออเดอร์เก่า (AppSheet Order)", run: importLegacyOrders },
+  "legacy:stock:ProductionLog": { label: "รอบผลิตเก่า (Stock Management)", run: importLegacyRuns },
+  "acct": { label: "บิลจากชีทระบบบัญชี (อ่านอย่างเดียว)", run: importAcct },
+};

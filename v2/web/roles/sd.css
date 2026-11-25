@@ -1,0 +1,108 @@
+/* ═══════════════════════════════════════════════════════════════════════
+   หน้าทีมสกรีนสี + ส่งของ (เฉพาะสองหน้านี้ — ใช้ token จาก tokens.css · รหัสสีมีเฉพาะ "กระดาษ" ใบส่งของที่ต้องขาวเสมอ)      v2/web/roles/sd.css
+   ═══════════════════════════════════════════════════════════════════════ */
+
+/* การ์ดที่มีส่วนหัวแตะได้ + ปุ่มงานด้านล่าง (ไม่ซ้อนปุ่มในปุ่ม) */
+.card.job { padding: 0; gap: 0; overflow: hidden; }
+.cardhead { display: grid; gap: var(--sp-2); width: 100%; padding: var(--sp-3) var(--sp-4); border: 0; background: none; text-align: left; color: var(--ink); min-height: var(--tap); }
+.cardhead:hover { background: var(--surface-2); }
+.card.job .btns { padding: 0 var(--sp-3) var(--sp-3); }
+.card.late { border-color: var(--bad); }
+.card.flat { box-shadow: none; background: var(--surface-2); }
+.jobbtns .btn { padding: 0 6px; min-width: 0; }
+.teamgrid { grid-auto-flow: row; grid-template-columns: repeat(auto-fit, minmax(96px, 1fr)); }
+.teamgrid .btn { min-height: var(--tap-lg); font-size: 18px; }
+.scr { display: inline-flex; align-items: center; gap: 4px; font-size: 14px; color: var(--ink-2); }
+.teamsum { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: var(--sp-2); }
+.tsum { gap: 2px; padding: var(--sp-2) var(--sp-3); }
+.teamfilter { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 2px; scrollbar-width: none; }
+.teamfilter .chip { flex: none; min-height: var(--tap); }
+details.more > summary { list-style: none; }
+details.more > summary::-webkit-details-marker { display: none; }
+details.more[open] > summary { margin-bottom: var(--sp-2); }
+.chip-sub { display: block; font: 500 12px/1.2 var(--font-body); color: var(--ink-2); }
+.chip:has(.chip-sub) { display: inline-grid; align-content: center; padding-top: 4px; padding-bottom: 4px; }
+
+/* ── ทำบางส่วน (งานหลายวัน) ── */
+.prog { display: grid; gap: 4px; }
+.prog .bar { height: 8px; border-radius: var(--r-full); background: var(--sunken); overflow: hidden; }
+.prog .bar i { display: block; height: 100%; border-radius: var(--r-full); background: var(--brand); }
+.card.job .partline { padding: 0 var(--sp-3) var(--sp-3); margin-top: calc(-1 * var(--sp-1)); }
+.partbtn.btn.block { min-height: var(--tap); font-size: 15px; color: var(--ink-2); border-style: dashed; }
+.bagfields { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: var(--sp-2); }
+.numdisp.pick { width: 100%; min-height: var(--tap-lg); border-color: var(--edge); box-shadow: none; color: var(--ink); font: inherit; text-align: left; flex-wrap: wrap; }
+.numdisp.pick .v { font: 800 28px var(--font-display); }
+.numdisp.pick[aria-pressed="true"] { border-color: var(--focus); box-shadow: 0 0 0 3px var(--brand-soft); }
+.partrow { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0 var(--sp-2); padding: 6px 0; border-bottom: 1px solid var(--line); font-size: 15px; }
+.partrow .tm { color: var(--ink-2); white-space: nowrap; }
+.partrow .muted { grid-column: 2; }
+.partlist { display: grid; gap: var(--sp-2); }
+.partcard { gap: 6px; }
+.partcard .btn { justify-self: start; }
+
+/* ── เส้นทาง (timeline วันส่ง → สาย → การ์ดเล็ก) ── */
+.tl > section.nodate::before { background: var(--ink-2); }
+.tl > section.today::before { background: var(--warn); }
+.tl .dayhead { display: flex; align-items: baseline; gap: var(--sp-2); flex-wrap: wrap; }
+.tl .dayhead b { font: 700 var(--fs-h3) var(--font-display); }
+.tl .late .dayhead b { color: var(--bad); }
+.daybody { display: grid; gap: var(--sp-3); }
+.routeblk { display: grid; gap: var(--sp-2); }
+.routeblk > .lbl { display: flex; align-items: center; gap: 6px; }
+.stops { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 240px), 1fr)); }
+.stop { display: grid; gap: 6px; padding: var(--sp-2) var(--sp-3); min-height: 64px; }
+.stop .name { font-size: 16px; }
+.stop.s-truck { border-left: 4px solid var(--brand); }
+.stop.s-fail { border-left: 4px solid var(--bad); }
+.stop.s-ready { border-left: 4px solid var(--ok); }
+.stop.s-wait { border-left: 4px solid var(--line); }
+
+/* ── บนรถ: มองเป็นรถก่อน ── */
+.truckblk { display: grid; gap: var(--sp-2); }
+.truckhead { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; padding: var(--sp-2) var(--sp-3); border-radius: var(--r-md); background: var(--brand-soft); color: var(--brand-ink); }
+.truckhead b { font: 800 20px var(--font-display); }
+.truckhead .btn { margin-left: auto; min-height: var(--tap); background: var(--surface); }
+.truckstops { display: grid; gap: var(--sp-2); grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); }
+.itemrow { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px var(--sp-2); align-items: center; padding: var(--sp-2) 0; border-bottom: 1px solid var(--line); }
+.itemrow:last-child { border-bottom: 0; }
+.itemrow .sub { grid-column: 1 / -1; font-size: 14px; color: var(--ink-2); }
+.itemrow .btn { min-height: var(--tap); }
+.loadrow { display: flex; align-items: center; gap: var(--sp-2); flex-wrap: wrap; font-size: 15px; }
+.daynav { display: grid; grid-template-columns: var(--tap) minmax(0, 1fr) var(--tap); align-items: center; gap: var(--sp-2); }
+.daynav .t { text-align: center; font: 700 var(--fs-h3) var(--font-display); }
+.daynav .iconbtn[disabled] { opacity: .35; }
+.vchips .chip { min-width: 72px; font-size: 17px; }
+.step { display: grid; gap: var(--sp-2); }
+.summary { font: 700 16px/1.5 var(--font-display); }
+
+@media (min-width: 1100px) {
+  .main .jobs, .main .partlist { grid-template-columns: repeat(auto-fill, minmax(380px, 1fr)); align-items: start; }
+  .daybody { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: var(--sp-3) var(--sp-4); align-items: start; }
+  .daybody .stops { grid-template-columns: minmax(0, 1fr); }
+}
+
+/* ── ใบส่งของ (กระดาษขาว อ่านง่าย — สีกระดาษคงที่ทั้งโหมดสว่าง/มืด) ── */
+.paper { background: var(--paper, #fff); color: var(--paper-ink, #1f1718); border: 1px solid var(--line); border-radius: var(--r-md); padding: var(--sp-4); display: grid; gap: var(--sp-3); font-size: 15px; }
+.paper header { display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 2px var(--sp-3); align-items: baseline; border-bottom: 3px solid var(--brand); padding-bottom: var(--sp-2); }
+.paper header .co { font: 800 18px var(--font-display); }
+.paper header h3 { grid-column: 2; grid-row: 1; font-size: 20px; }
+.paper .meta { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 2px var(--sp-3); }
+.paper .meta .wide { grid-column: 1 / -1; }
+.paper .meta span { color: #5c4a4c; }
+.paper table { width: 100%; border-collapse: collapse; }
+.paper th, .paper td { text-align: left; padding: 6px 4px; border-bottom: 1px solid #e7dcdb; vertical-align: top; }
+.paper th { background: #f3ecea; font: 700 14px var(--font-display); }
+.paper .n { text-align: right; white-space: nowrap; font-weight: 700; }
+.paper .sign { display: grid; grid-template-columns: 1fr 1fr; gap: var(--sp-5); padding-top: var(--sp-6); text-align: center; color: #5c4a4c; }
+.paper .sign div { border-top: 1px solid #5c4a4c; padding-top: 4px; }
+.paper .ref { color: #5c4a4c; }
+#sd-print { display: none; }
+@media print {
+  body.sd-printing > *:not(#sd-print) { display: none !important; }
+  body.sd-printing #sd-print { display: block; }
+  body.sd-printing #sd-print .paper { border: 0; padding: 0; font-size: 14pt; }
+  @page { margin: 14mm; }
+}
+
+/* แถบ "ย้อน" ต้องไม่บังปุ่มในแผ่นที่เปิดอยู่ — ระหว่างมีแผ่นเปิด ย้ายแถบขึ้นไปบนจอ */
+body:has(.sheet.on) .snack { top: calc(var(--sp-3) + env(safe-area-inset-top)); bottom: auto; }
