@@ -9,7 +9,7 @@ import * as api from "./api.js";
 import * as ui from "./ui.js";
 const { h, icon } = ui;
 
-export const WEB_VERSION = "2026-11-25a";   // ขยับทุกครั้งที่แก้หน้าเว็บ v2 (ต้องตรงกับ version.json)
+export const WEB_VERSION = "2026-11-25b";   // ขยับทุกครั้งที่แก้หน้าเว็บ v2 (ต้องตรงกับ version.json)
 const ROLE_FILES = { office: "office", prod: "prod", screen: "screen", deliver: "deliver", account: "account", exec: "exec" };
 const ROLE_TH = { office: "ออฟฟิศ", prod: "ทีมผลิต", screen: "ทีมสกรีนสี", deliver: "ส่งของ", account: "บัญชี", exec: "ประธาน" };
 

@@ -1,3 +1,11 @@
+/* ใช้พื้นขาวทั้งหน้าและแถบหัวเฉพาะเมนูจัดสายส่งในโหมดสว่าง */
+:root:has(.nav > a[data-key="plan"][aria-current="page"]) {
+  --bg: light-dark(var(--surface), var(--neutral-10));
+  --surface-2: light-dark(#f6f7f8, var(--neutral-20));
+  --sunken: light-dark(#eef0f2, var(--neutral-10));
+  --line: light-dark(#e1e4e8, var(--neutral-25));
+}
+
 .rp { gap: var(--sp-4); }
 .rp-overview, .rp-work { gap: var(--sp-3); }
 .rp-toolbar, .rp-status, .rp-legend, .rp-publication, .rp-pins {
