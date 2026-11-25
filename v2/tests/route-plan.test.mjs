@@ -55,6 +55,8 @@ test("ปฏิทิน 7 วัน: งวดส่งจริงทุกว
   assert.equal(d.days[1].stops.find(s => s.order === city).area.daily, true);
   const rounds = d.days.flatMap(day => day.stops).filter(s => s.order === fixed);
   assert.deepEqual(rounds.map(s => [s.seq, s.day, s.lines[0].pcs, s.lines[0].ready]), [[2, day(2), 600, 200], [3, day(4), 400, 0]]);
+  const { size, neck, shape, color } = rounds[0].lines[0];
+  assert.deepEqual({ size, neck, shape, color }, { size: BOTTLE.size, neck: BOTTLE.neck, shape: BOTTLE.shape, color: BOTTLE.color });
   assert.deepEqual(rounds[0].area, { code: "test-route", name: "เถิน", daily: false, suggested: true });
   assert.deepEqual(d.tray.map(s => s.order), [reserve]);
   assert.ok(!JSON.stringify(d).includes(held));

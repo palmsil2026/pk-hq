@@ -9,12 +9,34 @@ const stopKey = stop => stop.order + ":" + stop.round;
 const btn = (style, label, onclick, attrs = {}) => h("button." + style, { type: "button", onclick, ...attrs }, label);
 const number = n => ui.fmt(n);
 
-function amount(line, pcs = line.pcs, size = "") {
+function amount(line, pcs = line.pcs, separateLoose = false) {
   const per = line.per_bag, unit = line.piece_unit || "ใบ";
   const bags = per ? Math.floor(pcs / per) : 0;
-  const remainder = per ? pcs % per : pcs;
-  return bags ? ui.qty(size, bags, "ถุง" + (remainder ? " + " + number(remainder) + " " + unit : ""), number(pcs) + " " + unit)
-    : ui.qty(size, pcs, unit);
+  if (!bags) return ui.qty("", pcs, unit);
+
+  const remainder = pcs % per;
+  const loose = remainder ? "+ " + number(remainder) + " " + unit : "";
+  const badge = ui.qty("", bags, separateLoose || !loose ? "ถุง" : "ถุง " + loose, number(pcs) + " " + unit);
+  return separateLoose && loose ? h("span.rp-spec-qty", badge, h("small", loose)) : badge;
+}
+
+function itemSpec(line) {
+  const bottle = ["ขวด", "ถัง"].includes(line.type);
+  // ข้อมูลแคชจากรุ่นก่อนมีชื่อเต็ม แต่ยังไม่มีคอและทรงแยกช่อง
+  const split = line.type && line.size && typeof line.neck === "string" && typeof line.shape === "string";
+  const size = split ? line.size.replace(/^(\d+(?:\.\d+)?)\s*ml$/i, "$1 มล.") : "";
+  let title = line.label;
+  if (split) {
+    title = line.type;
+    if (line.type === "ขวด") title = size;
+    if (line.type === "ถัง") title = "ถัง " + size;
+  }
+  const traits = split ? [bottle ? "" : size, line.neck, line.shape, line.color].filter(Boolean) : [];
+  const extras = [line.screen && "สกรีน " + line.screen, line.cap_color && "ฝา " + line.cap_color].filter(Boolean);
+  return h("span.rp-spec",
+    h("span.rp-spec-top", h("strong.rp-spec-title", title), amount(line, line.pcs, true)),
+    traits.length ? h("span.rp-spec-meta", traits.join(" · ")) : null,
+    extras.length ? h("span.rp-spec-extra", extras.join(" · ")) : null);
 }
 
 function inPublished(board, day) {
@@ -76,7 +98,7 @@ function stopSheet(ctx, board, stop) {
     h("p.muted", [stop.area.name, stop.area.suggested && "สายแนะนำ", stop.totalRounds > 1 && ("งวด " + stop.seq + "/" + stop.totalRounds),
       stop.day && ("นัด " + thDayLong(stop.day))].filter(Boolean).join(" · ")),
     h("div.stack", stop.lines.map(line => h("div.rp-detail",
-      h("div.rp-line", h("span", labelOf(line)), amount(line)),
+      itemSpec(line),
       line.ready ? ui.pill("พร้อม " + number(line.ready) + " " + line.piece_unit, "ok") : null,
       line.needsScreen ? ui.pill("ต้องสกรีน " + number(line.needsScreen) + " " + line.piece_unit, "warn") : null,
       line.running ? ui.pill("รอรอบผลิต " + number(line.running) + " " + line.piece_unit, "warn") : null,
@@ -123,7 +145,7 @@ function publish(ctx, board, button) {
 function stopCard(stop, open, drag) {
   const card = btn("card.rp-stop", [
     h("b.rp-customer", stop.customer),
-    stop.lines.map(line => h("span.rp-line", h("span", labelOf(line)), amount(line))),
+    stop.lines.map(itemSpec),
   ], () => open(stop), { draggable: "true", "aria-label": stop.customer + (stop.tone ? " · " + toneText[stop.tone] : "") });
   card.dataset.tone = stop.tone || "";
   card.addEventListener("dragstart", e => {

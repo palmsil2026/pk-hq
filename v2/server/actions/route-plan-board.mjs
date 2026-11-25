@@ -132,8 +132,8 @@ function collectStops({ orders, items, rounds, loads, jobs, areas, learned, end 
         const truck = Math.min(pcs, remainingOnTruck.get(i.id));
         remainingOnTruck.set(i.id, remainingOnTruck.get(i.id) - truck);
         return {
-          spec_key: i.spec_key, label: itemName(i), type: i.type, size: i.size, cap_color: i.cap_color, per_bag: i.per_bag, piece_unit: i.piece_unit || "ใบ",
-          color: i.color, screen: screened ? screenColorOf(i, job) : "", plainKey: plainKey(i),
+          spec_key: i.spec_key, label: itemName(i), type: i.type, size: i.size, neck: i.neck, shape: i.shape, color: i.color,
+          cap_color: i.cap_color, per_bag: i.per_bag, piece_unit: i.piece_unit || "ใบ", screen: screened ? screenColorOf(i, job) : "", plainKey: plainKey(i),
           key: screened ? screenKey(i, job) : plainKey(i), pcs, truck,
         };
       }).filter(i => i.pcs);
