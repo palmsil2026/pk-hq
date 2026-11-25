@@ -103,6 +103,10 @@ for (const viewport of [{ width: 390, height: 844 }, { width: 1366, height: 768 
 
       await page.locator(".rp-overview").getByRole("button", { name: "ประกาศแผน", exact: true }).click();
       await dialog.getByRole("button", { name: "ประกาศแผน", exact: true }).click();
+      // หัวหน้าทีมยืนยันด้วย PIN (มีหัวหน้าคนเดียว = ขึ้นชื่อให้เลย)
+      await dialog.getByText("ใส่ PIN ของ จอย").waitFor();
+      for (const digit of "1234") await dialog.getByRole("button", { name: digit, exact: true }).click();
+      await dialog.getByRole("textbox", { name: "ข้อความแผนสายส่ง" }).waitFor();
       const share = await dialog.getByRole("textbox", { name: "ข้อความแผนสายส่ง" }).inputValue();
       assert.match(share, /แผนสายส่ง/);
       assert.match(share, /ต้องเป่าเพิ่ม/);

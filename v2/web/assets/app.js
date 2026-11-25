@@ -9,7 +9,7 @@ import * as api from "./api.js";
 import * as ui from "./ui.js";
 const { h, icon } = ui;
 
-export const WEB_VERSION = "2026-11-26a";   // ขยับทุกครั้งที่แก้หน้าเว็บ v2 (ต้องตรงกับ version.json)
+export const WEB_VERSION = "2026-11-26b";   // ขยับทุกครั้งที่แก้หน้าเว็บ v2 (ต้องตรงกับ version.json)
 const ROLE_FILES = { office: "office", prod: "prod", screen: "screen", deliver: "deliver", account: "account", exec: "exec" };
 const ROLE_TH = { office: "ออฟฟิศ", prod: "ทีมผลิต", screen: "ทีมสกรีนสี", deliver: "ส่งของ", account: "บัญชี", exec: "ประธาน" };
 
@@ -68,33 +68,39 @@ function askPin(p) {
 }
 
 // ── ทีมผลิต: "ใครบันทึก" + PIN ทุกครั้งที่กดบันทึก (คนล่าสุดขึ้นให้) → ตั๋วใช้ครั้งนี้ ─────────────────
-export function pinGate(label) {
+//   opt = { people: [{id, nick}], title, empty, memo } ← งานที่ต้องให้คนเฉพาะยืนยัน (เช่น หัวหน้าทีมสกรีนประกาศแผน)
+export function pinGate(label, opt) {
+  const o = opt || {};
+  const ask = o.title || "ใครบันทึก?";
+  const memo = o.memo || "prodLast";
   return new Promise(async resolve => {
     let done = null;
-    const sh = ui.sheet({ title: "ใครบันทึก?", modal: true, onClose: () => resolve(done) });
+    const sh = ui.sheet({ title: ask, modal: true, onClose: () => resolve(done) });
     sh.body.append(h("p.muted", (label || "บันทึก") + " — ใส่ PIN ของคนที่กด"));
     let people = [];
-    try { people = await api.staffCards("prod"); } catch (e) { sh.body.append(ui.errorBox(e.message)); return; }
-    const last = api.store.get("prodLast");
+    if (o.people) people = o.people;
+    else try { people = await api.staffCards("prod"); } catch (e) { sh.body.append(ui.errorBox(e.message)); return; }
+    if (!people.length) { sh.body.replaceChildren(ui.empty(o.empty || "ยังไม่มีรายชื่อ")); return; }
+    const last = api.store.get(memo);
     const pick = p => {
       sh.title = p.nick;
       sh.body.replaceChildren(h("p.muted", (label || "บันทึก") + " — ใส่ PIN ของ " + p.nick));
       ui.pinPad(sh.body, async pin => {
         const r = await api.gasTicket(p.id, pin, "g");
         if (!r.ok) return { error: r.error, shake: !!r.pinWrong };
-        api.store.set("prodLast", p.id);
+        api.store.set(memo, p.id);
         done = { ticket: r.ticket, staff: r.staff };
         sh.close("ok");
         return { ok: true };
       }, { busyText: "กำลังตรวจ PIN…" });
-      sh.body.append(h("button.btn.ghost", { type: "button", onclick: () => list() }, icon("back", "sm"), "เปลี่ยนคน"));
+      if (people.length > 1) sh.body.append(h("button.btn.ghost", { type: "button", onclick: () => list() }, icon("back", "sm"), "เปลี่ยนคน"));
     };
     const list = () => {
-      sh.title = "ใครบันทึก?";
+      sh.title = ask;
       sh.body.replaceChildren(h("p.muted", (label || "บันทึก") + " — แตะชื่อคนที่กด"),
         h("div.people", people.map(p => h("button.person" + (p.id === last ? ".last" : ""), { type: "button", onclick: () => pick(p) }, p.nick))));
     };
-    const lp = people.find(p => p.id === last);
+    const lp = people.find(p => p.id === last) || (people.length === 1 ? people[0] : null);
     if (lp) pick(lp); else list();
   });
 }
@@ -225,8 +231,8 @@ export const ctx = {
       reason = c.reason || reason;
     }
     let ticket;
-    if (S.role === "prod") {   // ทีมผลิต: ใส่ PIN ตอนกดบันทึกทุกครั้ง
-      const g = await pinGate(o.label);
+    if (S.role === "prod" || o.gate) {   // ทีมผลิต: ใส่ PIN ตอนกดบันทึกทุกครั้ง · o.gate = งานที่ต้องให้คนเฉพาะใส่ PIN ({ people, title, empty })
+      const g = await pinGate(o.label, o.gate === true ? null : o.gate);
       if (!g) return null;
       ticket = g.ticket;
     }
@@ -234,7 +240,7 @@ export const ctx = {
       const r = await api.write(action, input, { reason, ticket });
       if (r.undo) ui.undoBar(r.undo.label || o.label || "บันทึกแล้ว", async () => {
         let t2;
-        if (S.role === "prod") { const g = await pinGate("ย้อน " + (r.undo.label || "")); if (!g) throw new Error("ยังไม่ได้ย้อน"); t2 = g.ticket; }
+        if (S.role === "prod" || o.gate) { const g = await pinGate("ย้อน " + (r.undo.label || ""), o.gate === true ? null : o.gate); if (!g) throw new Error("ยังไม่ได้ย้อน"); t2 = g.ticket; }
         await api.write("undo.run", { id: r.undo.id }, { ticket: t2 });
         if (o.after) o.after();
       });

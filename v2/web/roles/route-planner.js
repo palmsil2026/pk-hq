@@ -48,10 +48,10 @@ function hasPin(day, area) {
   return area.daily || day.pins.includes(area.code);
 }
 
-function saveChange(ctx, button, action, input, confirm, after) {
+function saveChange(ctx, button, action, input, confirm, after, more) {
   return ui.busy(button, async () => {
     try {
-      const result = await ctx.save(action, input, { confirm, after: ctx.refresh });
+      const result = await ctx.save(action, input, { confirm, after: ctx.refresh, ...more });
       if (result) after?.(result.data);
     } catch (e) {
       if (e.code === "conflict" || e.code === "need_reason") ctx.refresh();
@@ -65,7 +65,7 @@ function reasonSheet(ctx, title, detail) {
 
 function moveStop(ctx, board, stop, day, button, close) {
   const to = day?.day || "";
-  const outside = day && !hasPin(day, stop.area);
+  const outside = day && !stop.area.unknown && !hasPin(day, stop.area);   // ร้านที่ยังไม่รู้สาย ลงวันไหนก็ได้ ไม่ถามเหตุผล
   const post = inPublished(board, stop.bookedDay) || inPublished(board, to);
   const confirm = stop.bookedDay || outside || post
     ? reasonSheet(ctx, to ? "นัดส่ง " + thDayLong(to) : "ย้ายกลับไปรอลงวัน", [
@@ -87,7 +87,7 @@ function moveStop(ctx, board, stop, day, button, close) {
 function stopSheet(ctx, board, stop) {
   const sh = ui.sheet({ title: stop.customer, modal: true });
   const actions = board.days.map(d => btn("btn.rp-choice",
-    [h("b", thDayLong(d.day)), h("small", stop.day === d.day ? "วันนัดเดิม" : hasPin(d, stop.area) ? "ส่งสายนี้" : "ยังไม่หมุดสาย")],
+    [h("b", thDayLong(d.day)), h("small", stop.day === d.day ? "วันนัดเดิม" : hasPin(d, stop.area) ? "ส่งสายนี้" : stop.area.unknown ? "ลงวันนี้ได้" : "ยังไม่หมุดสาย")],
     e => moveStop(ctx, board, stop, d, e.currentTarget, sh.close), {
       disabled: d.day === stop.bookedDay,
       class: hasPin(d, stop.area) ? "rp-match" : null,
@@ -139,7 +139,9 @@ function publish(ctx, board, button) {
     detail: thDayLong(board.start) + " ถึง " + thDayLong(board.end) + (board.tray.length ? " · รอลงวัน " + board.tray.length + " นัด" : ""),
     okText: "ประกาศแผน",
   };
-  return saveChange(ctx, button, "route_plan.publish", { revision: board.revision, start: board.start }, confirm, data => publicationSheet(data.share));
+  const gate = { people: board.leads || [], title: "หัวหน้าทีมยืนยัน", memo: "leadLast", empty: "ยังไม่ได้ตั้งหัวหน้าทีมสกรีน — ให้ประธานตั้งที่ ทีม › ค่าตั้ง" };
+  return saveChange(ctx, button, "route_plan.publish", { revision: board.revision, start: board.start }, confirm, data => publicationSheet(data.share),
+    { label: "ประกาศแผนสายส่ง", gate });
 }
 
 function stopCard(stop, open, drag) {

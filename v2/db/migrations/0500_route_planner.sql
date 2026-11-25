@@ -44,3 +44,7 @@ BEGIN SELECT RAISE(ABORT, 'ห้ามลบรายการในแผน�
 INSERT INTO vocab(kind, value, pos, label, tone) VALUES
   ('flags.kind', 'จัดส่งนอกสาย', 40, '', 'warn'),
   ('reason.reschedule', 'ปรับแผนสายส่ง', 6, '', '');
+
+-- หัวหน้าทีมสกรีนที่ประกาศแผนได้ (ชื่อเล่น คั่นด้วย , · ว่าง = ประธานเท่านั้น) · ประธานตั้งที่ ทีม › ค่าตั้ง
+INSERT INTO settings(key, value, note, updated_at, updated_by) VALUES
+  ('SCREEN_LEADS', '', 'หัวหน้าทีมสกรีนที่ประกาศแผนสายส่งได้ (ใส่ชื่อเล่น คั่นด้วย , · ตอนประกาศต้องใส่ PIN ของตัวเอง)', '2026-11-26T00:00:00.000Z', 'system');

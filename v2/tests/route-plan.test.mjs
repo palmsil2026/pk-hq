@@ -19,7 +19,7 @@ async function setup() {
   const put = (sql, ...args) => W.d1.raw.prepare(sql).run(...args);
   put("INSERT INTO routes(code,name,created_at,updated_at) VALUES ('test-route','สายทดสอบ',?,?)", AT, AT);
   put("INSERT INTO route_areas(route_code,name,confirmed,created_at,updated_at) VALUES ('test-route','เถิน',1,?,?)", AT, AT);
-  for (const [id, district, route] of [["CA", "อ.เมืองลำปาง", null], ["CB", "เถิน", "test-route"], ["CC", "เถิน", "test-route"], ["CD", "เถิน", null]]) {
+  for (const [id, district, route] of [["CA", "อ.เมืองลำปาง", null], ["CB", "เถิน", "test-route"], ["CC", "เถิน", "test-route"], ["CD", "เถิน", null], ["CE", "", null]]) {
     put("INSERT INTO customers(id,name,name_key,district,route_code,created_at,updated_at) VALUES (?,?,?,?,?,?,?)", id, "ร้านทดสอบ " + id, id, district, route, AT, AT);
   }
   const ok = async (token, action, input, more) => {
@@ -35,7 +35,10 @@ async function setup() {
   const moveInput = (stop, to) => ({ id: stop.order, version: stop.version, round: stop.round, round_version: stop.roundVersion, to_day: to });
   const stock = (key, grade, qty) => put(`INSERT INTO stock_moves(item_key,grade,qty_pcs,move_type,at,day)
     VALUES (?,?,?, 'ยอดยกมา',?,?)`, key, grade, qty, AT, TODAY);
-  return { W, office, screen, helper, exec, put, ok, order, board, moveInput, stock };
+  // ประกาศแผน = หัวหน้าทีมสกรีนใส่ PIN ตอนกด (ตั๋ว 'g' อายุสั้น)
+  put("UPDATE settings SET value = 'สกรีนทดสอบ' WHERE key = 'SCREEN_LEADS'");
+  const gate = (id, nick, roles) => W.ticket(id, nick, roles, "1234", { k: "g", exp: W.clock.now + 5 * 60000 });
+  return { W, office, screen, helper, exec, put, ok, order, board, moveInput, stock, gate };
 }
 
 test("ปฏิทิน 7 วัน: งวดส่งจริงทุกวันที่นัด · ส่วนขาดจากงวดก่อน · ของบนรถ · สายจากทะเบียน · รอลงวัน · กรองสิทธิ์และข้อมูลเงิน", async () => {
@@ -123,19 +126,26 @@ test("หมุดและย้ายวัน: สิทธิ์ · ชน�
   assert.deepEqual((await board()).days[1].pins, []);
 });
 
-test("ประกาศแผน: เก็บ 7 วัน · แชร์ข้อความ · สิทธิ์/ชนกัน/ซ้ำ · แก้หลังประกาศนับและย้อนได้", async () => {
-  const { W, office, screen, helper, ok, order, board, moveInput } = await setup();
+test("ประกาศแผน: หัวหน้าทีมใส่ PIN · เก็บ 7 วัน · แชร์ข้อความ · สิทธิ์/ชนกัน/ซ้ำ · แก้หลังประกาศนับและย้อนได้", async () => {
+  const { W, office, screen, exec, ok, order, board, moveInput, gate } = await setup();
+  const lead = await gate("S2", "สกรีนทดสอบ", ["screen"]);
   await order("CA", { plan: { first_day: day(1) } });
   const following = await order("CA");
   const pinnedBefore = await ok(screen, "route_plan.pins", { day: day(1), version: 0, routes: ["test-route"] });
   let d = await board();
   const publish = { start: d.start, revision: d.revision };
+  assert.deepEqual(d.leads.map(p => p.nick), ["สกรีนทดสอบ"]);
   assert.equal((await W.call(office, "route_plan.publish", publish)).status, 403);
-  assert.equal((await W.call(screen, "route_plan.publish", { ...publish, revision: publish.revision + 1 })).status, 409);
+  assert.equal((await W.call(screen, "route_plan.publish", publish)).error.code, "need_pin");   // ตั๋วประจำเครื่องใช้ประกาศไม่ได้
+  const notLead = await W.call(await gate("S3", "ผู้ช่วยทดสอบ", ["screen"]), "route_plan.publish", publish);
+  assert.equal(notLead.status, 403);
+  assert.match(notLead.error.message, /ไม่ใช่หัวหน้าทีมสกรีน/);
+  assert.equal((await W.call(lead, "route_plan.publish", { ...publish, revision: publish.revision + 1 })).status, 409);
   const key = W.key();
-  const published = await ok(screen, "route_plan.publish", publish, { key });
-  assert.equal((await ok(screen, "route_plan.publish", publish, { key })).data.share, published.data.share);
-  assert.equal((await W.call(helper, "route_plan.publish", publish)).status, 409);
+  const published = await ok(lead, "route_plan.publish", publish, { key });
+  assert.equal((await ok(lead, "route_plan.publish", publish, { key })).data.share, published.data.share);
+  assert.equal(W.one("SELECT by_staff FROM weekly_plans").by_staff, "S2");
+  assert.equal((await W.call(lead, "route_plan.publish", publish)).status, 409);
   assert.match(published.data.share, /แผนสายส่ง.*\n.*\n.*อำเภอเมือง/s);
   assert.doesNotMatch(published.data.share, /ร้านทดสอบ|2026-11/);
   assert.equal(W.one("SELECT count(*) AS n FROM plan_lines WHERE status = 'ใช้งาน'").n, 7);
@@ -155,7 +165,23 @@ test("ประกาศแผน: เก็บ 7 วัน · แชร์ข�
   assert.equal((await board()).publication.changes, 0);
   assert.equal(W.one("SELECT reason FROM audit_log WHERE action = 'route_plan.move' LIMIT 1").reason, "ปรับแผนสายส่ง");
   const next = await board();
-  const again = await ok(screen, "route_plan.publish", { start: next.start, revision: next.revision });
-  await ok(screen, "undo.run", { id: again.undo.id });
+  const again = await ok(await gate("S4", "ประธานทดสอบ", ["exec"]), "route_plan.publish", { start: next.start, revision: next.revision }, { as: "screen" });
+  await ok(exec, "undo.run", { id: again.undo.id }, { as: "screen" });
   assert.equal(W.one("SELECT count(*) AS n FROM plan_lines WHERE status = 'ใช้งาน'").n, 7);
+});
+
+test("ร้านที่ยังไม่รู้สาย: ลงวันไหนก็ได้ ไม่ถามเหตุผล ไม่ขึ้นธง · ยังไม่ตั้งหัวหน้าทีม = บอกให้ประธานตั้ง", async () => {
+  const { W, screen, ok, put, order, board, moveInput, gate } = await setup();
+  const unknown = await order("CE");
+  const d = await board();
+  const stop = d.tray.find(s => s.order === unknown);
+  assert.deepEqual(stop.area, { code: "", name: "ยังไม่ทราบสาย", daily: false, unknown: true });
+  await ok(screen, "route_plan.move", moveInput(stop, day(3)));
+  assert.equal(W.one("SELECT count(*) AS n FROM flags WHERE kind = 'จัดส่งนอกสาย'").n, 0);
+  put("UPDATE settings SET value = '' WHERE key = 'SCREEN_LEADS'");
+  const next = await board();
+  assert.deepEqual(next.leads, []);
+  const out = await W.call(await gate("S2", "สกรีนทดสอบ", ["screen"]), "route_plan.publish", { start: next.start, revision: next.revision });
+  assert.equal(out.status, 403);
+  assert.match(out.error.message, /ประธานตั้งได้ที่ ทีม › ค่าตั้ง/);
 });

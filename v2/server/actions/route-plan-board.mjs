@@ -33,13 +33,19 @@ export function areaFor(customer, areas, learned) {
   const hint = learned.get(districtKey(customer.district));
   const code = customer.route_code || (hint?.ok ? hint.route : "");
   const route = areas.find(r => r.code === code);
+  // ร้านที่ยังไม่รู้สาย = ลงวันไหนก็ได้ ไม่ถามเหตุผล ไม่ขึ้นธง (คุณปาล์มเคาะ 26 พ.ย. — ใช้ง่ายไว้ก่อน)
+  const unknown = { code: "", name: "ยังไม่ทราบสาย", daily: false, unknown: true };
   if (route && city(route.name)) {
     if (!districtKey(customer.district) && route.confirmed) return { code: "", name: "อำเภอเมือง", daily: true };
-    return { code: "", name: "ยังไม่ทราบสาย", daily: false };
+    return unknown;
   }
-  if (!route || !route.name || sameNumber(code, route.name)) return { code: "", name: "ยังไม่ทราบสาย", daily: false };
+  if (!route || !route.name || sameNumber(code, route.name)) return unknown;
   return { code, name: route.name, daily: false, suggested: !customer.route_code || route.confirmed === 0 };
 }
+
+// หัวหน้าทีมสกรีนจากค่าตั้ง SCREEN_LEADS (ชื่อเล่นหรือรหัส คั่นด้วย , หรือเว้นวรรค)
+export const leadNames = settings => String(settings?.SCREEN_LEADS || "").split(/[,\s]+/).map(s => s.trim()).filter(Boolean);
+export const isLead = (X, names = leadNames(X.settings)) => (X.roles || []).includes("exec") || names.includes(X.staff.nick) || names.includes(X.staff.id);
 
 export function pinCodes(row, areas) {
   if (!row || row.status !== "ใช้งาน") return [];
@@ -55,7 +61,7 @@ function group(rows) {
 
 export async function readRoutePlan(X) {
   const { start, end } = weekOf(X);
-  const [orders, items, rounds, loads, jobs, stock, running, rawAreas, known, pins, pub, revision, bColors] = await X.db.reads([
+  const [orders, items, rounds, loads, jobs, stock, running, rawAreas, known, pins, pub, revision, bColors, people] = await X.db.reads([
     [`SELECT o.id, o.version, o.status, o.priority, o.urgent, o.created_at, o.due_day, o.plan_mode, o.plan_cap_pcs,
          c.name AS customer, c.district, c.route_code
        FROM orders o JOIN customers c ON c.id = o.customer_id WHERE ${eligible}`],
@@ -83,6 +89,7 @@ export async function readRoutePlan(X) {
     ["SELECT * FROM route_day_pins WHERE day BETWEEN ? AND ?", start, end],
     [`SELECT id, start_day, end_day, created_at, changes, share_text ${publishedSql}`, start, end],
     [`SELECT (${revisionSql}) AS n`], [B_COLORS_SQL],
+    ["SELECT s.id, s.nick FROM staff s WHERE s.status = 'ทำงาน' ORDER BY s.nick"],
   ]);
 
   const areas = namedAreas(rawAreas, known);
@@ -98,7 +105,10 @@ export async function readRoutePlan(X) {
     const column = days.find(d => d.day === (stop.day < start ? start : stop.day));
     column.stops.push(stop);
   }
-  return { asOf: iso(X.now), start, end, days, areas: options, tray, needs, publication: pub[0] || null, revision: revision[0].n };
+  // คนที่ประกาศแผนได้ (โชว์ในแผ่น "ใครประกาศ") = หัวหน้าทีมสกรีนตามค่าตั้ง + ประธานที่เปิดอยู่
+  const names = leadNames(X.settings);
+  const leads = people.filter(p => names.includes(p.nick) || names.includes(p.id) || ((X.roles || []).includes("exec") && p.id === X.staff?.id));
+  return { asOf: iso(X.now), start, end, days, areas: options, tray, needs, publication: pub[0] || null, revision: revision[0].n, leads };
 }
 
 // งวดถัดไปใช้ส่วนต่างของเป้าสะสม ส่วนค้างจริงจากงวดก่อนอยู่ในงวดที่ถึงคิวแล้ว

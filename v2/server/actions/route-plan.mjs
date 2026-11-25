@@ -1,9 +1,9 @@
-import { bad, conflict, day, Fail, int, text } from "../core.mjs";
+import { bad, conflict, day, denied, Fail, int, text } from "../core.mjs";
 import { registerTable } from "../db.mjs";
 import { OPEN_ORDER_STATUSES } from "./deliver_common.mjs";
 import { learnRoutes } from "./geo-lib.mjs";
 import { roundMoveAction } from "./office-plan.mjs";
-import { areaFor, areaOptions, areaQuery, learnedQuery, namedAreas, pinCodes, planShare, publishedSql, readRoutePlan, revisionSql, weekOf } from "./route-plan-board.mjs";
+import { areaFor, areaOptions, areaQuery, isLead, leadNames, learnedQuery, namedAreas, pinCodes, planShare, publishedSql, readRoutePlan, revisionSql, weekOf } from "./route-plan-board.mjs";
 
 const roles = ["screen"];
 for (const table of ["weekly_plans", "plan_lines"]) registerTable(table, { void: { status: "ยกเลิก" } });
@@ -62,7 +62,7 @@ async function validateMove(X, input, ctx, round, from) {
     sql: "SELECT 1 WHERE COALESCE((SELECT version FROM route_day_pins WHERE day = ?), 0) = ?",
     args: [to, pin?.version || 0],
   });
-  if (!area.daily && !pinCodes(pin, areas).includes(area.code)) {
+  if (!area.daily && !area.unknown && !pinCodes(pin, areas).includes(area.code)) {
     if (!X.reason) throw new Fail(400, "need_reason", "ยังไม่มีหมุดสายสำหรับร้านนี้ในวันนี้ ต้องใส่เหตุผล", { kind: "reschedule" });
     ops.push({
       op: "flag", kind: "จัดส่งนอกสาย", severity: "ดู", team: "screen", entity: "orders", entity_id: ctx.o.id,
@@ -103,10 +103,15 @@ export function defineRoutePlan(R) {
     },
   });
   R.define({
-    name: "route_plan.publish", roles, write: true, undo: undoBeforeNextPublication,
+    // ประกาศ = หัวหน้าทีมสกรีน (หรือประธาน) ใส่ PIN ของตัวเองตอนกด (ตั๋ว PIN-ตอนบันทึก แบบทีมผลิต)
+    name: "route_plan.publish", roles, write: true, gate: true, undo: undoBeforeNextPublication,
     input: raw => ({ revision: int(raw.revision, "รุ่นของแผน", { min: 0 }), start: day(raw.start, "วันแรกของแผน") }),
     load: readRoutePlan,
     run(X, input, board) {
+      if (!isLead(X)) {
+        throw denied(leadNames(X.settings).length ? X.staff.nick + " ไม่ใช่หัวหน้าทีมสกรีน — ให้หัวหน้าทีมใส่ PIN เพื่อประกาศ"
+          : "ยังไม่ได้ตั้งหัวหน้าทีมสกรีน — ประธานตั้งได้ที่ ทีม › ค่าตั้ง");
+      }
       if (board.revision !== input.revision || board.start !== input.start) throw conflict("แผนหรือสต๊อกเปลี่ยนแล้ว — โหลดใหม่ก่อนประกาศ");
       const id = "WP" + X.newId();
       const share = planShare(board);
