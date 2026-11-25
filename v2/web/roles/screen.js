@@ -8,6 +8,7 @@
 import * as ui from "../assets/ui.js";
 import { save, duePill, qtyOf, fullName, useCss, put } from "./sdkit.js";
 import { stopSheet, resumeSheet, shareBtn, stopStats, eventRow, durWords } from "./repair.js";   // 0321 จอด/เดินต่อเครื่องสกรีน
+import { routePlanner } from "./route-planner.js";
 const { h, icon } = ui;
 
 const teamsOf = (ctx, d) => (d && d.teams && d.teams.length ? d.teams : (ctx.me && ctx.me.screenTeams) || ["ทีม 1", "ทีม 2", "ทีม 3"]);
@@ -212,10 +213,12 @@ export default {
   code: "screen", title: "ทีมสกรีนสี",
   nav: [
     { key: "queue", label: "คิว", icon: "list", title: "คิวสกรีน" },
+    { key: "plan", label: "จัดสายส่ง", icon: "calendar" },
     { key: "done", label: "เสร็จวันนี้", icon: "check" },
     { key: "history", label: "ประวัติ", icon: "clock", title: "ประวัติงานสกรีน" },
   ],
   views: {
+    plan: routePlanner,
     queue(ctx, view) {
       useCss();
       let filter = "";

@@ -17,6 +17,8 @@ import { defineDeliverGeo } from "./deliver-geo.mjs";   // 0310 ส่งขอ�
 import { defineScreenProgress } from "./screen-progress.mjs";   // 0320 สกรีนทำบางส่วน (ออฟฟิศอ่านความคืบหน้า)
 import { defineRepair } from "./repair.mjs";                   // 0110/0321 ซ่อมเสร็จ · ชิ้นส่วน · เครื่องสกรีน
 
+import { defineRoutePlan } from "./route-plan.mjs";
+
 export function buildRegistry(extra) {
   const R = createRegistry();
   defineFoundation(R);
@@ -32,6 +34,7 @@ export function buildRegistry(extra) {
   defineDeliverGeo(R);   // 0310 ส่งของ: ปักหมุดร้านตอนส่ง
   defineScreenProgress(R); // 0320 สกรีนทำบางส่วน
   defineRepair(R);         // 0110/0321 ซ่อมเสร็จ · เครื่องสกรีน
+  defineRoutePlan(R);
   if (typeof extra === "function") extra(R);   // เทสต์ใส่ action ตัวอย่างเพิ่มได้
   return R;
 }

@@ -57,6 +57,58 @@ async function loadPlan(X, id) {
 const custName = ctx => (ctx.cust ? ctx.cust.name : "");
 const notOpen = o => o.status === "ยกเลิก" ? "ออเดอร์นี้ยกเลิกแล้ว" : o.status === "ส่งแล้ว" ? "ออเดอร์นี้ส่งครบแล้ว" : "";
 
+// ══ นัด / เลื่อน / ยกเลิกนัด งวดเดียว ══════════════════════════════════════════════
+export function roundMoveAction({ name = "office.round_move", roles = ROLES_OFFICE, planner } = {}) {
+  return {
+    name, roles, write: true,
+    input: raw => ({ id: need(raw.id, "ออเดอร์", 40), version: int(raw.version, "รุ่นของออเดอร์", { min: 1 }), round: text(raw.round, 40),
+      to_day: day(raw.to_day, "วันนัดใหม่", true), shift_after: !planner && !!raw.shift_after,
+      ...(planner ? { round_version: int(raw.round_version, "รุ่นของงวด", { min: 0 }) } : {}) }),
+    load: (X, input) => loadPlan(X, input.id),
+    async run(X, input, ctx) {
+      const o = ctx.o;
+      if (o.version !== input.version) throw conflict();
+      if (notOpen(o)) throw locked(notOpen(o) + " — เลื่อนวันไม่ได้");
+      if (input.to_day && input.to_day < thaiDay(X.now)) throw bad("วันนัดเป็นวันที่ผ่านมาแล้ว — เลือกวันนี้หรือหลังจากนี้");
+      const live = ctx.rounds.filter(r => r.status !== "ยกเลิก").sort((a, b) => a.seq - b.seq);
+      const st = ctx.plan.rounds.find(r => r.id === input.round);
+      let round = null, from;
+      if (live.length) {
+        round = live.find(r => r.id === input.round);
+        if (!round) throw conflict("งวดนี้ถูกเปลี่ยนไปแล้ว — โหลดใหม่");
+        if (st && st.state === "ส่งครบ") throw locked("งวดนี้ส่งครบแล้ว — เลื่อนไม่ได้");
+        from = round.plan_day;
+      } else from = o.due_day;   // ออเดอร์เก่าที่ไม่ได้วางงวด = เลื่อนวันส่งของทั้งใบ
+      const extra = planner ? await planner(X, input, ctx, round, from) : [];
+      if (from === input.to_day) throw bad("วันเดิมอยู่แล้ว — ไม่มีอะไรเปลี่ยน");
+      const ops = [];
+      let c = null;
+      if (from) {   // มีวันนัดอยู่แล้ว = เลื่อน/ยกเลิกนัด → สาเหตุบังคับ + ลงสมุด
+        c = causeOf(X.reason, ctx.causes);
+        if (!c) throw new Fail(400, "need_reason", "เลื่อนวันส่งต้องเลือกสาเหตุ", { needReason: true, why: ["เลื่อนจากวันที่นัดลูกค้าไว้"], kind: "reschedule" });
+      }
+      const rows = live.map(r => ({ ...r }));
+      if (round) {
+        const shift = input.shift_after && from && input.to_day ? Math.round((Date.parse(input.to_day) - Date.parse(from)) / 864e5) : 0;
+        for (const r of rows) {
+          let nd = null;
+          if (r.id === round.id) nd = input.to_day;
+          else if (shift && r.seq > round.seq && r.plan_day && !(ctx.plan.rounds.find(x => x.id === r.id) || {}).state?.startsWith("ส่ง")) nd = addDays(r.plan_day, shift);
+          if (nd === null || nd === r.plan_day) continue;
+          ops.push({ op: "update", table: "order_rounds", id: r.id, expect: r.version, before: live.find(x => x.id === r.id), set: { plan_day: nd } });
+          if (c) ops.push({ op: "insert", table: "reschedule_events", row: { id: "RS" + X.newId(), order_id: o.id, round_id: r.id, seq: r.seq, from_day: r.plan_day, to_day: nd, cause: c.cause, note: c.note, by_staff: X.staff.id, src: "v2" } });
+          r.plan_day = nd;
+        }
+      } else if (c) ops.push({ op: "insert", table: "reschedule_events", row: { id: "RS" + X.newId(), order_id: o.id, round_id: "", seq: 0, from_day: from, to_day: input.to_day, cause: c.cause, note: c.note, by_staff: X.staff.id, src: "v2" } });
+      const next = round ? planState(o, rows, ctx.d.items, sentOf(ctx.loads)).due : input.to_day;
+      if (next !== o.due_day) { ops.unshift({ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set: { due_day: next } }); ops.push(...dueOps(ctx, next)); }
+      else ops.unshift({ op: "guard", sql: "SELECT 1 FROM orders WHERE id = ? AND version = ?", args: [o.id, o.version] });
+      const what = !from ? "นัดส่ง" : !input.to_day ? "ยกเลิกนัด" : "เลื่อนวันส่ง";
+      return { label: what + " " + custName(ctx), ops: [...extra, ...ops], result: { id: o.id, due_day: next, moved: ops.filter(x => x.table === "order_rounds").length, logged: !!c } };
+    },
+  };
+}
+
 export function defineOfficePlan(R) {
   // ══ วางงวดส่งใหม่ทั้งชุด + ต้องการเมื่อไร ══════════════════════════════════════════
   R.define({
@@ -95,53 +147,7 @@ export function defineOfficePlan(R) {
     },
   });
 
-  // ══ นัด / เลื่อน / ยกเลิกนัด งวดเดียว ══════════════════════════════════════════════
-  R.define({
-    name: "office.round_move", roles: ROLES_OFFICE, write: true,
-    input: raw => ({ id: need(raw.id, "ออเดอร์", 40), version: int(raw.version, "รุ่นของออเดอร์", { min: 1 }), round: text(raw.round, 40),
-      to_day: day(raw.to_day, "วันนัดใหม่", true), shift_after: !!raw.shift_after }),
-    load: (X, input) => loadPlan(X, input.id),
-    async run(X, input, ctx) {
-      const o = ctx.o;
-      if (o.version !== input.version) throw conflict();
-      if (notOpen(o)) throw locked(notOpen(o) + " — เลื่อนวันไม่ได้");
-      if (input.to_day && input.to_day < thaiDay(X.now)) throw bad("วันนัดเป็นวันที่ผ่านมาแล้ว — เลือกวันนี้หรือหลังจากนี้");
-      const live = ctx.rounds.filter(r => r.status !== "ยกเลิก").sort((a, b) => a.seq - b.seq);
-      const st = ctx.plan.rounds.find(r => r.id === input.round);
-      let round = null, from;
-      if (live.length) {
-        round = live.find(r => r.id === input.round);
-        if (!round) throw conflict("งวดนี้ถูกเปลี่ยนไปแล้ว — โหลดใหม่");
-        if (st && st.state === "ส่งครบ") throw locked("งวดนี้ส่งครบแล้ว — เลื่อนไม่ได้");
-        from = round.plan_day;
-      } else from = o.due_day;   // ออเดอร์เก่าที่ไม่ได้วางงวด = เลื่อนวันส่งของทั้งใบ
-      if (from === input.to_day) throw bad("วันเดิมอยู่แล้ว — ไม่มีอะไรเปลี่ยน");
-      const ops = [];
-      let c = null;
-      if (from) {   // มีวันนัดอยู่แล้ว = เลื่อน/ยกเลิกนัด → สาเหตุบังคับ + ลงสมุด
-        c = causeOf(X.reason, ctx.causes);
-        if (!c) throw new Fail(400, "need_reason", "เลื่อนวันส่งต้องเลือกสาเหตุ", { needReason: true, why: ["เลื่อนจากวันที่นัดลูกค้าไว้"], kind: "reschedule" });
-      }
-      const rows = live.map(r => ({ ...r }));
-      if (round) {
-        const shift = input.shift_after && from && input.to_day ? Math.round((Date.parse(input.to_day) - Date.parse(from)) / 864e5) : 0;
-        for (const r of rows) {
-          let nd = null;
-          if (r.id === round.id) nd = input.to_day;
-          else if (shift && r.seq > round.seq && r.plan_day && !(ctx.plan.rounds.find(x => x.id === r.id) || {}).state?.startsWith("ส่ง")) nd = addDays(r.plan_day, shift);
-          if (nd === null || nd === r.plan_day) continue;
-          ops.push({ op: "update", table: "order_rounds", id: r.id, expect: r.version, before: live.find(x => x.id === r.id), set: { plan_day: nd } });
-          if (c) ops.push({ op: "insert", table: "reschedule_events", row: { id: "RS" + X.newId(), order_id: o.id, round_id: r.id, seq: r.seq, from_day: r.plan_day, to_day: nd, cause: c.cause, note: c.note, by_staff: X.staff.id, src: "v2" } });
-          r.plan_day = nd;
-        }
-      } else if (c) ops.push({ op: "insert", table: "reschedule_events", row: { id: "RS" + X.newId(), order_id: o.id, round_id: "", seq: 0, from_day: from, to_day: input.to_day, cause: c.cause, note: c.note, by_staff: X.staff.id, src: "v2" } });
-      const next = round ? planState(o, rows, ctx.d.items, sentOf(ctx.loads)).due : input.to_day;
-      if (next !== o.due_day) { ops.unshift({ op: "update", table: "orders", id: o.id, expect: o.version, before: o, set: { due_day: next } }); ops.push(...dueOps(ctx, next)); }
-      else ops.unshift({ op: "guard", sql: "SELECT 1 FROM orders WHERE id = ? AND version = ?", args: [o.id, o.version] });
-      const what = !from ? "นัดส่ง" : !input.to_day ? "ยกเลิกนัด" : "เลื่อนวันส่ง";
-      return { label: what + " " + custName(ctx), ops, result: { id: o.id, due_day: next, moved: ops.filter(x => x.table === "order_rounds").length, logged: !!c } };
-    },
-  });
+  R.define(roundMoveAction());
 
   // ══ รอยืนยัน (ยังไม่ส่งเข้าคิวผลิต) ════════════════════════════════════════════════
   R.define({

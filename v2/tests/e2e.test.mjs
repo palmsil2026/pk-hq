@@ -451,7 +451,7 @@ test("สิทธิ์: ทีมที่ไม่เกี่ยวกับ
     ["acc", "run.close", { run: "x", version: 1, good: 1 }], ["prodDevice", "office.bill_create", { order_id: OID, version: 1, kind: "เงินสด", lines: [{ item_id: "x", qty_pcs: 1, price_satang: 1 }] }],
   ]) assert.equal((await W.call(T[who], action, input)).status, 403, who + " ทำ " + action + " ไม่ได้");
   // ทีมผลิต: ทุก action ที่มี gate ต้องใช้ตั๋วจาก PIN ตอนกด — ตั๋วประจำเครื่องได้ 401 need_pin ก่อนจะถึงเนื้องาน
-  const gated = W.registry.list().filter(d => d.gate);
+  const gated = W.registry.list().filter(d => d.gate && d.roles.includes("prod"));   // ทีมอื่นที่ติด gate (ประกาศแผนสายส่ง) ตรวจใน route-plan.test.mjs
   assert.ok(gated.length >= 12, "ปุ่มบันทึกของทีมผลิตติด gate ครบ");
   for (const d of gated) {
     const r = await W.call(T.prodDevice, d.name, {}, { as: "prod" });

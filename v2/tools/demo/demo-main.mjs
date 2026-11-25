@@ -17,7 +17,6 @@ import { MIGRATIONS, ROLE_CSS, WEB_VERSION, DEMO_BUILD } from "pk-demo-data";
 const KEYS = { ticket: "pk-demo-ticket-key-not-secret", sync: "pk-demo-sync-key-not-secret", pin: "pk-demo-pin-key-not-secret" };
 const GAS_URL = "https://pk-demo.invalid/gas";
 const BASE = "https://pk-demo.invalid/";
-const ROUTE_TRIAL = "https://claude.ai/artifact/7VYg67UxzBZBCyXqSb6nay";
 const NOT_SHEET = "ไม่มีในโหมดตัวอย่าง — การนำเข้า/ซิงก์ต้องต่อชีต Google จริง (เดโมนี้ไม่ต่อระบบจริง)";
 const NOT_STAFF = "ไม่มีในโหมดตัวอย่าง — การแก้ทะเบียนพนักงาน/ตั้ง PIN เขียนที่ชีต Staff จริงผ่าน Google (เดโมนี้ไม่ต่อระบบจริง)";
 const NOT_NET = "ไม่มีในโหมดตัวอย่าง — เดโมนี้ไม่ออกอินเทอร์เน็ต";
@@ -25,7 +24,7 @@ const NOT_NET = "ไม่มีในโหมดตัวอย่าง — �
 const APPS = [
   ["office", "ออฟฟิศ", "ลงออเดอร์ · ลูกค้า · บิล · งวดส่ง", "ออฟฟิศ"],
   ["prod", "ทีมผลิต", "ผังเครื่อง · เปิด/ปิดรอบ · สต๊อก · ซ่อม", "ผลิต"],
-  ["screen", "ทีมสกรีนสี", "คิวงานสกรีน · เริ่ม/เสร็จ · ชิ้นส่วน", "สกรีน"],
+  ["screen", "ทีมสกรีนสี", "คิวสกรีน · จัดสายส่ง 7 วัน · ขวดที่ต้องมี", "สกรีน"],
   ["deliver", "ส่งของ", "ของรอส่ง · ขึ้นรถ · ส่งแล้ว", "ส่งของ"],
   ["account", "บัญชี", "รับชำระ · ลูกหนี้ · เงินเข้า", "บัญชี"],
   ["exec", "ประธาน", "ภาพรวม · ธง · ทีม · เปิดได้ทุกแอป", "บริหาร"],
@@ -323,10 +322,6 @@ function picker() {
       el("div", { class: "lbl" }, "วิธีเข้า"),
       el("p", {}, "แตะชื่อไหนก็ได้ แล้วใส่ PIN ", el("b", { class: "num" }, DEMO_PIN), " (ทุกคนใช้เลขเดียวกัน)"),
       el("p", { class: "small muted" }, "ทีมผลิตตั้งเครื่องครั้งเดียว แล้วถาม \"ใครบันทึก\" + PIN ทุกครั้งที่กดบันทึก · หัวหน้า (ประธาน) เปิดได้ทุกแอปจากปุ่มชื่อมุมขวาบน")),
-    el("a", { class: "card demo-link", href: ROUTE_TRIAL, target: "_blank", rel: "noopener" },
-      el("span", { class: "lbl" }, "หน้าทดลองแยก"),
-      el("b", {}, "จัดสายส่ง (ออกแบบใหม่)"),
-      el("span", { class: "small muted" }, "ยังไม่อยู่ใน v2 — เปิดในแท็บใหม่")),
     el("details", { class: "card demo-limits" },
       el("summary", { class: "lbl" }, "อะไรทำไม่ได้ในโหมดตัวอย่าง"),
       el("ul", { class: "small" },

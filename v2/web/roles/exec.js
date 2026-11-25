@@ -317,7 +317,7 @@ async function importBox(ctx, box) {
     box.append(h("div.card", h("div.row", h("b.grow", s.label), btn), st));
   });
 }
-const SETTING_TH = { UNDO_HOURS: "ย้อนรายการได้ภายใน (ชั่วโมง)", GATE_TICKET_MIN: "ทีมผลิต: PIN ตอนบันทึกใช้ได้ (นาที)", RUN_STALE_HOURS: "รอบเครื่องเปิดค้างเกิน (ชั่วโมง) = ขึ้นเรื่อง", MIN_WEB_VERSION: "รุ่นหน้าเว็บต่ำสุดที่ยอมให้ใช้", COMPANY_NAME: "ชื่อบนหัวเอกสาร", ACCT_SYNC_AUTO: "ซิงก์ชีทบัญชีอัตโนมัติทุกวัน ~20:00", ACCT_DUE_DAYS: "ลูกหนี้ครบกำหนดภายใน (วัน) ขึ้นหน้าบัญชี", DEPOSIT_REMIND: "มัดจำ: เตือนตอนส่งเข้าคิว (ไม่เตือน / งานสกรีน / ทุกออเดอร์)", RESERVE_CALL_DAYS: "ของจองค้างเกิน (วัน) ให้โทรยืนยัน" };
+const SETTING_TH = { UNDO_HOURS: "ย้อนรายการได้ภายใน (ชั่วโมง)", GATE_TICKET_MIN: "ทีมผลิต: PIN ตอนบันทึกใช้ได้ (นาที)", RUN_STALE_HOURS: "รอบเครื่องเปิดค้างเกิน (ชั่วโมง) = ขึ้นเรื่อง", MIN_WEB_VERSION: "รุ่นหน้าเว็บต่ำสุดที่ยอมให้ใช้", COMPANY_NAME: "ชื่อบนหัวเอกสาร", ACCT_SYNC_AUTO: "ซิงก์ชีทบัญชีอัตโนมัติทุกวัน ~20:00", ACCT_DUE_DAYS: "ลูกหนี้ครบกำหนดภายใน (วัน) ขึ้นหน้าบัญชี", DEPOSIT_REMIND: "มัดจำ: เตือนตอนส่งเข้าคิว (ไม่เตือน / งานสกรีน / ทุกออเดอร์)", RESERVE_CALL_DAYS: "ของจองค้างเกิน (วัน) ให้โทรยืนยัน", SCREEN_LEADS: "หัวหน้าทีมสกรีน (ประกาศแผนสายส่งได้)" };
 async function settingsBox(ctx, box) {
   const { h, ui, api } = ctx;
   let d;
