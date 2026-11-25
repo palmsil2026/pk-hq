@@ -1,0 +1,524 @@
+<title>จัดสายส่ง โรงขวด P&amp;K</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Anuphan:wght@500;600;700;800&family=Sarabun:wght@400;500;600&display=swap">
+<style>
+/* Layout: tool screen. Desktop = tray of unscheduled orders on the left + 7 day columns. Phone = day strip + one day at a time, tray as a tab. Tokens = P&K v2 design system (brick red, warm neutrals). */
+:root{
+  --bg:#FFF8F2; --surface:#FFFFFF; --surface-2:#FBF2EA; --sunken:#F5ECE5;
+  --ink:#201A15; --ink-2:#6B645E; --line:#EAE1D9; --edge:#7D756F;
+  --brand:#B24A4F; --on-brand:#FFFFFF; --brand-ink:#702F32; --brand-soft:#FFE8E7; --brand-tint:#FFF7F7;
+  --ok:#236F3B; --ok-soft:#D1FAD8; --warn:#B45309; --warn-soft:#FFE9DE; --bad:#B91C1C; --bad-soft:#FFE8E5;
+  --scrim:rgba(26,18,18,.40);
+  --elev-1:0 1px 2px rgba(32,22,22,.06),0 1px 3px rgba(32,22,22,.08);
+  --elev-3:0 2px 4px rgba(32,22,22,.08),0 10px 24px rgba(32,22,22,.16);
+  --font-display:"Anuphan","Noto Sans Thai",system-ui,sans-serif;
+  --font-body:"Sarabun","Noto Sans Thai",system-ui,sans-serif;
+  --r-sm:6px; --r-md:10px; --r-lg:16px; --tap:44px;
+}
+@media (prefers-color-scheme: dark){:root:not([data-theme="light"]){
+  --bg:#201A15; --surface:#2B241F; --surface-2:#362F29; --sunken:#1A1511;
+  --ink:#FBF2EA; --ink-2:#CDC5BD; --line:#413A34; --edge:#978F88;
+  --brand:#FAB0AF; --on-brand:#401618; --brand-ink:#FFD8D7; --brand-soft:#5F2729; --brand-tint:#4F1E21;
+  --ok:#9ED7A9; --ok-soft:#0C3A1B; --warn:#F9B591; --warn-soft:#4F2203; --bad:#FFAFA5; --bad-soft:#5A1310;
+  --scrim:rgba(0,0,0,.55); --elev-1:0 1px 2px rgba(0,0,0,.4); --elev-3:0 10px 28px rgba(0,0,0,.55); color-scheme:dark}}
+:root[data-theme="dark"]{
+  --bg:#201A15; --surface:#2B241F; --surface-2:#362F29; --sunken:#1A1511;
+  --ink:#FBF2EA; --ink-2:#CDC5BD; --line:#413A34; --edge:#978F88;
+  --brand:#FAB0AF; --on-brand:#401618; --brand-ink:#FFD8D7; --brand-soft:#5F2729; --brand-tint:#4F1E21;
+  --ok:#9ED7A9; --ok-soft:#0C3A1B; --warn:#F9B591; --warn-soft:#4F2203; --bad:#FFAFA5; --bad-soft:#5A1310;
+  --scrim:rgba(0,0,0,.55); --elev-1:0 1px 2px rgba(0,0,0,.4); --elev-3:0 10px 28px rgba(0,0,0,.55); color-scheme:dark}
+
+*{box-sizing:border-box}
+html,body{min-height:100%}
+body{background:var(--bg);color:var(--ink);font-family:var(--font-body);font-size:15px;line-height:1.55;
+  padding-left:max(16px,env(safe-area-inset-left,0px));padding-right:max(16px,env(safe-area-inset-right,0px));padding-block:0 96px}
+button{font:inherit;color:inherit;cursor:pointer}
+:focus-visible{outline:3px solid var(--brand);outline-offset:2px}
+.num{font-variant-numeric:tabular-nums}
+@media (prefers-reduced-motion:reduce){*{transition:none!important;animation:none!important}}
+
+/* top bar */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:var(--bg);padding-block:14px 10px;display:grid;gap:10px;border-bottom:1px solid var(--line)}
+body::before{content:"";position:fixed;inset:0 0 auto;height:env(safe-area-inset-top,0px);z-index:21;background:var(--bg)}
+.row1{display:flex;align-items:center;gap:10px;flex-wrap:wrap}
+.title{font-family:var(--font-display);font-weight:800;font-size:22px;letter-spacing:-.01em;margin:0}
+.week{font-family:var(--font-display);font-weight:600;color:var(--ink-2);font-size:15px}
+.sample{font-size:12px;font-weight:600;color:var(--warn);background:var(--warn-soft);border-radius:99px;padding:2px 9px}
+.sp{flex:1}
+.seg{display:inline-flex;background:var(--sunken);border-radius:12px;padding:3px;gap:2px}
+.seg button{border:0;background:transparent;min-height:38px;padding:0 14px;border-radius:9px;font-weight:600;color:var(--ink-2)}
+.seg button[aria-pressed="true"]{background:var(--surface);color:var(--ink);box-shadow:var(--elev-1)}
+.btn{min-height:var(--tap);padding:0 16px;border-radius:12px;border:1px solid var(--line);background:var(--surface);font-weight:600;display:inline-flex;align-items:center;gap:8px}
+.btn.primary{background:var(--brand);color:var(--on-brand);border-color:var(--brand)}
+.btn.ghost{background:transparent;border-color:transparent;color:var(--ink-2)}
+.btn.sm{min-height:36px;padding:0 12px;font-size:14px;border-radius:10px}
+.stats{display:flex;gap:8px;flex-wrap:wrap}
+.stat{display:inline-flex;align-items:center;gap:6px;font-size:13.5px;padding:4px 10px;border-radius:99px;background:var(--surface);border:1px solid var(--line)}
+.stat b{font-family:var(--font-display);font-weight:700}
+.stat.bad{background:var(--bad-soft);border-color:transparent;color:var(--bad)}
+.stat.warn{background:var(--warn-soft);border-color:transparent;color:var(--warn)}
+.pub{font-size:13px;color:var(--ink-2)}
+.pub b{color:var(--ok)}
+
+/* board */
+.board{display:grid;grid-template-columns:262px minmax(0,1fr);gap:14px;margin-top:14px;align-items:start}
+.tray{position:sticky;top:calc(env(safe-area-inset-top,0px) + 132px);max-height:calc(100vh - 150px);overflow:auto;background:var(--surface-2);border-radius:var(--r-lg);padding:12px;display:grid;gap:10px}
+.tray h2,.mh{font-family:var(--font-display);font-size:16px;font-weight:700;margin:0;display:flex;align-items:center;gap:8px}
+.cnt{font-size:12px;font-weight:700;background:var(--brand);color:var(--on-brand);border-radius:99px;padding:1px 8px}
+.hint{font-size:13px;color:var(--ink-2)}
+.grp{display:grid;gap:6px}
+.grph{display:flex;align-items:center;gap:4px 6px;font-weight:600;font-size:14px;flex-wrap:wrap}
+.grph small{color:var(--ink-2);font-weight:400}
+.grph .btn{margin-left:auto}
+.days{overflow-x:auto;padding-bottom:8px}
+.dgrid{display:grid;grid-template-columns:repeat(7,minmax(146px,1fr));gap:8px;min-width:1080px}
+.day{background:var(--surface-2);border-radius:var(--r-lg);display:flex;flex-direction:column;min-height:520px;border:2px solid transparent;transition:border-color .12s}
+.day.over,.tray.over{border-color:var(--brand)}
+.tray{border:2px solid transparent}
+.dh{padding:10px 10px 8px;display:grid;gap:6px;border-bottom:1px solid var(--line)}
+.dname{display:flex;align-items:baseline;gap:6px}
+.dname b{font-family:var(--font-display);font-size:20px;font-weight:800}
+.dname span{color:var(--ink-2);font-size:13px}
+.dname .today{margin-left:auto;font-size:11px;font-weight:700;color:var(--brand-ink);background:var(--brand-soft);padding:1px 7px;border-radius:99px}
+.pins{display:flex;flex-wrap:wrap;gap:4px}
+.pin{font-size:12.5px;font-weight:600;border-radius:99px;padding:2px 9px;background:var(--brand-soft);color:var(--brand-ink);border:0;min-height:26px}
+.pin.daily{background:var(--sunken);color:var(--ink-2)}
+.pin.add{background:transparent;border:1px dashed var(--edge);color:var(--ink-2)}
+.dsum{font-size:12.5px;color:var(--ink-2);display:flex;justify-content:space-between;gap:6px}
+.bar{display:flex;height:6px;border-radius:99px;overflow:hidden;background:var(--line)}
+.bar i{display:block;height:100%}
+.bar .r{background:var(--ok)}.bar .s{background:var(--warn)}.bar .x{background:var(--bad)}
+.db{padding:8px;display:flex;flex-direction:column;gap:6px;flex:1}
+.alab{font-size:11.5px;font-weight:700;letter-spacing:.03em;color:var(--ink-2);margin-top:4px;display:flex;align-items:center;gap:6px}
+.alab .off{color:var(--warn);font-weight:600;letter-spacing:0}
+.empty{font-size:13px;color:var(--ink-2);text-align:center;padding:18px 6px;border:1px dashed var(--line);border-radius:var(--r-md)}
+
+/* card */
+.card{background:var(--surface);border-radius:var(--r-md);box-shadow:var(--elev-1);padding:8px 10px 8px 12px;display:grid;gap:2px;cursor:pointer;position:relative;border:1px solid var(--line);text-align:left;width:100%}
+.card::before{content:"";position:absolute;left:0;top:8px;bottom:8px;width:4px;border-radius:0 3px 3px 0;background:var(--edge)}
+.card.st-ready::before{background:var(--ok)}.card.st-screen::before{background:var(--warn)}.card.st-short::before{background:var(--bad)}.card.st-none::before{background:var(--line)}
+.card[draggable="true"]{cursor:grab}
+.card.dragging{opacity:.4}
+.c1{display:flex;align-items:baseline;gap:6px}
+.cust{font-weight:600;font-size:14.5px;line-height:1.3;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.bags{margin-left:auto;font-family:var(--font-display);font-weight:700;font-size:14px;white-space:nowrap}
+.c2{font-size:12.5px;color:var(--ink-2);line-height:1.35}
+.c3{display:flex;flex-wrap:wrap;gap:4px;margin-top:3px}
+.tag{font-size:11.5px;font-weight:600;border-radius:6px;padding:0 6px;line-height:1.6}
+.tag.ready{background:var(--ok-soft);color:var(--ok)}.tag.screen{background:var(--warn-soft);color:var(--warn)}.tag.short{background:var(--bad-soft);color:var(--bad)}
+.tag.plain{background:var(--sunken);color:var(--ink-2)}.tag.urgent{background:var(--brand-soft);color:var(--brand-ink)}
+
+/* need view */
+.need{display:grid;gap:18px;margin-top:14px}
+.todo{display:grid;grid-template-columns:repeat(auto-fit,minmax(300px,1fr));gap:12px}
+.panel{background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg);padding:14px;display:grid;gap:10px;align-content:start}
+.panel h3{font-family:var(--font-display);font-size:16px;margin:0;display:flex;align-items:center;gap:8px}
+.panel h3 .who{font-family:var(--font-body);font-weight:500;font-size:13px;color:var(--ink-2)}
+.li{display:flex;align-items:center;gap:10px;padding:8px 10px;border-radius:var(--r-md);background:var(--surface-2)}
+.li .k{font-family:var(--font-display);font-weight:700;min-width:70px}
+.sday{display:grid;gap:4px}
+.sday h4{margin:4px 0 0;font-family:var(--font-display);font-size:14px;display:flex;gap:8px;align-items:baseline}
+.sday h4 small{font-family:var(--font-body);font-weight:400;color:var(--ink-2);font-size:12.5px}
+.srow{display:flex;gap:8px;align-items:baseline;padding:5px 10px;border-radius:8px;background:var(--surface-2);font-size:14px}
+.srow .c{font-weight:600;min-width:92px}
+.srow .p{flex:1;min-width:0;color:var(--ink-2)}
+.srow .v{font-family:var(--font-display);font-weight:800;color:var(--warn)}
+.li .d{flex:1;min-width:0}
+.li .d small{display:block;color:var(--ink-2);font-size:12.5px}
+.li .v{font-family:var(--font-display);font-weight:800;font-size:17px;white-space:nowrap}
+.li.bad .v{color:var(--bad)}.li.warn .v{color:var(--warn)}
+.okmsg{font-size:14px;color:var(--ok);background:var(--ok-soft);border-radius:var(--r-md);padding:10px}
+.tblw{overflow-x:auto;background:var(--surface);border:1px solid var(--line);border-radius:var(--r-lg)}
+table{border-collapse:collapse;width:100%;min-width:760px;font-size:14px}
+th,td{padding:8px 10px;border-bottom:1px solid var(--line);text-align:right;white-space:nowrap}
+th:first-child,td:first-child{text-align:left}
+th{font-family:var(--font-display);font-size:13px;color:var(--ink-2);font-weight:600;background:var(--surface-2)}
+tr:last-child td{border-bottom:0}
+td .cell{display:inline-block;min-width:44px;padding:1px 6px;border-radius:6px;font-weight:600}
+.cell.r{background:var(--ok-soft);color:var(--ok)}.cell.s{background:var(--warn-soft);color:var(--warn)}.cell.x{background:var(--bad-soft);color:var(--bad)}
+td.z{color:var(--line)}
+.legend{display:flex;gap:14px;flex-wrap:wrap;font-size:13px;color:var(--ink-2)}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:3px;margin-right:5px;vertical-align:-1px}
+
+/* sheet */
+.scrim{position:fixed;inset:0;background:var(--scrim);z-index:40}
+.sheet{position:fixed;z-index:41;background:var(--surface);box-shadow:var(--elev-3);display:flex;flex-direction:column;gap:12px;overflow:auto}
+@media (min-width:761px){.sheet{top:0;right:0;bottom:0;width:400px;padding:20px 20px calc(20px + env(safe-area-inset-bottom,0px));padding-right:max(20px,env(safe-area-inset-right,0px))}}
+@media (max-width:760px){.sheet{left:0;right:0;bottom:0;max-height:86%;border-radius:20px 20px 0 0;padding:16px max(16px,env(safe-area-inset-right,0px)) calc(16px + env(safe-area-inset-bottom,0px)) max(16px,env(safe-area-inset-left,0px))}}
+.sheet h3{font-family:var(--font-display);font-size:20px;margin:0}
+.meta{display:flex;flex-wrap:wrap;gap:6px;color:var(--ink-2);font-size:13.5px}
+.items{display:grid;gap:6px}
+.it{display:flex;gap:10px;align-items:center;padding:8px 10px;border-radius:var(--r-md);background:var(--surface-2)}
+.it .d{flex:1;min-width:0}
+.it .d small{display:block;color:var(--ink-2);font-size:12.5px}
+.sl{font-family:var(--font-display);font-size:14px;font-weight:600;margin:4px 0 0}
+.dayc{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.dayc button{min-height:56px;border-radius:12px;border:1px solid var(--line);background:var(--surface);display:grid;place-items:center;line-height:1.2;padding:4px}
+.dayc button b{font-family:var(--font-display);font-size:16px}
+.dayc button small{font-size:11px;color:var(--ink-2)}
+.dayc button.run{border-color:var(--brand);background:var(--brand-tint)}
+.dayc button.run small{color:var(--brand-ink);font-weight:600}
+.dayc button[aria-current="true"]{background:var(--brand);color:var(--on-brand);border-color:var(--brand)}
+.dayc button[aria-current="true"] small{color:var(--on-brand)}
+.areas{display:flex;flex-wrap:wrap;gap:6px}
+.areas button{min-height:40px;padding:0 14px;border-radius:99px;border:1px solid var(--line);background:var(--surface);font-weight:600}
+.areas button[aria-pressed="true"]{background:var(--brand);color:var(--on-brand);border-color:var(--brand)}
+textarea{width:100%;min-height:220px;border-radius:var(--r-md);border:1px solid var(--line);background:var(--surface-2);color:var(--ink);font:14px/1.6 var(--font-body);padding:10px}
+
+/* toast */
+.toast{position:fixed;left:50%;transform:translateX(-50%);bottom:calc(20px + env(safe-area-inset-bottom,0px));z-index:50;background:var(--ink);color:var(--bg);border-radius:12px;padding:8px 8px 8px 14px;display:flex;align-items:center;gap:10px;box-shadow:var(--elev-3);max-width:calc(100% - 32px)}
+.toast button{background:transparent;border:0;color:var(--bg);font-weight:700;min-height:36px;padding:0 10px;text-decoration:underline}
+
+/* phone */
+.mobile{display:none}
+@media (max-width:760px){
+  .board{display:none}
+  .mobile{display:grid;gap:12px;margin-top:12px}
+  .title{font-size:20px}
+  .strip{display:grid;grid-template-columns:repeat(7,minmax(0,1fr));gap:4px}
+  .strip button{border:1px solid var(--line);background:var(--surface);border-radius:12px;padding:6px 2px;display:grid;justify-items:center;gap:2px;min-height:64px}
+  .strip button b{font-family:var(--font-display);font-size:17px;line-height:1.1}
+  .strip button small{font-size:10.5px;color:var(--ink-2)}
+  .strip button[aria-current="true"]{background:var(--brand);border-color:var(--brand);color:var(--on-brand)}
+  .strip button[aria-current="true"] small{color:var(--on-brand)}
+  .strip .dot{width:7px;height:7px;border-radius:50%}
+  .mday{background:var(--surface-2);border-radius:var(--r-lg);padding:10px;display:grid;gap:8px}
+  .mtabs{display:grid;grid-template-columns:1fr 1fr}
+  .mtabs .seg{width:100%;grid-column:1/3}
+  .mtabs .seg button{flex:1}
+}
+</style>
+
+<div class="top">
+  <div class="row1">
+    <h1 class="title">จัดสายส่ง</h1>
+    <span class="week" id="week"></span>
+    <span class="sample">ข้อมูลตัวอย่าง</span>
+    <span class="sp"></span>
+    <div class="seg" role="group" aria-label="มุมมอง">
+      <button type="button" id="v-cal" aria-pressed="true">ปฏิทิน</button>
+      <button type="button" id="v-need" aria-pressed="false">ขวดที่ต้องมี</button>
+    </div>
+    <button type="button" class="btn primary" id="publish">ประกาศแผน</button>
+  </div>
+  <div class="row1">
+    <div class="stats" id="stats"></div>
+    <span class="sp"></span>
+    <span class="pub" id="pubinfo"></span>
+    <button type="button" class="btn ghost sm" id="reset">เริ่มใหม่</button>
+  </div>
+</div>
+
+<main id="main"></main>
+<div id="layer"></div>
+
+<script>
+(function(){
+'use strict';
+/* ---------- reference data (sample) ---------- */
+var DAYS=[];(function(){var names=['อา','จ','อ','พ','พฤ','ศ','ส'];var d=new Date(2026,10,20);for(var i=0;i<7;i++){var x=new Date(d);x.setDate(d.getDate()+i);DAYS.push({i:i,n:names[x.getDay()],d:x.getDate()});}})();
+var AREAS=[{id:'mueang',name:'เมือง',daily:true},{id:'phrae',name:'แพร่'},{id:'wangchin',name:'วังชิ้น'},{id:'thoen',name:'เถิน–แม่พริก'},{id:'lamphun',name:'ลำพูน'},{id:'chaehom',name:'แจ้ห่ม–เมืองปาน'},{id:'kokha',name:'เกาะคา–ห้างฉัตร'}];
+var AREA={};AREAS.forEach(function(a){AREA[a.id]=a});
+var SPEC={
+ a:{n:'250 คอสั้นใส'}, b:{n:'250 คอสั้นน้ำเงิน'}, c:{n:'250 คอยาวใส'}, d:{n:'600 คอสั้นน้ำเงิน'},
+ e:{n:'600 คอสั้นใส'}, f:{n:'920 ปากแคบน้ำเงิน'}, g:{n:'500 คอยาวใส'}, h:{n:'ถัง 18.9 น้ำเงิน'}
+};
+var STOCK_PLAIN={a:190,b:70,c:40,d:55,e:18,f:12,g:20,h:24};
+var STOCK_SCR={'a|ขาว':20,'d|ขาว':10};
+function O(id,cust,area,wanted,inst,items,day){return{id:id,cust:cust,area:area,wanted:wanted,inst:inst,items:items,day:day}}
+function I(spec,scr,bags){return{spec:spec,scr:scr,bags:bags}}
+var SAMPLE=[
+ O('o1','ภูน้ำทอง','mueang','สัปดาห์นี้',null,[I('a','ขาว',40)],0),
+ O('o2','ฟ้าใสวอเตอร์','mueang','ด่วน',null,[I('b','ฟ้าคริสตัล',20),I('h','ขาว',10)],0),
+ O('o3','ศรีวารี','phrae','สัปดาห์นี้','งวด 2/4',[I('a','ขาว',25)],0),
+ O('o4','บ้านน้ำเย็นแพร่','phrae','สัปดาห์นี้',null,[I('c','ส้ม',30)],0),
+ O('o5','ทิพย์มณี','phrae','ไม่รีบ',null,[I('d','ชมพูบานเย็น',20)],0),
+ O('o6','ลำธารใส','mueang','สัปดาห์นี้',null,[I('a','ขาว',30)],1),
+ O('o7','สายน้ำทอง','wangchin','สัปดาห์นี้',null,[I('a','ฟ้าคริสตัล',50)],1),
+ O('o8','ดอยงามดริงก์','wangchin','สัปดาห์นี้','งวด 1/2',[I('b','ขาว',40)],1),
+ O('o9','เพชรธารา','thoen','สัปดาห์นี้',null,[I('e','เขียวเข้ม',20)],2),
+ O('o10','ใสสะอาด','thoen','ด่วน',null,[I('a','ขาว',40),I('g',null,10)],2),
+ O('o11','รุ่งเช้าน้ำดื่ม','mueang','สัปดาห์นี้',null,[I('d','ขาว',30)],2),
+ O('o12','ดอกบัวทิพย์','lamphun','สัปดาห์นี้',null,[I('a','น้ำเงิน',30)],4),
+ O('o13','ภูผาใส','mueang','ไม่รีบ',null,[I('f','เขียวอ่อน',8)],4),
+ O('o14','เวียงเหนือวอเตอร์','chaehom','สัปดาห์นี้',null,[I('b','ฟ้าคริสตัล',25)],5),
+ O('o15','ทองทิพย์ธารา','chaehom','ไม่รีบ','งวด 3/4',[I('a','ขาว',20)],null),
+ O('o16','น้ำดื่มสายรุ้ง','chaehom','สัปดาห์นี้',null,[I('c','ขาว',20)],null),
+ O('o17','ธารเย็นลำพูน','lamphun','สัปดาห์นี้',null,[I('d','ส้ม',15),I('h','ฟ้าคริสตัล',8)],null),
+ O('o18','บ่อทองดริงก์','kokha','สัปดาห์นี้',null,[I('a','ชมพูบานเย็น',30)],null),
+ O('o19','ห้างฉัตรวอเตอร์','kokha','ด่วน',null,[I('e','ขาว',15)],null),
+ O('o20','ม่อนใสน้ำแร่','mueang','สัปดาห์นี้',null,[I('a','ขาว',20)],null),
+ O('o21','พรหมธารา','phrae','ไม่รีบ',null,[I('g','ขาว',15)],null),
+ O('o22','ภูเขาเขียวดริงก์','thoen','สัปดาห์นี้',null,[I('b','ขาว',30)],null),
+ O('o23','ศิลาทองแพร่','wangchin','ไม่รีบ',null,[I('f',null,10)],null)
+];
+var SAMPLE_PINS=[['mueang','phrae'],['mueang','wangchin'],['mueang','thoen'],['mueang'],['mueang','lamphun'],['mueang','chaehom'],['mueang','kokha']];
+
+/* ---------- state ---------- */
+var KEY='pk-route-planner-v1';
+var S=load()||fresh();
+function fresh(){return{orders:JSON.parse(JSON.stringify(SAMPLE)).map(function(o,k){o.seq=k;return o}),pins:JSON.parse(JSON.stringify(SAMPLE_PINS)),view:'cal',mday:0,mtab:'day',pub:null,changes:0}}
+function load(){try{var s=localStorage.getItem(KEY);return s?JSON.parse(s):null}catch(e){return null}}
+function save(){try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}}
+var undoStack=[];var drag=null;var openId=null;var openPinDay=null;var shareOpen=false;var toastT=null;
+
+/* ---------- helpers ---------- */
+function el(tag,attrs){var e=document.createElement(tag);if(attrs)for(var k in attrs){var v=attrs[k];if(v==null||v===false)continue;if(k==='class')e.className=v;else if(k==='text')e.textContent=v;else if(k.slice(0,2)==='on')e.addEventListener(k.slice(2),v);else e.setAttribute(k,v===true?'':v)}for(var i=2;i<arguments.length;i++){var c=arguments[i];if(c==null||c===false)continue;if(Array.isArray(c))c.forEach(function(x){if(x!=null&&x!==false)e.appendChild(typeof x==='string'?document.createTextNode(x):x)});else e.appendChild(typeof c==='string'?document.createTextNode(c):c)}return e}
+function dayLabel(i){var d=DAYS[i];return d.n+' '+d.d}
+function bagsOf(o){return o.items.reduce(function(s,x){return s+x.bags},0)}
+function itemText(x){return SPEC[x.spec].n+(x.scr?' · สกรีน'+x.scr:' · ไม่สกรีน')}
+function ordersOn(day){return S.orders.filter(function(o){return o.day===day}).sort(function(a,b){return a.seq-b.seq})}
+function pinned(day,area){return AREA[area].daily||S.pins[day].indexOf(area)>=0}
+function runDays(area){var r=[];for(var i=0;i<7;i++)if(pinned(i,area))r.push(i);return r}
+
+/* ---------- allocation (scheduled days first, in day order, then queue order) ---------- */
+var ALLOC={};var NEED={};
+function compute(){
+  var plain=Object.assign({},STOCK_PLAIN),scr=Object.assign({},STOCK_SCR);ALLOC={};
+  NEED={blow:{},screen:{},grid:{}};
+  for(var d=0;d<7;d++){ordersOn(d).forEach(function(o){
+    var st='ready';
+    o.items.forEach(function(x,ix){
+      var need=x.bags,r=0,p=0,s=0;
+      if(x.scr){var k=x.spec+'|'+x.scr;var u=Math.min(need,scr[k]||0);scr[k]=(scr[k]||0)-u;r=u;need-=u}
+      var u2=Math.min(need,plain[x.spec]||0);plain[x.spec]-=u2;need-=u2;
+      if(x.scr)p=u2;else r+=u2; s=need;
+      var ist=s>0?'short':(p>0?'screen':'ready');
+      ALLOC[o.id+'#'+ix]={ready:r,screen:p,short:s,st:ist};
+      if(ist==='short')st='short';else if(ist==='screen'&&st!=='short')st='screen';
+      var g=NEED.grid[x.spec]||(NEED.grid[x.spec]=[0,0,0,0,0,0,0].map(function(){return{n:0,r:0,s:0,x:0}}));
+      g[d].n+=x.bags;g[d].r+=r;g[d].s+=p;g[d].x+=s;
+      if(s>0){var b=NEED.blow[x.spec]||(NEED.blow[x.spec]={bags:0,first:d});b.bags+=s;if(d<b.first)b.first=d}
+      if(x.scr&&(p>0||s>0)){var sk=d+'|'+x.scr+'|'+x.spec;NEED.screen[sk]=(NEED.screen[sk]||0)+p+s}
+    });
+    ALLOC[o.id]=st;
+  })}
+  S.orders.forEach(function(o){if(o.day==null)ALLOC[o.id]='none'});
+}
+var ST_LABEL={ready:'พร้อมส่ง',screen:'ต้องสกรีน',short:'ขวดไม่พอ',none:'ยังไม่ลงวัน'};
+var ST_TAG={ready:'ready',screen:'screen',short:'short',none:'plain'};
+
+/* ---------- actions ---------- */
+function move(id,day,quiet){
+  var o=S.orders.find(function(x){return x.id===id});if(!o||o.day===day)return;
+  undoStack.push([{id:id,day:o.day,seq:o.seq}]);
+  o.day=day;o.seq=Date.now()/1000;if(S.pub)S.changes++;
+  save();render();
+  if(!quiet)toast(o.cust+(day==null?' กลับไปรอจัด':' → '+dayLabel(day)));
+}
+function moveMany(ids,day){
+  var batch=[];ids.forEach(function(id,k){var o=S.orders.find(function(x){return x.id===id});batch.push({id:id,day:o.day,seq:o.seq});o.day=day;o.seq=Date.now()/1000+k*0.001});
+  undoStack.push(batch);if(S.pub)S.changes+=ids.length;save();render();
+  toast(ids.length+' ร้าน → '+dayLabel(day));
+}
+function undo(){var b=undoStack.pop();if(!b)return;b.forEach(function(r){var o=S.orders.find(function(x){return x.id===r.id});o.day=r.day;o.seq=r.seq});if(S.pub)S.changes=Math.max(0,S.changes-b.length);save();render();hideToast()}
+function togglePin(day,area){var p=S.pins[day];var k=p.indexOf(area);if(k>=0)p.splice(k,1);else p.push(area);save();render()}
+
+/* ---------- toast ---------- */
+function toast(msg){var L=document.getElementById('toast');if(L)L.remove();var t=el('div',{class:'toast',id:'toast',role:'status'},el('span',{text:msg}),el('button',{type:'button',onclick:undo,text:'ย้อน'}));document.body.appendChild(t);clearTimeout(toastT);toastT=setTimeout(hideToast,4500)}
+function hideToast(){var t=document.getElementById('toast');if(t)t.remove()}
+
+/* ---------- render ---------- */
+function render(){
+  compute();
+  document.getElementById('week').textContent=dayLabel(0)+' – '+dayLabel(6)+' พ.ย.';
+  document.getElementById('v-cal').setAttribute('aria-pressed',S.view==='cal');
+  document.getElementById('v-need').setAttribute('aria-pressed',S.view==='need');
+  renderStats();
+  var m=document.getElementById('main');m.textContent='';
+  if(S.view==='cal'){m.appendChild(renderBoard());m.appendChild(renderMobile())}else m.appendChild(renderNeed());
+  renderLayer();
+}
+function renderStats(){
+  var tray=S.orders.filter(function(o){return o.day==null});
+  var short=S.orders.filter(function(o){return ALLOC[o.id]==='short'}).length;
+  var scrBags=0;for(var k in NEED.screen)scrBags+=NEED.screen[k];
+  var blow=0;for(var s in NEED.blow)blow+=NEED.blow[s].bags;
+  var st=document.getElementById('stats');st.textContent='';
+  st.appendChild(el('span',{class:'stat'},'รอลงวัน ',el('b',{class:'num',text:String(tray.length)}),' ร้าน'));
+  st.appendChild(el('span',{class:'stat'+(short?' bad':'')},'ขวดไม่พอ ',el('b',{class:'num',text:String(short)}),' ร้าน'));
+  st.appendChild(el('span',{class:'stat'+(blow?' bad':'')},'ต้องเป่าเพิ่ม ',el('b',{class:'num',text:String(blow)}),' ถุง'));
+  st.appendChild(el('span',{class:'stat warn'},'ต้องสกรีน ',el('b',{class:'num',text:String(scrBags)}),' ถุง'));
+  var pi=document.getElementById('pubinfo');
+  pi.textContent='';
+  if(S.pub){pi.appendChild(el('b',{text:'ประกาศแล้ว '}));pi.appendChild(document.createTextNode(S.pub+(S.changes?' · แก้หลังประกาศ '+S.changes+' รายการ':'')))}
+  else pi.textContent='ยังไม่ประกาศ';
+}
+function cardEl(o,inDay){
+  var st=ALLOC[o.id];var b=bagsOf(o);
+  var first=o.items[0];var more=o.items.length>1?' +'+(o.items.length-1)+' รายการ':'';
+  var off=inDay!=null&&!pinned(inDay,o.area);
+  var c=el('button',{type:'button',class:'card st-'+st,draggable:'true','data-id':o.id,'aria-label':o.cust+' '+b+' ถุง '+ST_LABEL[st],onclick:function(){openId=o.id;openPinDay=null;renderLayer()}},
+    el('div',{class:'c1'},el('span',{class:'cust',text:o.cust}),el('span',{class:'bags num',text:b+' ถุง'})),
+    el('div',{class:'c2',text:itemText(first)+more}),
+    el('div',{class:'c3'},
+      st!=='none'?el('span',{class:'tag '+ST_TAG[st],text:ST_LABEL[st]}):null,
+      o.wanted==='ด่วน'?el('span',{class:'tag urgent',text:'ด่วน'}):(inDay==null?el('span',{class:'tag plain',text:o.wanted}):null),
+      o.inst?el('span',{class:'tag plain',text:o.inst}):null,
+      off?el('span',{class:'tag screen',text:'นอกสายวันนี้'}):null));
+  c.addEventListener('dragstart',function(e){drag=o.id;c.classList.add('dragging');try{e.dataTransfer.setData('text/plain',o.id);e.dataTransfer.effectAllowed='move'}catch(_){}});
+  c.addEventListener('dragend',function(){drag=null;c.classList.remove('dragging');document.querySelectorAll('.over').forEach(function(x){x.classList.remove('over')})});
+  return c;
+}
+function dropZone(node,day){
+  node.addEventListener('dragover',function(e){if(!drag)return;e.preventDefault();node.classList.add('over')});
+  node.addEventListener('dragleave',function(e){if(!node.contains(e.relatedTarget))node.classList.remove('over')});
+  node.addEventListener('drop',function(e){e.preventDefault();node.classList.remove('over');var id=drag||e.dataTransfer.getData('text/plain');if(id)move(id,day)});
+}
+function trayGroups(){
+  var tray=S.orders.filter(function(o){return o.day==null}).sort(function(a,b){return a.seq-b.seq});
+  var groups=[];AREAS.forEach(function(a){var os=tray.filter(function(o){return o.area===a.id});if(os.length)groups.push({a:a,os:os})});
+  return groups;
+}
+function groupEl(g){
+  var rd=runDays(g.a.id).filter(function(d){return!AREA[g.a.id].daily});
+  var target=rd.length?rd[0]:null;
+  var bags=g.os.reduce(function(s,o){return s+bagsOf(o)},0);
+  return el('div',{class:'grp'},
+    el('div',{class:'grph'},g.a.name,el('small',{class:'num',text:g.os.length+' ร้าน · '+bags+' ถุง'}),
+      target!=null?el('button',{type:'button',class:'btn sm',onclick:function(){moveMany(g.os.map(function(o){return o.id}),target)},title:'ย้ายทั้งสายไปวันที่หมุดไว้',text:'ลงทั้งสาย → '+dayLabel(target)}):
+      (g.a.daily?null:el('span',{class:'hint',text:'ยังไม่หมุดวัน'}))),
+    g.os.map(function(o){return cardEl(o,null)}));
+}
+function renderBoard(){
+  var groups=trayGroups();
+  var tray=el('aside',{class:'tray','aria-label':'รอลงวัน'},
+    el('h2',null,'รอลงวัน',el('span',{class:'cnt num',text:String(groups.reduce(function(s,g){return s+g.os.length},0))})),
+    el('p',{class:'hint',text:'ลากการ์ดไปวางในวัน หรือแตะการ์ดเพื่อเลือกวัน'}),
+    groups.length?groups.map(groupEl):el('div',{class:'empty',text:'ลงวันครบทุกร้านแล้ว'}));
+  dropZone(tray,null);
+  var grid=el('div',{class:'dgrid'});
+  for(var d=0;d<7;d++)grid.appendChild(dayCol(d));
+  return el('div',{class:'board'},tray,el('div',{class:'days'},grid));
+}
+function daySummary(d){
+  var os=ordersOn(d);var tot=0,r=0,s=0,x=0;
+  os.forEach(function(o){o.items.forEach(function(it,ix){var a=ALLOC[o.id+'#'+ix];tot+=it.bags;r+=a.ready;s+=a.screen;x+=a.short})});
+  return{os:os,tot:tot,r:r,s:s,x:x};
+}
+function barEl(sm){var t=sm.tot||1;return el('div',{class:'bar','aria-hidden':'true'},el('i',{class:'r',style:'width:'+(sm.r/t*100)+'%'}),el('i',{class:'s',style:'width:'+(sm.s/t*100)+'%'}),el('i',{class:'x',style:'width:'+(sm.x/t*100)+'%'}))}
+function pinsEl(d){
+  return el('div',{class:'pins'},
+    AREAS.filter(function(a){return a.daily}).map(function(a){return el('span',{class:'pin daily',text:a.name+' ทุกวัน'})}),
+    S.pins[d].filter(function(a){return!AREA[a].daily}).map(function(a){return el('button',{type:'button',class:'pin',title:'แตะเพื่อแก้หมุดสาย',onclick:function(){openPinDay=d;openId=null;renderLayer()},text:AREA[a].name})}),
+    el('button',{type:'button',class:'pin add','aria-label':'หมุดสายวัน '+dayLabel(d),onclick:function(){openPinDay=d;openId=null;renderLayer()},text:'+ สาย'}));
+}
+function dayBody(d,os){
+  var body=el('div',{class:'db'});
+  if(!os.length)body.appendChild(el('div',{class:'empty',text:'วางการ์ดที่นี่'}));
+  var seen={};
+  var order=AREAS.map(function(a){return a.id});
+  os.slice().sort(function(a,b){return order.indexOf(a.area)-order.indexOf(b.area)||a.seq-b.seq}).forEach(function(o){
+    if(!seen[o.area]){seen[o.area]=1;body.appendChild(el('div',{class:'alab'},AREA[o.area].name,!pinned(d,o.area)?el('span',{class:'off',text:'· ไม่ได้หมุดวันนี้'}):null))}
+    body.appendChild(cardEl(o,d));
+  });
+  return body;
+}
+function dayCol(d){
+  var sm=daySummary(d);
+  var col=el('section',{class:'day','aria-label':'วัน '+dayLabel(d)},
+    el('div',{class:'dh'},
+      el('div',{class:'dname'},el('b',{text:DAYS[d].n}),el('span',{class:'num',text:DAYS[d].d+' พ.ย.'})),
+      pinsEl(d),
+      el('div',{class:'dsum num'},el('span',{text:sm.os.length+' ร้าน'}),el('span',{text:sm.tot+' ถุง'})),
+      barEl(sm)),
+    dayBody(d,sm.os));
+  dropZone(col,d);
+  return col;
+}
+function renderMobile(){
+  var m=el('div',{class:'mobile'});
+  var strip=el('div',{class:'strip',role:'tablist','aria-label':'เลือกวัน'});
+  for(var d=0;d<7;d++)(function(d){var sm=daySummary(d);var col=sm.x?'var(--bad)':(sm.s?'var(--warn)':(sm.tot?'var(--ok)':'var(--line)'));
+    strip.appendChild(el('button',{type:'button',role:'tab','aria-current':String(S.mtab==='day'&&S.mday===d),onclick:function(){S.mday=d;S.mtab='day';save();render()}},
+      el('small',{text:DAYS[d].n}),el('b',{class:'num',text:String(DAYS[d].d)}),el('span',{class:'dot',style:'background:'+col}),el('small',{class:'num',text:sm.tot?sm.tot+' ถุง':'–'})))})(d);
+  m.appendChild(strip);
+  var trayN=S.orders.filter(function(o){return o.day==null}).length;
+  m.appendChild(el('div',{class:'mtabs'},el('div',{class:'seg',role:'group'},
+    el('button',{type:'button','aria-pressed':String(S.mtab==='day'),onclick:function(){S.mtab='day';save();render()},text:'วัน '+dayLabel(S.mday)}),
+    el('button',{type:'button','aria-pressed':String(S.mtab==='tray'),onclick:function(){S.mtab='tray';save();render()},text:'รอลงวัน ('+trayN+')'}))));
+  if(S.mtab==='day'){var d=S.mday;var sm=daySummary(d);
+    m.appendChild(el('div',{class:'mday'},el('div',{class:'dname'},el('b',{text:DAYS[d].n+' '+DAYS[d].d+' พ.ย.'}),el('span',{class:'num',text:sm.os.length+' ร้าน · '+sm.tot+' ถุง'})),pinsEl(d),barEl(sm),dayBody(d,sm.os)));
+  }else{var g=trayGroups();m.appendChild(el('div',{class:'mday'},el('p',{class:'hint',text:'แตะการ์ดเพื่อเลือกวันส่ง'}),g.length?g.map(groupEl):el('div',{class:'empty',text:'ลงวันครบทุกร้านแล้ว'})))}
+  return m;
+}
+function renderNeed(){
+  var wrap=el('div',{class:'need'});
+  var blowL=Object.keys(NEED.blow).map(function(s){var b=NEED.blow[s];var before=b.first>0?'ก่อน '+dayLabel(b.first-1):'ด่วน ภายในวันนี้';
+    return el('div',{class:'li bad'},el('div',{class:'d'},SPEC[s].n,el('small',{text:'ให้ทันส่ง '+dayLabel(b.first)+' · '+before})),el('span',{class:'v num',text:b.bags+' ถุง'}))});
+  var byDay={};Object.keys(NEED.screen).forEach(function(k){var p=k.split('|');var d=+p[0];var sd=Math.max(0,d-1);(byDay[sd]=byDay[sd]||[]).push({d:d,c:p[1],s:p[2],v:NEED.screen[k]})});
+  var scrL=Object.keys(byDay).sort(function(a,b){return a-b}).map(function(sd){var rows=byDay[sd].sort(function(a,b){return a.d-b.d||(a.c<b.c?-1:1)});var tot=rows.reduce(function(t,r){return t+r.v},0);
+    return el('div',{class:'sday'},el('h4',null,'สกรีน '+dayLabel(+sd),el('small',{class:'num',text:tot+' ถุง · ส่ง '+rows.map(function(r){return dayLabel(r.d)}).filter(function(x,i,a){return a.indexOf(x)===i}).join(', ')})),
+      rows.map(function(r){return el('div',{class:'srow'},el('span',{class:'c',text:'สี'+r.c}),el('span',{class:'p',text:SPEC[r.s].n+(r.d===+sd?' · ส่งวันเดียวกัน':'')}),el('span',{class:'v num',text:r.v+' ถุง'}))}))});
+  wrap.appendChild(el('div',{class:'todo'},
+    el('div',{class:'panel'},el('h3',null,'ต้องเป่าเพิ่ม',el('span',{class:'who',text:'ทีมเป่า'})),blowL.length?blowL:el('div',{class:'okmsg',text:'ขวดเปล่าพอทุกวันในแผนนี้'})),
+    el('div',{class:'panel'},el('h3',null,'ต้องสกรีน',el('span',{class:'who',text:'ทีมสกรีน'})),scrL.length?scrL:el('div',{class:'okmsg',text:'ไม่มีงานสกรีนในแผนนี้'}))));
+  var head=el('tr',null,el('th',{text:'ขวด (ถุง)'}),DAYS.map(function(d){return el('th',{class:'num',text:d.n+' '+d.d})}),el('th',{text:'รวม'}),el('th',{text:'ขวดเปล่าในคลัง'}));
+  var rows=Object.keys(NEED.grid).map(function(s){var g=NEED.grid[s];var tot=0;
+    return el('tr',null,el('td',{text:SPEC[s].n}),g.map(function(c){tot+=c.n;if(!c.n)return el('td',{class:'z',text:'–'});var cls=c.x?'x':(c.s?'s':'r');return el('td',null,el('span',{class:'cell num '+cls,title:(c.x?'ขาด '+c.x+' ถุง':c.s?'ต้องสกรีน '+c.s+' ถุง':'พร้อม'),text:String(c.n)}))}),el('td',{class:'num',text:String(tot)}),el('td',{class:'num',text:String(STOCK_PLAIN[s]||0)}))});
+  wrap.appendChild(el('div',{class:'tblw'},el('table',null,el('thead',null,head),el('tbody',null,rows))));
+  wrap.appendChild(el('div',{class:'legend'},el('span',null,el('i',{style:'background:var(--ok)'}),'พร้อมส่ง'),el('span',null,el('i',{style:'background:var(--warn)'}),'มีขวดแล้ว ต้องสกรีน'),el('span',null,el('i',{style:'background:var(--bad)'}),'ขวดไม่พอ ต้องเป่าเพิ่ม'),el('span',{text:'คิดตามลำดับวันที่ส่ง แล้วตามคิว ร้านที่ยังไม่ลงวันไม่ถูกนับ'})));
+  return wrap;
+}
+function renderLayer(){
+  var L=document.getElementById('layer');L.textContent='';
+  if(openId==null&&openPinDay==null&&!shareOpen)return;
+  var close=function(){openId=null;openPinDay=null;shareOpen=false;renderLayer()};
+  L.appendChild(el('div',{class:'scrim',onclick:close}));
+  var sh=el('div',{class:'sheet',role:'dialog','aria-modal':'true'});
+  if(openId!=null){
+    var o=S.orders.find(function(x){return x.id===openId});var st=ALLOC[o.id];
+    sh.appendChild(el('h3',{text:o.cust}));
+    sh.appendChild(el('div',{class:'meta'},el('span',{text:'สาย'+AREA[o.area].name}),el('span',{text:'· ต้องการ '+o.wanted}),o.inst?el('span',{text:'· '+o.inst}):null));
+    sh.appendChild(el('div',{class:'items'},o.items.map(function(x,ix){var a=ALLOC[o.id+'#'+ix];var t=a?a.st:'none';
+      var sub=!a?'ยังไม่ลงวัน':(a.short?'ขาด '+a.short+' ถุง ต้องเป่าเพิ่ม':(a.screen?'มีขวดแล้ว ต้องสกรีน '+a.screen+' ถุง':'พร้อมส่ง'));
+      return el('div',{class:'it'},el('div',{class:'d'},itemText(x),el('small',{text:sub})),el('span',{class:'bags num',text:x.bags+' ถุง'}),el('span',{class:'tag '+ST_TAG[t],text:ST_LABEL[t]}))})));
+    sh.appendChild(el('p',{class:'sl',text:'ส่งวันไหน'}));
+    var dc=el('div',{class:'dayc'});
+    for(var d=0;d<7;d++)(function(d){var run=pinned(d,o.area)&&!AREA[o.area].daily;dc.appendChild(el('button',{type:'button',class:run?'run':null,'aria-current':String(o.day===d),onclick:function(){move(o.id,d);openId=null;renderLayer()}},el('b',{text:dayLabel(d)}),el('small',{text:run?'สายนี้วิ่ง':' '})))})(d);
+    dc.appendChild(el('button',{type:'button','aria-current':String(o.day==null),onclick:function(){move(o.id,null);openId=null;renderLayer()}},el('b',{text:'รอลงวัน'}),el('small',{text:' '})));
+    sh.appendChild(dc);
+    sh.appendChild(el('p',{class:'hint',text:'วันที่ขอบแดงคือวันที่หมุดสาย'+AREA[o.area].name+'ไว้'}));
+    sh.appendChild(el('button',{type:'button',class:'btn',onclick:close,text:'ปิด'}));
+  }else if(openPinDay!=null){
+    var dd=openPinDay;
+    sh.appendChild(el('h3',{text:'หมุดสาย '+dayLabel(dd)}));
+    sh.appendChild(el('p',{class:'hint',text:'เลือกสายที่รถวิ่งวันนี้ เมืองส่งได้ทุกวันอยู่แล้ว'}));
+    sh.appendChild(el('div',{class:'areas'},AREAS.filter(function(a){return!a.daily}).map(function(a){return el('button',{type:'button','aria-pressed':String(S.pins[dd].indexOf(a.id)>=0),onclick:function(){togglePin(dd,a.id)},text:a.name})})));
+    sh.appendChild(el('button',{type:'button',class:'btn primary',onclick:close,text:'เสร็จ'}));
+  }else if(shareOpen){
+    sh.appendChild(el('h3',{text:'ประกาศแผนส่ง'}));
+    sh.appendChild(el('p',{class:'hint',text:'คัดลอกข้อความนี้ไปวางในกลุ่ม TEAMWORK'}));
+    var ta=el('textarea',{id:'sharetext',readonly:true});ta.value=shareText();sh.appendChild(ta);
+    var msg=el('span',{class:'hint'});
+    sh.appendChild(el('div',{class:'row1'},
+      el('button',{type:'button',class:'btn primary',onclick:function(){var t=ta.value;var done=function(){msg.textContent='คัดลอกแล้ว'};try{navigator.clipboard.writeText(t).then(done,function(){ta.select();msg.textContent='กดค้างแล้วเลือกคัดลอก'})}catch(e){ta.select();msg.textContent='กดค้างแล้วเลือกคัดลอก'}
+        var now=new Date();S.pub='19 พ.ย. '+String(now.getHours()).padStart(2,'0')+':'+String(now.getMinutes()).padStart(2,'0');S.changes=0;save();renderStats()},text:'คัดลอกและประกาศ'}),msg,el('span',{class:'sp'}),el('button',{type:'button',class:'btn',onclick:close,text:'ปิด'})));
+  }
+  L.appendChild(sh);
+  var f=sh.querySelector('button');if(f)f.focus({preventScroll:true});
+}
+function shareText(){
+  compute();
+  var lines=['แผนส่ง '+dayLabel(0)+' – '+dayLabel(6)+' พ.ย.'];
+  for(var d=0;d<7;d++){var sm=daySummary(d);if(!sm.tot)continue;
+    var areas=[];sm.os.forEach(function(o){var n=AREA[o.area].name;if(areas.indexOf(n)<0)areas.push(n)});
+    lines.push(dayLabel(d)+' · '+areas.join(' + ')+' · '+sm.os.length+' ร้าน '+sm.tot+' ถุง'+(sm.x?' (ขวดไม่พอ '+sm.x+' ถุง)':''));}
+  var bk=Object.keys(NEED.blow);if(bk.length){lines.push('');lines.push('ต้องเป่าเพิ่ม');bk.forEach(function(s){var b=NEED.blow[s];lines.push('- '+SPEC[s].n+' '+b.bags+' ถุง '+(b.first>0?'ก่อน '+dayLabel(b.first-1):'ด่วนวันนี้'))})}
+  var sk=Object.keys(NEED.screen).sort(function(a,b){return (+a.split('|')[0])-(+b.split('|')[0])});
+  if(sk.length){lines.push('');lines.push('ต้องสกรีน');sk.forEach(function(k){var p=k.split('|');lines.push('- ส่ง '+dayLabel(+p[0])+' · '+SPEC[p[2]].n+' สกรีน'+p[1]+' '+NEED.screen[k]+' ถุง')})}
+  var tray=S.orders.filter(function(o){return o.day==null}).length;if(tray){lines.push('');lines.push('ยังไม่ลงวัน '+tray+' ร้าน')}
+  return lines.join('\n');
+}
+
+/* ---------- wiring ---------- */
+document.getElementById('v-cal').addEventListener('click',function(){S.view='cal';save();render()});
+document.getElementById('v-need').addEventListener('click',function(){S.view='need';save();render()});
+document.getElementById('publish').addEventListener('click',function(){shareOpen=true;openId=null;openPinDay=null;renderLayer()});
+document.getElementById('reset').addEventListener('click',function(){S=fresh();undoStack=[];save();render();toast('กลับเป็นข้อมูลตัวอย่างแล้ว')});
+document.addEventListener('keydown',function(e){if(e.key==='Escape'&&(openId!=null||openPinDay!=null||shareOpen)){openId=null;openPinDay=null;shareOpen=false;renderLayer()}});
+render();
+})();
+</script>

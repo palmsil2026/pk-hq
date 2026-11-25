@@ -20,7 +20,7 @@ try { pw = require("playwright"); } catch (e) { pw = require("/opt/node-tools/no
 const args = process.argv.slice(2);
 const shotsAt = args.indexOf("--shots");
 const SHOTS = shotsAt >= 0 ? args[shotsAt + 1] : "";
-const FILE = path.resolve(args.find((a, i) => !a.startsWith("--") && i !== shotsAt + 1) || path.join(HERE, "..", "..", "dist", "demo", "pk-v2-demo.html"));
+const FILE = path.resolve(args.find((a, i) => !a.startsWith("--") && (shotsAt < 0 || i !== shotsAt + 1)) || path.join(HERE, "..", "..", "dist", "demo", "pk-v2-demo.html"));
 if (SHOTS) fs.mkdirSync(SHOTS, { recursive: true });
 
 const body = fs.readFileSync(FILE, "utf8");
