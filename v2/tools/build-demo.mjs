@@ -134,8 +134,6 @@ const SHELL_CSS = `
 .demo-app b { font: 700 19px/1.35 var(--font-display); }
 .demo-app .demo-who { margin-top: auto; padding-top: var(--sp-2); font: 600 13px var(--font-display); color: var(--brand-ink); }
 .demo-how p b { font-size: 18px; letter-spacing: .08em; }
-.demo-link { text-decoration: none; color: var(--ink); }
-.demo-link:hover { border-color: var(--brand); }
 .demo-limits summary { cursor: pointer; min-height: 28px; display: flex; align-items: center; }
 .demo-limits ul { margin: 0; padding-left: 20px; display: grid; gap: 4px; color: var(--ink-2); }
 `;

@@ -40,5 +40,9 @@ export async function seedOfficePlan(X, apply, now) {
   });
   // ลำดับคิวที่ออฟฟิศดันขึ้น (ป้าย "ดันขึ้นก่อน")
   ops.push({ op: "raw", sql: "UPDATE orders SET priority = 1 WHERE id = 'OD007'", args: [] });
+  // หมุดสายสำหรับปฏิทินตัวอย่าง (อำเภอเมืองแสดงทุกวันเอง)
+  for (const [offset, routes] of [[0, ["111", "212"]], [1, ["119", "212"]], [3, ["119"]], [4, ["212"]], [6, ["119"]]]) {
+    ops.push({ op: "insert", table: "route_day_pins", row: { day: addDays(today, offset), routes_json: JSON.stringify(routes) } });
+  }
   await apply(X, ops);
 }
