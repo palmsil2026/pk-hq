@@ -19,7 +19,7 @@ import { OPEN_STATUSES, CATALOG_READS, catalogOf, deriveOrder, loadOrderParts, c
 import { defineOfficeOrders, loadOrder, ROLES_OFFICE } from "./office-orders.mjs";
 import { defineOfficeCustomers } from "./office-customers.mjs";
 import { defineOfficeBills, suggestDue } from "./office-bills.mjs";
-import { plainKey, screenKey, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
+import { plainKey, screenKey, screenedStockLabel, stockViewLabel, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 import { defineOfficePlan } from "./office-plan.mjs";          // งวดส่ง · เลื่อน · รอยืนยัน · รวมตามสินค้า · หน้าร้าน (0210)
 import { defineOfficeDeposits, DEPOSIT_SQL, depositSum, depositUsed, depositLeft } from "./office-deposits.mjs";   // มัดจำ (0210)
 import { defineOfficeGeo } from "./office-geo.mjs";            // หมุดลูกค้า · แนะนำสาย · ชื่อสาย (0310)
@@ -379,7 +379,7 @@ export function defineOffice(R) {
           const sj = (P.sjobs[id] || []).find(j => j.order_item_id === i.id && j.status !== "ยกเลิก");
           const k = sj && sj.status === "เสร็จแล้ว" ? screenKey(i, sj) : plainKey(i);
           const grade = gradeFor(k, i, bSet);
-          const n = need.get(k) || { label: i.label + (k !== plainKey(i) ? " สกรีน " + k.split("|สกรีน ")[1] : ""), type: i.type, size: i.size, need: 0, orders: 0, soonest: "", grade };
+          const n = need.get(k) || { label: k !== plainKey(i) ? screenedStockLabel(i, sj, custs.get(o.customer_id)?.name, o.brand) : i.label, type: i.type, size: i.size, need: 0, orders: 0, soonest: "", grade };
           n.need += left; n.orders++;
           if (o.due_day && (!n.soonest || o.due_day < n.soonest)) n.soonest = o.due_day;
           need.set(k, n);
@@ -387,7 +387,7 @@ export function defineOffice(R) {
       }
       const by = new Map();
       for (const b of bal) {
-        const r = by.get(b.item_key) || { item_key: b.item_key, label: b.label, a: 0, b: 0, updated_at: b.updated_at };
+        const r = by.get(b.item_key) || { item_key: b.item_key, label: stockViewLabel(b.item_key, b.label), a: 0, b: 0, updated_at: b.updated_at };
         r[b.grade === "B" ? "b" : "a"] += b.qty_pcs;
         if (b.updated_at > r.updated_at) r.updated_at = b.updated_at;
         by.set(b.item_key, r);

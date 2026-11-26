@@ -4,6 +4,7 @@
 //       ยอดทำแล้ว = ผลรวมรอบที่ผูก (view job_made) ไม่เก็บตัวนับซ้ำ · ผูกรอบไม่บังคับ (ผลิตเข้าสต๊อกได้แบบแอปเดิม)
 //  สต๊อก: สมุด stock_moves (เขียนเพิ่มอย่างเดียว) · เกรด A/B แยก · ติดลบไม่บล็อก แต่ขึ้นธง
 // ============================================================
+import { stockViewLabel } from "./deliver_common.mjs";
 import { bad, conflict, notFound, need, text, int, oneOf, iso, thaiDay, specLabel } from "../core.mjs";
 import { readSpec, negativeFlag, stockKey, jobsOps, PROD_TYPES } from "./prodLib.mjs";
 
@@ -143,7 +144,7 @@ export function defineProdStock(R) {
         if (!it) {
           if (b.item_key.startsWith("spec:")) {
             const [type, size, neck, shape, color] = b.item_key.slice(5).split("|");
-            it = { key: b.item_key, kind: "spec", type, size, neck, shape, color, label: b.label || specLabel({ type, size, neck, shape, color }), per_bag: pb.get(type + "|" + size) || 0, unit: unit.get(type) || "ใบ", a: 0, b: 0, at: b.updated_at };
+            it = { key: b.item_key, kind: "spec", type, size, neck, shape, color, label: stockViewLabel(b.item_key, b.label || specLabel({ type, size, neck, shape, color })), per_bag: pb.get(type + "|" + size) || 0, unit: unit.get(type) || "ใบ", a: 0, b: 0, at: b.updated_at };
           } else {
             const m = matBy.get(b.item_key.slice(4));
             it = { key: b.item_key, kind: "mat", label: m ? m.name : b.label || b.item_key.slice(4), unit: m ? m.unit : "", per_bag: m ? m.per_pack : 0, pack_unit: m ? m.pack_unit : "", a: 0, b: 0, at: b.updated_at };
@@ -199,7 +200,7 @@ export function defineProdStock(R) {
   R.define({
     name: "stock.count", roles: ["prod"], write: true, gate: true, reason: "required", label: "นับปรับสต๊อก",
     input: raw => {
-      const key = need(raw.item_key, "รายการ", 300);
+      const key = need(raw.item_key, "รายการ", 800);
       if (!/^(spec:|mat:)/.test(key)) throw bad("รายการสต๊อกไม่ถูกต้อง");
       return { key, grade: oneOf(raw.grade || "A", ["A", "B"], "เกรด"), counted: int(raw.counted, "ยอดที่นับได้", { min: 0, max: 50000000 }), seen: int(raw.seen, "ยอดที่เห็นบนจอ", { min: -50000000, max: 50000000 }) };
     },

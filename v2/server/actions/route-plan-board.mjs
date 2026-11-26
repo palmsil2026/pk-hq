@@ -191,7 +191,7 @@ export function allocate(stops, stock, running, bColors) {
       const short = line.pcs - ready - blanks - current;
       const blow = ["ขวด", "ถัง"].includes(line.type) && blankGrade === "A" ? short : 0;
       Object.assign(line, { ready, needsScreen, running: current, short, blow, check: short - blow });
-      const aggregate = JSON.stringify([stop.day, line.key, blankGrade, line.per_bag]);
+      const aggregate = JSON.stringify([stop.day, line.plainKey, line.screen, line.cap_color, blankGrade, line.per_bag]);
       if (!totals.has(aggregate)) totals.set(aggregate, {
         day: stop.day, before: addDays(stop.day, -1), label: line.label, size: line.size, screen: line.screen, cap_color: line.cap_color,
         per_bag: line.per_bag, piece_unit: line.piece_unit, pcs: 0, ready: 0, needsScreen: 0, running: 0, short: 0, blow: 0, check: 0,

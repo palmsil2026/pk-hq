@@ -3,7 +3,7 @@
 //
 //  สต๊อก (ตัดสินแทนคุณปาล์ม 16 พ.ย. — เหตุผลใน docs/app-v2/STATUS.md):
 //    ขวดเปล่า        spec:<spec_key>                 (ทีมผลิต "ผลิตเข้า" ที่กุญแจนี้)
-//    ขวดสกรีนแล้ว    spec:<spec_key>|สกรีน <สี>      (สกรีนเสร็จ = เปล่าออก ดี+เสีย · สกรีนแล้วเข้า ดี)
+//    ขวดสกรีนแล้ว    spec:<spec_key>|งานสกรีน:<รายการออเดอร์>|สกรีน <สี> · แยกของแต่ละใบสั่ง
 //    ขึ้นรถ          ออกจากกุญแจที่เหมาะกับรายการ (มีงานสกรีน = กุญแจสกรีน · ไม่มี = เปล่า) — จดกุญแจไว้ในแถวของบนรถ
 //    ส่งแล้ว         ไม่ขยับคลัง (ออกไปตอนขึ้นรถแล้ว) · เอาลงจากรถ = คืนเข้ากุญแจเดิม
 // ============================================================
@@ -20,10 +20,24 @@ export const plainKey = item => "spec:" + item.spec_key;
 export function screenColorOf(item, job) {
   return String((item && item.screen_color) || (job && job.colors) || "").trim() || "ไม่ระบุสี";
 }
-export const screenKey = (item, job) => plainKey(item) + "|สกรีน " + screenColorOf(item, job);
+export function screenKey(item, job) {
+  if (!item.id) throw new Error("สต๊อกสกรีนต้องผูกรายการสินค้า");
+  return plainKey(item) + "|งานสกรีน:" + encodeURIComponent(item.id) + "|สกรีน " + screenColorOf(item, job);
+}
 export function itemName(item) {
   if (!item) return "สินค้า";
   return item.label || [item.type, item.size, item.neck, item.shape, item.color].map(v => String(v || "").trim()).filter(Boolean).join(" ") || item.type || "สินค้า";
+}
+
+export function screenedStockLabel(item, job, customer, brand) {
+  return [itemName(item) + " สกรีน " + screenColorOf(item, job), customer, brand].filter(Boolean).join(" · ");
+}
+
+/** ของเดิมที่รวมตามสีเก็บไว้ดูเพื่อให้คนตรวจว่าเป็นของงานไหน */
+export function stockViewLabel(key, label) {
+  return key.startsWith("spec:") && key.split("|")[5]?.startsWith("สกรีน ")
+    ? label + " · ต้องยืนยันว่าเป็นของงานไหน"
+    : label;
 }
 
 /** จำนวนเป็นคำที่คนอ่าน: "40 ถุง (8,000 ใบ)" / "400 ชิ้น" */

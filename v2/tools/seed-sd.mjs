@@ -5,6 +5,8 @@
 // ============================================================
 import { iso, thaiDay, addDays, specKey, specLabel } from "../server/core.mjs";
 
+import { screenKey, screenedStockLabel } from "../server/actions/deliver_common.mjs";
+
 export async function seedScreenDeliver(X, apply, now) {
   const today = thaiDay(now), at = ms => iso(now - ms), H = 3600000;
   const ops = [];
@@ -36,9 +38,11 @@ export async function seedScreenDeliver(X, apply, now) {
   ops.push({ op: "insert", table: "screen_parts", row: { id: "SPD122", job_id: "SJD12", order_id: "OD012", team: "ทีม 1", qty_pcs: 2400, at: at(1.5 * H), day: today, by: "S121", job_ver: 3, src: "demo" } });
   ops.push({ op: "move", item_key: "spec:" + specKey(b600), label: specLabel(b600), grade: "A", qty_pcs: 20000, move_type: "ยอดยกมา", ref_entity: "demo", ref_id: "seed-b", src: "demo" });
   ops.push({ op: "move", item_key: "spec:" + specKey(b600), label: specLabel(b600), grade: "A", qty_pcs: -6000, move_type: "เบิกสกรีน", ref_entity: "screen_jobs", ref_id: "SJD12", src: "demo" });
-  ops.push({ op: "move", item_key: "spec:" + specKey(b600) + "|สกรีน น้ำเงิน", label: specLabel(b600) + " สกรีน น้ำเงิน", grade: "A", qty_pcs: 6000, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: "SJD12", src: "demo" });
+  const blue = { ...b600, id: "OD012-1", spec_key: specKey(b600), screen_color: "น้ำเงิน" };
+  ops.push({ op: "move", item_key: screenKey(blue), label: screenedStockLabel(blue, null, "ร้านตัวอย่าง B"), grade: "A", qty_pcs: 6000, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: "SJD12", src: "demo" });
   // คลัง: ยอดยกมา (ทีมผลิตจะเริ่มนับจริงตอนย้ายมา)
   for (const [it, n] of [[b600, 12000], [b250, 6000]]) ops.push({ op: "move", item_key: "spec:" + specKey(it), label: specLabel(it), grade: "A", qty_pcs: n, move_type: "ยอดยกมา", ref_entity: "demo", ref_id: "seed", src: "demo" });
-  ops.push({ op: "move", item_key: "spec:" + specKey(b250) + "|สกรีน เขียวเข้ม", label: specLabel(b250) + " สกรีน เขียวเข้ม", grade: "A", qty_pcs: 5040, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: "SJD11", src: "demo" });
+  const green = { ...b250, id: "OD011-1", spec_key: specKey(b250), screen_color: "เขียวเข้ม" };
+  ops.push({ op: "move", item_key: screenKey(green), label: screenedStockLabel(green, null, "ร้านตัวอย่าง E"), grade: "A", qty_pcs: 5040, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: "SJD11", src: "demo" });
   await apply(X, ops);
 }

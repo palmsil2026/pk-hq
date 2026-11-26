@@ -10,7 +10,7 @@
 import { Fail, bad, conflict, notFound, need, text, int, day, oneOf, iso, thaiDay } from "../core.mjs";
 import { nameKey } from "../import/legacy.mjs";
 import { CATALOG_READS, catalogOf, normalizeItem, deriveOrder, statusSet, splitBags, gradeOf, PRICE_KIND } from "./office-lib.mjs";
-import { plainKey, screenKey, negativeStockFlags, billAfterGuard } from "./deliver_common.mjs";
+import { plainKey, screenKey, screenedStockLabel, negativeStockFlags, billAfterGuard } from "./deliver_common.mjs";
 import { PROD_TYPES } from "./prodLib.mjs";
 import { planInput, wantInput, planState } from "./office-plan-lib.mjs";
 import { roundRows, planCols } from "./office-plan.mjs";
@@ -433,7 +433,7 @@ export function defineOfficeOrders(R) {
           stock_key: key, note: ["ลูกค้ารับที่โรงงาน", input.note].filter(Boolean).join(" · "), src: "v2" };
         loads.push(row);
         ops.push({ op: "insert", table: "delivery_loads", row });
-        const mv = { op: "move", item_key: key, label: it.label + (key !== plainKey(it) ? " สกรีน " + key.split("|สกรีน ")[1] : ""), grade, qty_pcs: -l.qty_pcs, move_type: "ส่งออก", ref_entity: "delivery_loads", ref_id: id, reason: "ลูกค้ารับที่โรงงาน" };
+        const mv = { op: "move", item_key: key, label: key !== plainKey(it) ? screenedStockLabel(it, sj, ctx.cust?.name, o.brand) : it.label, grade, qty_pcs: -l.qty_pcs, move_type: "ส่งออก", ref_entity: "delivery_loads", ref_id: id, reason: "ลูกค้ารับที่โรงงาน" };
         ops.push(mv);
         moves.push(mv);
         const before = ctx.items.find(x => x.id === it.id);
