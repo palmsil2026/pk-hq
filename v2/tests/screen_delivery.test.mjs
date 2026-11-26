@@ -9,7 +9,7 @@ const AT = new Date(T0).toISOString();
 const TODAY = "2026-11-16";
 const BOTTLE = { type: "ขวด", size: "600 ml", neck: "คอยาว", shape: "MK", color: "ใส" };
 const PLAIN = "spec:" + specKey(BOTTLE);
-const SCREENED = PLAIN + "|สกรีน น้ำเงิน";
+const SCREENED = PLAIN + "|งานสกรีน:IB1|สกรีน น้ำเงิน";
 
 /** โลกทดสอบ: พนักงานทุกบทบาท · ลูกค้า 3 ราย · ออเดอร์ (ไม่สกรีน 40 ถุง · สกรีน 20 ถุง 2 รายการ · ยกเลิก) */
 async function setup(opt) {
@@ -192,7 +192,8 @@ test("สกรีน · รายการ: คิวตามวันนั�
 // ═══════════════════ ส่งของ ═══════════════════
 
 test("ส่งของ · ขึ้นรถเต็ม: แถวบนรถ + รอบรถวันนี้ (ใช้ซ้ำ) · ตัวนับบนรถ · คลังออก (ขวดเปล่า / ขวดสกรีน) · ย้อนครบ", async () => {
-  const { W, T } = await setup({ stock: { [PLAIN]: 9000, [SCREENED]: 6000 } });
+  const secondScreened = PLAIN + "|งานสกรีน:IB2|สกรีน น้ำเงิน";
+  const { W, T } = await setup({ stock: { [PLAIN]: 9000, [SCREENED]: 4000, [secondScreened]: 2000 } });
   const s0 = snap(W);
   const r = await W.call(T.deliver, "deliver.load", { order: "OA", vehicle: "04", lines: [{ item: "IA1", qty: 8000 }] });
   assert.equal(r.ok, true, JSON.stringify(r));
@@ -205,7 +206,7 @@ test("ส่งของ · ขึ้นรถเต็ม: แถวบนร�
   W.d1.raw.prepare("UPDATE screen_jobs SET status = 'เสร็จแล้ว', done_at = ?, done_day = ? WHERE order_id = 'OB'").run(AT, TODAY);
   const r2 = await W.call(T.deliver, "deliver.load", { order: "OB", vehicle: "04", lines: [{ item: "IB1", qty: 4000 }, { item: "IB2", qty: 2000 }] });
   assert.equal(r2.ok, true, JSON.stringify(r2));
-  assert.equal(bal(W, SCREENED), 0, "รายการที่มีงานสกรีนตัดจากขวดสกรีนแล้ว");
+  assert.deepEqual([bal(W, SCREENED), bal(W, secondScreened)], [0, 0], "ขึ้นรถหักขวดสกรีนของแต่ละรายการ");
   assert.equal(W.one("SELECT count(*) n FROM delivery_trips").n, 1, "รถคันเดียววันเดียว = รอบเดียว");
   assert.equal((await undo(W, T.deliver, r2)).ok, true);
   assert.equal((await undo(W, T.deliver, r)).ok, true);
@@ -356,6 +357,20 @@ test("ส่งของ · เอาลงจากรถ (คืนคลั�
   assert.equal(W.q("SELECT count(*) n FROM stock_moves WHERE move_type = 'คืนคลัง'")[0].n, 2);
   assert.equal((await undo(W, T.deliver, u)).ok, true);
   assert.equal(snap(W), s0);
+});
+
+test("ส่งของ · คืนขวดสกรีนเข้าสต๊อกของรายการเดิมพร้อมชื่อร้าน", async () => {
+  const { W, T } = await setup({ stock: { [SCREENED]: 4000 } });
+  W.d1.raw.prepare("UPDATE screen_jobs SET status = 'เสร็จแล้ว', done_at = ?, done_day = ? WHERE id = 'J1'").run(AT, TODAY);
+  const loaded = await W.call(T.deliver, "deliver.load", { order: "OB", vehicle: "04", lines: [{ item: "IB1", qty: 4000 }] });
+  assert.equal(loaded.ok, true, JSON.stringify(loaded));
+  const [load] = loadsOf(W, "OB");
+  const returned = await W.call(T.deliver, "deliver.unload", { loads: [{ id: load.id, version: load.version }] });
+  assert.equal(returned.ok, true, JSON.stringify(returned));
+  const move = W.one("SELECT item_key, label FROM stock_moves WHERE ref_id = ? AND move_type = 'คืนคลัง'", load.id);
+  assert.equal(move.item_key, SCREENED);
+  assert.match(move.label, /ร้านทดสอบ ข/);
+  assert.equal(bal(W, SCREENED), 4000);
 });
 
 test("ส่งของ · ผิดทาง: ออเดอร์ยกเลิก · รายการไม่ใช่ของออเดอร์ · ปนหลายร้าน · ส่งเกินบนรถ · ส่ง 0 · รุ่นเก่า (คนอื่นส่งไปแล้ว) · รถพัก", async () => {

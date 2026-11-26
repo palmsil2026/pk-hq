@@ -77,7 +77,7 @@ test("ขวดที่ต้องมี: ดันคิวกลางชน
   await ok(office, "office.prio_move", { id: screened, version: W.one("SELECT version FROM orders WHERE id = ?", screened).version, dir: "up" }, { reason: "ทดสอบคิว" });
   stock(KEY, "A", 500);
   stock(KEY, "B", 900);
-  stock(KEY + "|สกรีน แดง", "A", 200);
+  stock(KEY + "|งานสกรีน:" + screened + "-1|สกรีน แดง", "A", 200);
   stock(KEY + "|สกรีน ขาว", "A", 600);
   put("INSERT INTO production_jobs(id,type,spec_key,target_pcs,status,created_at,updated_at) VALUES ('job','ขวด',?,300,'กำลังผลิต',?,?)", SPEC, AT, AT);
   const machine = "test-machine";
@@ -184,4 +184,31 @@ test("ร้านที่ยังไม่รู้สาย: ลงวัน
   const out = await W.call(await gate("S2", "สกรีนทดสอบ", ["screen"]), "route_plan.publish", { start: next.start, revision: next.revision });
   assert.equal(out.status, 403);
   assert.match(out.error.message, /ประธานตั้งได้ที่ ทีม › ค่าตั้ง/);
+});
+
+test("ขวดสกรีนสเปกและสีเดียวกันของคนละร้านไม่หักให้กัน แม้ร้านอื่นนัดส่งเร็วกว่า", async () => {
+  const { W, office, screen, order, ok, board, stock } = await setup();
+  const due = (first_day, brand) => ({
+    brand, queue: true, plan: { first_day }, items: [{ ...BOTTLE, bags: 3, screen_color: "น้ำเงิน" }],
+  });
+  const earlier = await order("CA", due(TODAY, "แบบสมมติ A"));
+  const later = await order("CB", due(day(1), "แบบสมมติ B"));
+  stock(KEY, "A", 600);
+  const pooled = KEY + "|สกรีน น้ำเงิน";
+  stock(pooled, "A", 600);
+  const job = W.one("SELECT id, version FROM screen_jobs WHERE order_id = ?", later);
+  await ok(screen, "screen.done", { ...job, team: "ทีม 1" });
+
+  const d = await board();
+  const first = d.days[0].stops.find(s => s.order === earlier).lines[0];
+  const second = d.days[1].stops.find(s => s.order === later).lines[0];
+  assert.deepEqual([first.ready, first.blow, first.needsScreen], [0, 600, 600]);
+  assert.deepEqual([second.ready, second.blow, second.needsScreen], [600, 0, 0]);
+  const officeStock = (await ok(office, "office.stock")).data.rows;
+  const current = officeStock.find(b => b.item_key === second.key);
+  assert.match(current.label, /ร้านทดสอบ CB · แบบสมมติ B/);
+  assert.equal(current.a, 600);
+  const older = officeStock.find(b => b.item_key === pooled);
+  assert.equal(older.a, 600);
+  assert.match(older.label, /ต้องยืนยันว่าเป็นของงานไหน/);
 });

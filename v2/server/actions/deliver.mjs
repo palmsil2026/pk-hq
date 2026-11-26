@@ -12,7 +12,7 @@
 import { bad, conflict, notFound, need, int, text, iso, thaiDay, thaiHm, Fail, addDays, day as dayIn } from "../core.mjs";
 import { planState } from "./office-plan-lib.mjs";   // 0310: วันส่ง = วันของงวดที่ถึงคิว (งวดส่งของออฟฟิศ)
 import { mapsUrl } from "./geo-lib.mjs";
-import { OPEN_ORDER_SQL, ON_TRUCK, ON_TRUCK_SQL, plainKey, screenKey, itemName, qtyText, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL, billAfterGuard } from "./deliver_common.mjs";
+import { OPEN_ORDER_SQL, ON_TRUCK, ON_TRUCK_SQL, plainKey, screenKey, screenedStockLabel, itemName, qtyText, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL, billAfterGuard } from "./deliver_common.mjs";
 
 const ROLES = ["deliver", "office"];
 const MAX_LINES = 60;
@@ -46,7 +46,9 @@ function loadConflict(l) {
 async function readLoads(X, refs, extra) {
   const ids = refs.map(r => r.id);
   const [loads, ...more] = await X.db.reads([
-    [`SELECT l.*, t.vehicle_id, s.nick AS done_nick FROM delivery_loads l LEFT JOIN delivery_trips t ON t.id = l.trip_id LEFT JOIN staff s ON s.id = l.done_by WHERE l.id IN (${ph(ids.length)})`, ...ids],
+    [`SELECT l.*, t.vehicle_id, s.nick AS done_nick,
+        (SELECT b.label FROM stock_balance b WHERE b.item_key = l.stock_key ORDER BY b.grade LIMIT 1) AS stock_label
+      FROM delivery_loads l LEFT JOIN delivery_trips t ON t.id = l.trip_id LEFT JOIN staff s ON s.id = l.done_by WHERE l.id IN (${ph(ids.length)})`, ...ids],
     [`SELECT i.*, t.piece_unit FROM order_items i LEFT JOIN product_types t ON t.code = i.type WHERE i.id IN (SELECT order_item_id FROM delivery_loads WHERE id IN (${ph(ids.length)}))`, ...ids],
     [`SELECT o.*, c.name AS customer_name FROM orders o JOIN customers c ON c.id = o.customer_id WHERE o.id IN (SELECT order_id FROM delivery_loads WHERE id IN (${ph(ids.length)}))`, ...ids],
     ...(extra || []),
@@ -75,12 +77,6 @@ function itemOps(items, deltas) {
   return ops;
 }
 const addDelta = (m, id, k, n) => { if (!id) return; const d = m.get(id) || {}; d[k] = (d[k] || 0) + n; m.set(id, d); };
-
-/** แถวสต๊อกที่ขึ้นรถ: รายการมีงานสกรีน (ไม่ยกเลิก) = ขวดสกรีนแล้ว · ไม่มี = ขวดเปล่า */
-function stockKeyFor(item, jobs) {
-  const job = jobs.find(j => j.order_item_id === item.id && j.status !== "ยกเลิก");
-  return job || item.screen_color ? screenKey(item, job) : plainKey(item);
-}
 
 function tripOps(X, ctx, vehicleId) {
   const id = tripId(thaiDay(X.now), vehicleId);
@@ -280,9 +276,12 @@ export function defineDeliver(R) {
       const loadRows = [], moves = [], deltas = new Map();
       let pcs = 0;
       for (const l of input.lines) {
-        const it = ctx.items.get(l.item), id = "L" + X.newId(), key = stockKeyFor(it, ctx.jobs);
+        const it = ctx.items.get(l.item), id = "L" + X.newId();
+        const job = ctx.jobs.find(j => j.order_item_id === it.id);
+        const printed = job || it.screen_color;
+        const key = printed ? screenKey(it, job) : plainKey(it);
         loadRows.push({ op: "insert", table: "delivery_loads", row: { id, trip_id: trip.id, order_id: o.id, order_item_id: it.id, qty_pcs: l.qty, status: "บนรถ", loaded_at: iso(X.now), loaded_by: X.staff.id, stock_key: key } });
-        moves.push({ op: "move", item_key: key, label: itemName(it) + (key.indexOf("|สกรีน ") > 0 ? " สกรีน " + key.split("|สกรีน ")[1] : ""), grade: gradeFor(key, it, ctx.bColors), qty_pcs: -l.qty, move_type: "ขึ้นรถ", ref_entity: "delivery_loads", ref_id: id });
+        moves.push({ op: "move", item_key: key, label: printed ? screenedStockLabel(it, job, o.customer_name, o.brand) : itemName(it), grade: gradeFor(key, it, ctx.bColors), qty_pcs: -l.qty, move_type: "ขึ้นรถ", ref_entity: "delivery_loads", ref_id: id });
         addDelta(deltas, it.id, "onboard", l.qty);
         pcs += l.qty;
       }
@@ -389,7 +388,7 @@ export function defineDeliver(R) {
         if (o) names.add(o.customer_name);
         ops.push({ op: "update", table: "delivery_loads", id: l.id, expect: l.version, before: l, set: { status: "คืนคลัง", done_at: at, done_day: today, done_by: X.staff.id, note: X.reason || l.note } });
         const key = l.stock_key || (it ? plainKey(it) : "");
-        if (key) moves.push({ op: "move", item_key: key, label: itemName(it), grade: it ? gradeFor(key, it, ctx.extra[0].map(b => b.value)) : "A", qty_pcs: l.qty_pcs, move_type: "คืนคลัง", ref_entity: "delivery_loads", ref_id: l.id, reason: X.reason });
+        if (key) moves.push({ op: "move", item_key: key, label: l.stock_label || (it ? itemName(it) : ""), grade: it ? gradeFor(key, it, ctx.extra[0].map(b => b.value)) : "A", qty_pcs: l.qty_pcs, move_type: "คืนคลัง", ref_entity: "delivery_loads", ref_id: l.id, reason: X.reason });
         addDelta(deltas, l.order_item_id, "onboard", -l.qty_pcs);
         pcs += l.qty_pcs;
       }

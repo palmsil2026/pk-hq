@@ -21,7 +21,7 @@ const CLEAR = { type: "ขวด", size: "600 ml", neck: "คอยาว", shap
 const BLUE = { ...CLEAR, color: "น้ำเงิน" };
 const CAP = { type: "ฝา", size: "PET น้ำลัง ปากแคบ", color: "" };
 const K_CLEAR = "spec:" + specKey(CLEAR, AX), K_BLUE = "spec:" + specKey(BLUE, AX), K_CAP = "spec:" + specKey(CAP, "ขนาด,สี");
-const K_SCREEN = K_CLEAR + "|สกรีน น้ำเงิน";
+const screenedKeyOf = id => K_CLEAR + "|งานสกรีน:" + id + "|สกรีน น้ำเงิน";
 
 /** โลกเดียวทั้งโรงงาน: พนักงานทุกบทบาท (ตั๋วจริง) · ทะเบียนสินค้า+เครื่อง · ราคาตั้งโดยประธาน */
 async function factory(opt) {
@@ -73,6 +73,7 @@ test("ทั้งวง: ลูกค้าใหม่สั่ง ขวด�
   });
   const OID = cr.data.id;
   const [I1, I2, I3] = F.items(OID);
+  const K_SCREEN = screenedKeyOf(I1.id);
   assert.deepEqual([I1.qty_pcs, I2.qty_pcs, I3.qty_pcs], [2000, 1000, 3000]);
   assert.equal(F.order(OID).customer_text, "ร้านน้ำดื่มสมมติ ทดลอง");
   assert.equal(F.order(OID).total_satang, 2000 * 150 + 1000 * 150 + 3000 * 40);
@@ -278,6 +279,7 @@ test("ย้อน: ปิดรอบแล้วของถูกใช้ (�
   const F = await factory();
   const { W } = F;
   const { OID, J, run, close } = await screenedReady(F);
+  const K_SCREEN = screenedKeyOf(F.items(OID)[0].id);
   assert.equal(F.bal(K_CLEAR), 2000);
   assert.equal((await F.prod("job.done", { job: J.id, version: F.jobs(OID)[0].version })).status, 200);
   let sj = F.sjobs(OID)[0];
@@ -336,7 +338,7 @@ test("ย้อน: ส่งแล้ว (บางส่วน/ครบ) → 
   assert.equal((await F.call("deliver", "undo.run", { id: fullDone.undo.id })).status, 200);
   o = F.order(OID);
   assert.equal(o.status, "พร้อมส่ง"); assert.equal(o.delivered_day, "", "ย้อนส่งแล้ว = ล้างวันส่งแล้ว");
-  assert.equal(F.bal(K_SCREEN), 0, "ย้อนส่ง ≠ คืนคลัง (ของยังอยู่บนรถ)");
+  assert.equal(F.bal(screenedKeyOf(F.items(OID)[0].id)), 0, "ย้อนส่ง ≠ คืนคลัง (ของยังอยู่บนรถ)");
   // ส่งใหม่ → ออฟฟิศออกบิล → ย้อนการส่งต้องไม่ได้ (ขั้นถัดไปรับไปแล้ว) — ไม่งั้นมีบิลของที่ระบบบอกว่ายังไม่ได้ส่ง
   const l3 = W.one("SELECT * FROM delivery_loads WHERE order_id = ? AND status = 'บนรถ'", OID);
   const again = await F.ok("deliver", "deliver.done", { order: OID, loads: [{ id: l3.id, version: l3.version }] });

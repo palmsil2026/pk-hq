@@ -9,7 +9,7 @@ import { amountText, progressText } from "../server/actions/screen-progress.mjs"
 const AT = new Date(T0).toISOString();
 const BOTTLE = { type: "ขวด", size: "600 ml", neck: "คอยาว", shape: "MK", color: "ใส" };
 const PLAIN = "spec:" + specKey(BOTTLE);
-const SCREENED = PLAIN + "|สกรีน น้ำเงิน";
+const SCREENED = PLAIN + "|งานสกรีน:IB1|สกรีน น้ำเงิน";
 const DAY = 864e5;
 
 async function setup() {

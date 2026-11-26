@@ -70,3 +70,44 @@ test("ค่าสถานะต้องอยู่ในคลัง vocab �
   d.raw.exec(`INSERT INTO vocab(kind,value) VALUES ('orders.status','รอรับ')`);
   d.raw.exec(`INSERT INTO orders(id,order_day,customer_id,status,created_at,updated_at) VALUES ('O1','2026-11-16','C1','รอรับ','${T}','${T}')`);
 });
+
+test("งานผลิต สกรีน และส่งของต้องอ้างออเดอร์ของรายการเดียวกัน", () => {
+  const d = freshDb();
+  const run = (sql, ...args) => d.raw.prepare(sql).run(...args);
+  run("INSERT INTO customers(id,name,name_key,created_at,updated_at) VALUES ('C','ร้านสมมติ','ร้านสมมติ',?,?)", T, T);
+  for (const id of ["O1", "O2"]) run("INSERT INTO orders(id,order_day,customer_id,created_at,updated_at) VALUES (?, '2026-11-16','C',?,?)", id, T, T);
+  run("INSERT INTO order_items(id,order_id,line_no,type,spec_key,qty_pcs,created_at,updated_at) VALUES ('I','O1',1,'ขวด','ขวด||||',10,?,?)", T, T);
+
+  const inserts = [
+    ["production_jobs", "INSERT INTO production_jobs(id,order_id,order_item_id,type,spec_key,created_at,updated_at) VALUES (?,?,?,'ขวด','ขวด||||',?,?)"],
+    ["screen_jobs", "INSERT INTO screen_jobs(id,order_id,order_item_id,created_at,updated_at) VALUES (?,?,?,?,?)"],
+    ["delivery_loads", "INSERT INTO delivery_loads(id,order_id,order_item_id,qty_pcs,loaded_at,created_at,updated_at) VALUES (?,?,?,10,'2026-11-16T02:00:00.000Z',?,?)"],
+  ];
+  for (const [table, sql] of inserts) {
+    assert.throws(() => run(sql, "other", "O2", "I", T, T), /ออเดอร์เดียวกัน/);
+    run(sql, "valid", "O1", "I", T, T);
+    assert.throws(() => run(`UPDATE ${table} SET order_id = 'O2' WHERE id = 'valid'`), /ออเดอร์เดียวกัน/);
+    run(sql, "header", "O2", null, T, T);
+  }
+  assert.throws(() => run(inserts[0][1], "missing-order", null, "I", T, T), /ออเดอร์เดียวกัน/);
+  run(inserts[0][1], "build-stock", null, null, T, T);
+  assert.throws(() => run("UPDATE order_items SET order_id = 'O2' WHERE id = 'I'"), /ต้องอยู่ใบเดิม/);
+  assert.deepEqual(d.q("PRAGMA foreign_key_check"), []);
+});
+
+test("สมุดสต๊อก: ย้อนต้องกลับรายการเดิมครบทั้งสินค้า เกรด จำนวน และที่มา", () => {
+  const d = freshDb();
+  const put = (key, grade, qty, type, original = null, reference = "RC1") => d.raw.prepare(`
+    INSERT INTO stock_moves(at,day,item_key,grade,qty_pcs,move_type,reverses,ref_entity,ref_id)
+    VALUES (?,'2026-11-16',?,?,?,?,?,'machine_runs',?)`).run(T, key, grade, qty, type, original, reference).lastInsertRowid;
+  const key = "spec:ขวด|600 ml|||";
+  const id = put(key, "A", 100, "ผลิตเข้า");
+  assert.throws(() => put(key, "A", -99, "ย้อน", id), /ยอดย้อน/);
+  assert.throws(() => put(key, "B", -100, "ย้อน", id), /ยอดย้อน/);
+  assert.throws(() => put("spec:ขวด|250 ml|||", "A", -100, "ย้อน", id), /ยอดย้อน/);
+  assert.throws(() => put(key, "A", -100, "ย้อน"), /ยอดย้อน/);
+  assert.throws(() => put(key, "A", -100, "ย้อน", id, "RC2"), /ยอดย้อน/);
+  assert.equal(d.one("SELECT qty_pcs FROM stock_balance WHERE item_key = ? AND grade = 'A'", key).qty_pcs, 100);
+  put(key, "A", -100, "ย้อน", id);
+  assert.equal(d.one("SELECT qty_pcs FROM stock_balance WHERE item_key = ? AND grade = 'A'", key).qty_pcs, 0);
+});

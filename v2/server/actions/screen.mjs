@@ -11,7 +11,7 @@
 import { bad, conflict, notFound, need, int, text, iso, thaiDay, thaiHm } from "../core.mjs";
 import { stockGuard } from "./prodRun.mjs";
 const screenUndoGuard = stockGuard((have, n) => "ขวดสกรีนจากงานนี้ขึ้นรถ/ส่งไปแล้ว (คงเหลือ " + have + " น้อยกว่า " + n + ") — ย้อนไม่ได้ · ถ้าจำนวนผิด ให้กด \"ลงจำนวน\" แก้แทน");
-import { plainKey, screenKey, itemName, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
+import { plainKey, screenKey, screenedStockLabel, itemName, negativeStockFlags, orderStatusOp, patchRows, gradeFor, B_COLORS_SQL } from "./deliver_common.mjs";
 import { registerTable } from "../db.mjs";
 import { amountText } from "./screen-progress.mjs";
 import { orderRanks, byRank } from "./order-rank.mjs";   // ลำดับคิวกลาง (คุณปาล์มเคาะ 19 พ.ย.)
@@ -73,7 +73,7 @@ function stockOps(X, ctx, dUsed, dGood) {
   const label = itemName(item), plain = plainKey(item), g = gradeFor(plain, item, ctx.bColors);
   const moves = [];
   if (dUsed) moves.push({ op: "move", item_key: plain, label, grade: g, qty_pcs: -dUsed, move_type: "เบิกสกรีน", ref_entity: "screen_jobs", ref_id: ctx.job.id });
-  if (dGood) moves.push({ op: "move", item_key: screenKey(item, ctx.job), label: label + " สกรีน" + (item.screen_color || ctx.job.colors ? " " + (item.screen_color || ctx.job.colors) : ""), grade: "A", qty_pcs: dGood, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: ctx.job.id });
+  if (dGood) moves.push({ op: "move", item_key: screenKey(item, ctx.job), label: screenedStockLabel(item, ctx.job, ctx.order?.customer_name, ctx.order?.brand), grade: "A", qty_pcs: dGood, move_type: "สกรีนเข้า", ref_entity: "screen_jobs", ref_id: ctx.job.id });
   const flags = [];
   for (const gr of ["A", "B"]) flags.push(...negativeStockFlags(ctx.balances.filter(b => b.grade === gr), moves.filter(m => m.grade === gr), X.role));
   return [...moves, ...flags];
